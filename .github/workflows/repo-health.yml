@@ -19,7 +19,7 @@ on:
       exclude: { description: 'Globs never read', required: false, type: string }
       model: { description: 'Model', required: false, type: string, default: claude-haiku-5-5 }
       max_usd: { description: 'Model spend cap per run, USD', required: false, type: string, default: '2' }
-      budget_kb: { description: 'Largest document read, KB', required: false, type: string, default: '60' }
+      # budget_kb (largest document read, default 60) is a workflow_call input only: workflow_dispatch allows 10 inputs
       mode: { description: 'live calls the model; offline runs code only (no key needed)', required: false, type: choice, options: [live, offline], default: live }
   workflow_call:
     inputs:
