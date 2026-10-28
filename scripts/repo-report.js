@@ -25,7 +25,17 @@ function args(argv) {
   return o;
 }
 
+// .env in the working directory, for local runs; a variable already set wins. CI passes secrets as env instead.
+function loadEnv(file = '.env') {
+  if (!fs.existsSync(file)) return;
+  for (const l of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const m = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/.exec(l);
+    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2');
+  }
+}
+
 async function main() {
+  loadEnv();
   const o = args(process.argv.slice(2));
   if (!o.repo) { console.error('usage: repo-report --repo <github url | directory> [options]'); process.exit(2); }
   const out = o.out || 'out';

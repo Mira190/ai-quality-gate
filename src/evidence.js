@@ -6,6 +6,7 @@
 const { readText, linesOf, numbersIn } = require('./util');
 const { STYLE, obj, arr, str } = require('./judge');
 const { termRe } = require('./trace');
+const { isTestFile, SOURCE_EXT } = require('./tests-index');
 
 const CHECK_ORDER = ['Suspected not built', 'No test', 'Not skipped', 'Calls the code', 'Asserts the rule', 'Covers stated limits', 'Crosses the real boundary', 'Placement', 'Runs on PR'];
 const WEAK = new Set(['Suspected not built', 'Not skipped', 'Calls the code', 'Asserts the rule', 'Covers stated limits', 'Crosses the real boundary']);
@@ -28,7 +29,8 @@ async function judgeAsserts(llm, rules, testIndex) {
       const lines = new Set(cases.flatMap((c) => t.asserts.filter((a) => a.line >= c.line && a.line <= c.end).map((a) => a.line)));
       return `<test path="${t.path}">\n${cases.slice(0, 15).map((c) => `  case ${c.line}: ${c.name}${c.skipped ? ' (skipped)' : ''}`).join('\n')}\n${t.asserts.filter((a) => lines.has(a.line)).slice(0, 25).map((a) => `  ${a.line}: ${a.text.slice(0, 200)}`).join('\n')}\n</test>`;
     }).join('\n')}\n</rule>`).join('\n')}`,
-    schema: obj({ rules: arr(obj({ id: str, asserts: { type: 'boolean' }, cite_path: str, cite_line: { type: 'integer' }, what: str })) }),
+    // reasoning fields before the verdict: the model writes what the line checks, then decides
+    schema: obj({ rules: arr(obj({ id: str, cite_path: str, cite_line: { type: 'integer' }, what: str, asserts: { type: 'boolean' } })) }),
     maxTokens: 6000,
   })))).flatMap((o) => o?.rules || []);
   const map = new Map();
@@ -43,17 +45,32 @@ async function judgeAsserts(llm, rules, testIndex) {
   return map;
 }
 
-async function judgeBuilt(llm, rules, root) {
+// Lines in other source files that use the implementing symbol: a decision such as "admin routes check the role" is
+// often broken where the function is wired up (a route that mounts only the login check), not where it is defined.
+function callSites(root, files, r, max = 8) {
+  const sym = String(r.impl.symbol || '').split(/[.#:]/).filter((s) => s.length >= 4).pop();
+  if (!sym) return [];
+  const re = new RegExp(`\\b${sym.replace(/[$]/g, '\\$')}\\b`), out = [];
+  for (const f of files) {
+    if (f === r.impl.path || !SOURCE_EXT.some((e) => f.endsWith(e)) || isTestFile(f)) continue;
+    linesOf(readText(root, f) || '').forEach((l, i) => { if (out.length < max && re.test(l) && !/^\s*import\b/.test(l)) out.push({ path: f, line: i + 1, text: l.trim().slice(0, 200) }); });
+  }
+  return out;
+}
+
+async function judgeBuilt(llm, rules, root, files = []) {
   const subjects = rules.filter((r) => r.kind === 'decision' && r.addsBehaviour && r.critical && r.impl);
   if (!subjects.length) return new Map();
+  for (const r of subjects) r._uses = callSites(root, files, r);
   const out = await llm.ask('built:0', {
     system: STYLE,
-    prompt: `For each design decision, read the code that implements it and say whether the code does what the decision says. Answer "not_built" only when a specific line shows the behaviour is missing or different (for example a call with no timeout, a route that checks login but not the role); cite that line. Answer "built" when it does, citing the line that does it. Answer "unsure" when the snippet cannot tell.\n\n${subjects.map((r) => {
+    prompt: `For each design decision, read the code that implements it and say whether the code does what the decision says. Answer "not_built" only when a specific line shows the behaviour is missing or different (for example a call with no timeout, a route that checks login but not the role); cite that line. Answer "built" when it does, citing the line that does it. The <used-at> lines show where other files use the implementing function; a decision can be broken there (a route that mounts the login check but no role check), so cite such a line when it is the one. Answer "unsure" when the code shown cannot tell. Write "why" first, then a verdict that agrees with it: a why that says the behaviour is there is "built".\n\n${subjects.map((r) => {
       const lines = linesOf(readText(root, r.impl.path) || '');
       const from = Math.max(1, r.impl.line - 25), to = Math.min(lines.length, r.impl.line + 45);
-      return `<decision id="${r.id}">${r.title}. ${r.text}\n<code path="${r.impl.path}">\n${lines.slice(from - 1, to).map((l, i) => `${from + i}: ${l}`).join('\n')}\n</code>\n</decision>`;
+      const uses = r._uses.length ? `\n<used-at>\n${r._uses.map((u) => `${u.path}:${u.line}: ${u.text}`).join('\n')}\n</used-at>` : '';
+      return `<decision id="${r.id}">${r.title}. ${r.text}\n<code path="${r.impl.path}">\n${lines.slice(from - 1, to).map((l, i) => `${from + i}: ${l}`).join('\n')}\n</code>${uses}\n</decision>`;
     }).join('\n')}`,
-    schema: obj({ decisions: arr(obj({ id: str, verdict: { type: 'string', enum: ['built', 'not_built', 'unsure'] }, path: str, line: { type: 'integer' }, why: str })) }),
+    schema: obj({ decisions: arr(obj({ id: str, path: str, line: { type: 'integer' }, why: str, verdict: { type: 'string', enum: ['built', 'not_built', 'unsure'] } })) }),
     maxTokens: 6000,
   });
   const map = new Map();
@@ -61,7 +78,8 @@ async function judgeBuilt(llm, rules, root) {
     const r = subjects.find((x) => x.id === v.id);
     if (!r) continue;
     const lines = linesOf(readText(root, v.path) || '');
-    if (v.verdict === 'not_built' && (v.path !== r.impl.path || !lines[v.line - 1]?.trim())) { map.set(r.id, { dropped: true }); continue; }
+    const shownPaths = new Set([r.impl.path, ...r._uses.map((u) => u.path)]);
+    if (v.verdict === 'not_built' && (!shownPaths.has(v.path) || !lines[v.line - 1]?.trim())) { map.set(r.id, { dropped: true }); continue; }
     map.set(r.id, { verdict: v.verdict, path: v.path, line: v.line, why: v.why });
   }
   return map;

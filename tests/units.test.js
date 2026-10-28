@@ -142,6 +142,21 @@ test('runLine groups long source lists by folder', () => {
   assert.match(line, /`docs\/` \(6 files, over the 60 KB read budget\)/);
 });
 
+test('indexTests: multi-line ESM imports resolve .js to .ts; CLI-process tests are e2e', () => {
+  const { indexTests } = require('../src/tests-index');
+  const { root, files } = repo({
+    'src/utils/interactive.ts': 'export function isInteractive() { return true; }\n',
+    'test/utils/interactive.test.ts': "import { describe, it, expect } from 'vitest';\nimport {\n  isInteractive,\n} from '../../src/utils/interactive.js';\nit('x', () => { expect(isInteractive()).toBe(true); });\n",
+    'test/commands/validate.test.ts': "import { runCLI } from '../helpers/run-cli.js';\nit('y', async () => { expect((await runCLI(['validate'])).exitCode).toBe(0); });\n",
+    'test/cli-e2e/basic.test.ts': "it('z', () => { expect(1).toBe(1); });\n",
+  });
+  const t = Object.fromEntries(indexTests(root, files).tests.map((x) => [x.path, x]));
+  assert.ok(t['test/utils/interactive.test.ts'].imports.some((i) => i.resolved === 'src/utils/interactive.ts'));
+  assert.equal(t['test/utils/interactive.test.ts'].level, 'unit');
+  assert.equal(t['test/commands/validate.test.ts'].level, 'e2e');
+  assert.equal(t['test/cli-e2e/basic.test.ts'].level, 'e2e');
+});
+
 test('costUsd uses the Haiku 5.5 card', () => {
   const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
   near(costUsd('claude-haiku-5-5', { input_tokens: 50000, output_tokens: 1e6 }), 0.505);

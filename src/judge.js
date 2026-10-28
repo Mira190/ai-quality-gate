@@ -62,7 +62,7 @@ async function judgeRules(llm, rules, { root, fileSet }) {
   const listing = (rs) => rs.map((r) => {
     const arts = namedArtifacts(root, r, fileSet);
     r.artifacts = arts;
-    return `<rule id="${r.id}" kind="${r.kind}" at="${r.path}:${r.line}"${r.servesIds?.length ? ` serves="${r.servesIds.join(',')}"` : ''}>\n${r.title}. ${r.text}${r.reason ? `\nReason: ${r.reason}` : ''}\n${arts.map((a) => `<named-file path="${a.path}">\n${a.text}\n</named-file>`).join('\n')}\n</rule>`;
+    return `<rule id="${r.id}" kind="${r.kind}" at="${r.path}:${r.line}"${r.servesIds?.length ? ` serves="${r.servesIds.join(',')}"` : ''}>\n${r.title}. ${r.text}${r.reason ? `\nReason: ${r.reason}` : ''}${r.detail ? `\nAcceptance scenarios:\n${r.detail}` : ''}\n${arts.map((a) => `<named-file path="${a.path}">\n${a.text}\n</named-file>`).join('\n')}\n</rule>`;
   }).join('\n');
   const all = rules.map((r) => `${r.id} (${r.kind}): ${r.title}. ${r.text}`).join('\n');
   const schema = obj({ rules: arr(obj({

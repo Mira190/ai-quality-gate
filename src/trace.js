@@ -27,24 +27,36 @@ function bm25(docs) {
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const termRe = (t) => new RegExp(escapeRe(t).replace(/\\ /g, '[\\s_-]*'), 'i');
 
-function candidates(root, files, testIndex, rule) {
-  return { code: rule._code || [], tests: testCandidates(testIndex, rule) };
+function candidates(root, files, testIndex, rule, testSearch) {
+  return { code: rule._code || [], tests: testCandidates(testIndex, rule, testSearch) };
 }
 
-function testCandidates(testIndex, rule) {
-  const out = [];
+// Test candidates, best first: the rule ID in the test, the rule's search terms, an import of a code candidate, then
+// similar case names. The model's terms are often document phrases a test never contains, so the last two sources keep
+// a real test from being missed (a missed test becomes a false "No test").
+function testCandidates(testIndex, rule, testSearch) {
+  const out = [], codePaths = new Set((rule._code || []).map((c) => c.path));
   for (const t of testIndex.tests) {
     const tag = new RegExp(`\\b${escapeRe(rule.id)}\\b`).test(t.text);
     const hits = rule.terms.filter((term) => termRe(term).test(t.text));
-    if (tag || hits.length) out.push({ path: t.path, tag, hits, level: t.level, cases: t.cases.length });
+    const imp = t.imports.find((i) => codePaths.has(i.resolved));
+    if (tag || hits.length || imp) out.push({ path: t.path, tag, hits, imports: imp?.resolved || null, level: t.level, cases: t.cases.length });
   }
-  return out.sort((a, b) => (b.tag - a.tag) || b.hits.length - a.hits.length).slice(0, 10);
+  out.sort((a, b) => (b.tag - a.tag) || b.hits.length - a.hits.length || Boolean(b.imports) - Boolean(a.imports));
+  const top = out.slice(0, 10);
+  if (testSearch) for (const x of testSearch(`${rule.title} ${rule.text} ${rule.terms.join(' ')}`).slice(0, 3)) {
+    if (top.length >= 12 || top.some((t) => t.path === x.path)) continue;
+    const t = testIndex.tests.find((y) => y.path === x.path);
+    top.push({ path: t.path, tag: false, hits: [], imports: null, level: t.level, cases: t.cases.length });
+  }
+  return top;
 }
 
 async function traceRules(llm, rules, { root, files, testIndex }) {
   const src = files.filter((f) => SOURCE_EXT.some((e) => f.endsWith(e)) && !isTestFile(f) && !/\.config\.|\.d\.ts$/.test(f));
   const texts = new Map(src.map((f) => [f, readText(root, f) || '']));
   const search = bm25(src.map((f) => ({ path: f, toks: [...tokens(f), ...tokens(texts.get(f))] })));
+  const testSearch = bm25(testIndex.tests.map((t) => ({ path: t.path, toks: [...tokens(t.path), ...t.cases.flatMap((c) => tokens(c.name))] })));
   for (const r of rules) {
     const top = search(`${r.title} ${r.text} ${r.terms.join(' ')}`).slice(0, 5);
     const q = new Set([...tokens(`${r.title} ${r.text} ${r.terms.join(' ')}`)].filter((t) => !STOP.has(t)));
@@ -58,9 +70,9 @@ async function traceRules(llm, rules, { root, files, testIndex }) {
   for (let i = 0; i < rules.length; i += 12) batches.push(rules.slice(i, i + 12));
   const picks = (await Promise.all(batches.map((b, i) => llm.ask(`trace:${i}`, {
     system: STYLE,
-    prompt: `For each rule, pick (1) where the code implements it: the file, the line of the function or statement that does it, and the symbol name, or null fields ("" and 0) if no candidate implements it; (2) which candidate test files test this rule's behaviour (not just the same module). Pick only from the candidates shown.\n\n${b.map((r) => {
-      const c = candidates(root, files, testIndex, r);
-      return `<rule id="${r.id}">${r.title}. ${r.text}\n<code-candidates>\n${c.code.map((x) => `${x.path}\n${x.lines.map((l) => `  ${l.n}: ${l.l.trim().slice(0, 160)}`).join('\n')}`).join('\n')}\n</code-candidates>\n<test-candidates>\n${c.tests.map((t) => `${t.path} (${t.level}, ${t.cases} cases; ${t.tag ? 'names the rule ID' : `contains ${t.hits.map((h) => `"${h}"`).join(', ')}`})\n${testIndex.tests.find((x) => x.path === t.path).cases.slice(0, 12).map((k) => `  ${k.line}: ${k.name}`).join('\n')}`).join('\n') || '(none)'}\n</test-candidates>\n</rule>`;
+    prompt: `For each rule, pick (1) where the code implements it: the file, the line of the function or statement that does it, and the symbol name, or null fields ("" and 0) if no candidate implements it; (2) which candidate test files exercise this rule's behaviour at all, even partly or poorly (a browser test that shows a premium on a page counts for a premium rule; a test that calls the implementing function counts). Later checks judge whether those tests assert the rule, cover its limits and run on PR, so do not leave a test out because it is weak; leave it out only when it tests a different behaviour. Pick only from the candidates shown.\n\n${b.map((r) => {
+      const c = candidates(root, files, testIndex, r, testSearch);
+      return `<rule id="${r.id}">${r.title}. ${r.text}\n<code-candidates>\n${c.code.map((x) => `${x.path}\n${x.lines.map((l) => `  ${l.n}: ${l.l.trim().slice(0, 160)}`).join('\n')}`).join('\n')}\n</code-candidates>\n<test-candidates>\n${c.tests.map((t) => `${t.path} (${t.level}, ${t.cases} cases; ${t.tag ? 'names the rule ID' : t.hits.length ? `contains ${t.hits.map((h) => `"${h}"`).join(', ')}` : t.imports ? `imports ${t.imports}` : 'similar case names'})\n${testIndex.tests.find((x) => x.path === t.path).cases.slice(0, 12).map((k) => `  ${k.line}: ${k.name}`).join('\n')}`).join('\n') || '(none)'}\n</test-candidates>\n</rule>`;
     }).join('\n')}`,
     schema: obj({ rules: arr(obj({ id: str, impl_path: str, impl_line: { type: 'integer' }, impl_symbol: str, tests: arr(str) })) }),
     maxTokens: 8000,
@@ -68,7 +80,7 @@ async function traceRules(llm, rules, { root, files, testIndex }) {
   const testPaths = new Set(testIndex.tests.map((t) => t.path));
   for (const r of rules) {
     const p = picks.find((x) => x.id === r.id);
-    const c = candidates(root, files, testIndex, r);
+    const c = candidates(root, files, testIndex, r, testSearch);
     const n = p && texts.has(p.impl_path) ? linesOf(texts.get(p.impl_path)).length : 0;
     r.impl = p && n && p.impl_line >= 1 && p.impl_line <= n ? { path: p.impl_path, line: p.impl_line, symbol: p.impl_symbol } : null;
     const tagged = c.tests.filter((t) => t.tag).map((t) => ({ path: t.path, source: 'tag' }));

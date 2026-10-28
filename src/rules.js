@@ -57,9 +57,15 @@ const REQ_HEAD = /^(#{2,6})\s+Requirement(?:\s+\d+(?:\.\d+)*)?\s*[:.\-–—]?\s
 function structuredItems(doc, lines) {
   const out = [];
   const para = (from) => { const body = []; let first = null; for (let j = from; j < lines.length; j++) { const l = lines[j]; if (/^#{1,6}\s/.test(l)) break; if (!l.trim()) { if (body.length) break; continue; } if (META.test(l)) continue; if (first == null) first = j + 1; body.push(l.trim()); } return { text: body.join(' '), line: first }; };
+  // the scenarios under a requirement (up to the next heading of the same or a higher level) are its acceptance detail
+  const detailOf = (i, level) => { const d = []; for (let j = i + 1; j < lines.length; j++) { const h = /^(#{1,6})\s/.exec(lines[j]); if (h && h[1].length <= level) break; if (lines[j].trim()) d.push(lines[j].trim()); } return d; };
   lines.forEach((l, i) => {
     const m = REQ_HEAD.exec(l);
-    if (m) { const p = para(i + 1); if (p.text) out.push({ title: m[2] || shortTitle(p.text), text: p.text, line: p.line, kind: doc.kindHint === 'design' ? 'decision' : 'requirement' }); }
+    if (!m) return;
+    const p = para(i + 1);
+    if (!p.text) return;
+    const rest = detailOf(i, m[1].length), at = rest.findIndex((x) => /^#{1,6}\s/.test(x));
+    out.push({ title: m[2] || shortTitle(p.text), text: p.text, line: p.line, kind: doc.kindHint === 'design' ? 'decision' : 'requirement', detail: at >= 0 ? rest.slice(at).join('\n').slice(0, 1500) : '' });
   });
   if (!out.length && /^\s*(?:[-*]\s*)?(?:\*\*)?status/im.test(doc.text)) {
     const d = lines.findIndex((l) => /^#{1,3}\s+Decision(\s+Outcome)?\s*$/i.test(l));

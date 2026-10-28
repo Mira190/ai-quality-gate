@@ -321,7 +321,7 @@ workflow：[`.github/workflows/repo-health.yml`](../.github/workflows/repo-healt
 - 文档预算：最多 60 份 / 800 KB，按分数取前面的，其余写进 Not read。超过 5 条的 Read / Not read / Skipped 列表按目录聚合，仍超过 8 组时上提一级。
 - OpenSpec 离线结果：读 60 份文档，得 299 条规则，4028 个测试（229 个文件），4 个 workflow。CI gate 57 分，P0 是缺 secret scan。
 
-**运行模式**：`live` / `record`（录制 cassette）/ `replay`（golden test 用）/ `offline`（不调模型，只出代码能确定的部分，依赖模型的分区显示 n/a）。
+**运行模式**：`live` / `record`（录制 cassette）/ `replay`（golden test 用）/ `offline`（不调模型，只出代码能确定的部分，依赖模型的分区显示 n/a）。 `fill`：cassette 里有的调用照常回放，没有的把 prompt 写到 `<cassette>.pending.json`，由人工（或另一个模型）逐轮回答再并入 cassette。没有可用 key 时，可以用这种方式把真实仓库的全流程跑通。2026-10-28 用这个方式在 OpenSpec（3 份文档，18 条规则，7 次调用）上跑通：0 条回答被引用校验丢弃。过程中发现并修复了三个问题：多行 ESM import 解析不到；启动 CLI 进程的测试被判成 unit，导致 "Calls the code" 误报，S3 因此从 61 被压到 33；OpenSpec 的 Scenario 没有进入 judge 的 prompt。
 
 **验证**：`npm test` 共 13 项，包括 golden（fixture → 与 mock 逐字相等）和 12 个确定性模块单测（glob、规则解析、critical 标签、status、优先级重排、文档召回与预算、CI 7 项、run line 聚合、计价）。
 
@@ -333,3 +333,18 @@ workflow：[`.github/workflows/repo-health.yml`](../.github/workflows/repo-healt
 - live eval：精度报表要等有效 key（见下一条）。
 
 **阻塞**：SpecGuard `docs/.env` 里的两个 Anthropic key 都返回 401，所以真实 haiku 运行尚未验证。拿到有效 key 后，先用 `--record` 对 fixture 跑一次 live eval，再对真实仓试跑。
+
+**live eval（claude-haiku-5-5，2026-10-28）**：用 fixture 对照 golden 标准答案，`node scripts/eval-fixture.js <gold ledger> <run ledger>...`。每次运行约 2 AIU（$0.02），耗时约 2 分钟。
+
+| 轮次 | 改动 | recall | precision | 假 P0 | 第 3 节 P / R |
+| --- | --- | :-: | :-: | :-: | :-: |
+| 1 | 基线 | 0.66 | 0.50 | 10 | 0.60 / 0.60 |
+| 2 | built schema 改为先 why 后 verdict；trace prompt 把"关联"与"评质量"分开 | 0.59 | 0.53 | 7 | 0.55 / 0.60 |
+| 3 | 候选测试加入 import 了候选实现文件的测试，以及按用例名做 BM25 检索 | 0.69 | 0.63 | 2 | 0.89 / 0.80 |
+| 4–5 | built 检查附上实现符号的调用点 | 0.66–0.72 | 0.57–0.58 | 2 | 1.00 / 0.80 |
+
+- 两次同配置运行之间的 Jaccard 为 0.73（SpecGuard 基线 0.17）。第 5 节 7 项检查每轮都完全一致。
+- 剩下的 2 个"假 P0"：DEC-05 haiku 是对的（`gateway-adapter.ts:10` 的 fetch 确实没设超时），是标准答案写得含糊；DEC-11 haiku 判为新增行为，标准答案判为复述需求，属于判断尺度不同。
+- 剩余差距：第 1 节（文档判断比标准答案严或宽，recall 约 0.5）和第 4 节（关联偏宽，把 "No test" 降级为 "Asserts the rule"；以及新增行为还是复述需求的判断）。
+- 试过一次"模型没给关联时，由代码按实现符号补关联"，后来撤掉了：它会把 DEC-06 这种"有测试调用了 `charge`，但测的不是幂等"的正确 No test 改错。
+- 注意：fixture 和标准答案都是本项目自己写的，指标只能说明方向。真实精度要靠真实仓库的人工标注样本。

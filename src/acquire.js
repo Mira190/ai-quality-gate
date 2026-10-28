@@ -20,8 +20,9 @@ function clone(repoUrl, ref, into) {
   if (!r) throw new Error(`not a GitHub repository URL: ${repoUrl}`);
   const dir = into || fs.mkdtempSync(path.join(os.tmpdir(), 'aqg-'));
   const auth = token() ? ['-c', `http.https://github.com/.extraheader=AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token()}`).toString('base64')}`] : [];
-  git([...auth, 'clone', '--quiet', '--filter=blob:limit=2m', '--no-checkout', r.url, dir]);
-  git(['-C', dir, ...auth, 'checkout', '--quiet', ref || 'HEAD']);
+  // core.longpaths: deep spec trees pass the 260-character path limit on Windows runners
+  git([...auth, '-c', 'core.longpaths=true', 'clone', '--quiet', '--filter=blob:limit=2m', '--no-checkout', r.url, dir]);
+  git(['-C', dir, '-c', 'core.longpaths=true', ...auth, 'checkout', '--quiet', ref || 'HEAD']);
   return { root: dir, name: r.name, sha: git(['-C', dir, 'rev-parse', '--short=7', 'HEAD']), owner: r.owner, repo: r.repo };
 }
 
