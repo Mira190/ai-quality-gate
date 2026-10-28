@@ -1,0 +1,110 @@
+# Repository health report for any GitHub repository: requirement and design health, test coverage of the rules,
+# and the CI gate, in the report-summary shape (report-summary-template.md).
+#
+# The target repository is read, never built or run. Secrets:
+#   ANTHROPIC_API_KEY  required unless mode is offline; the model calls (default claude-haiku-5-5, capped by max_usd)
+#   TARGET_REPO_PAT    optional; read access to a private target and to its branch protection
+#                      (fine-grained PAT: Contents read, Administration read). Never printed or put in a URL.
+name: Repository health report
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_url: { description: 'Target repository (https://github.com/owner/name)', required: true, type: string }
+      ref: { description: 'Branch, tag or commit (default branch when empty)', required: false, type: string }
+      requirement_urls: { description: 'Requirement document URLs, comma or newline separated', required: false, type: string }
+      design_urls: { description: 'Design document URLs, comma or newline separated', required: false, type: string }
+      test_doc_urls: { description: 'Test plan document URLs, comma or newline separated', required: false, type: string }
+      include: { description: 'Globs always read as rule documents', required: false, type: string }
+      exclude: { description: 'Globs never read', required: false, type: string }
+      model: { description: 'Model', required: false, type: string, default: claude-haiku-5-5 }
+      max_usd: { description: 'Model spend cap per run, USD', required: false, type: string, default: '2' }
+      budget_kb: { description: 'Largest document read, KB', required: false, type: string, default: '60' }
+      mode: { description: 'live calls the model; offline runs code only (no key needed)', required: false, type: choice, options: [live, offline], default: live }
+  workflow_call:
+    inputs:
+      repo_url: { required: true, type: string }
+      ref: { required: false, type: string }
+      requirement_urls: { required: false, type: string }
+      design_urls: { required: false, type: string }
+      test_doc_urls: { required: false, type: string }
+      include: { required: false, type: string }
+      exclude: { required: false, type: string }
+      model: { required: false, type: string, default: claude-haiku-5-5 }
+      max_usd: { required: false, type: string, default: '2' }
+      budget_kb: { required: false, type: string, default: '60' }
+      mode: { required: false, type: string, default: live }
+    secrets:
+      ANTHROPIC_API_KEY: { required: false }
+      TARGET_REPO_PAT: { required: false }
+    outputs:
+      p0_count: { description: 'P0 issues shown in the report', value: '${{ jobs.report.outputs.p0_count }}' }
+      artifact: { description: 'Name of the uploaded report artifact', value: '${{ jobs.report.outputs.artifact }}' }
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-health-${{ inputs.repo_url }}-${{ inputs.ref }}
+  cancel-in-progress: true
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      p0_count: ${{ steps.run.outputs.p0_count }}
+      artifact: ${{ steps.name.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      # Inputs go through env, never into the script text, so a crafted input cannot inject shell.
+      - id: run
+        name: Build the report
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TARGET_REPO_PAT: ${{ secrets.TARGET_REPO_PAT }}
+          REPO_URL: ${{ inputs.repo_url }}
+          REF: ${{ inputs.ref }}
+          REQUIREMENT_URLS: ${{ inputs.requirement_urls }}
+          DESIGN_URLS: ${{ inputs.design_urls }}
+          TEST_DOC_URLS: ${{ inputs.test_doc_urls }}
+          INCLUDE: ${{ inputs.include }}
+          EXCLUDE: ${{ inputs.exclude }}
+          MODEL: ${{ inputs.model || 'claude-haiku-5-5' }}
+          MAX_USD: ${{ inputs.max_usd || '2' }}
+          BUDGET_KB: ${{ inputs.budget_kb || '60' }}
+          MODE: ${{ inputs.mode || 'live' }}
+        run: |
+          args=(--repo "$REPO_URL" --model "$MODEL" --max-usd "$MAX_USD" --budget-kb "$BUDGET_KB" --out out)
+          [ "$MODE" = offline ] && args+=(--offline)
+          [ -n "$REF" ] && args+=(--ref "$REF")
+          [ -n "$REQUIREMENT_URLS" ] && args+=(--requirement-url "$REQUIREMENT_URLS")
+          [ -n "$DESIGN_URLS" ] && args+=(--design-url "$DESIGN_URLS")
+          [ -n "$TEST_DOC_URLS" ] && args+=(--test-doc-url "$TEST_DOC_URLS")
+          [ -n "$INCLUDE" ] && args+=(--include "$INCLUDE")
+          [ -n "$EXCLUDE" ] && args+=(--exclude "$EXCLUDE")
+          node scripts/repo-report.js "${args[@]}"
+      - name: Job summary
+        if: always() && steps.run.outcome == 'success'
+        run: cat out/report.md >> "$GITHUB_STEP_SUMMARY"
+      - id: name
+        env:
+          REPO_URL: ${{ inputs.repo_url }}
+        run: echo "artifact=repo-health-$(basename "$REPO_URL" .git)-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.run.outcome == 'success'
+        with:
+          name: ${{ steps.name.outputs.artifact }}
+          path: |
+            out/report.md
+            out/report-details.md
+            out/ledger.json
+          retention-days: 30

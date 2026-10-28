@@ -1,0 +1,21 @@
+{
+  "name": "ai-quality-gate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Repository health report: requirement and design health, test coverage of rules, and CI gate, in the fixed report-summary shape.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "repo-report": "scripts/repo-report.js"
+  },
+  "scripts": {
+    "test": "node --test tests/",
+    "report": "node scripts/repo-report.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "yaml": "^2.9.1"
+  }
+}
