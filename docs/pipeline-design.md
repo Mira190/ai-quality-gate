@@ -347,3 +347,47 @@ workflow：[`.github/workflows/repo-health.yml`](../.github/workflows/repo-healt
 - 剩余差距：第 1 节（文档判断比标准答案严或宽，recall 约 0.5）和第 4 节（关联偏宽，把 "No test" 降级为 "Asserts the rule"；以及新增行为还是复述需求的判断）。
 - 试过一次"模型没给关联时，由代码按实现符号补关联"，后来撤掉了：它会把 DEC-06 这种"有测试调用了 `charge`，但测的不是幂等"的正确 No test 改错。
 - 注意：fixture 和标准答案都是本项目自己写的，指标只能说明方向。真实精度要靠真实仓库的人工标注样本。
+
+### 7.1 降噪：代码能定的不交给模型（2026-10-29）
+
+每个判断由谁做（S = 代码，M = 模型；M 的结论都要过代码校验）：
+
+| 阶段 | 判断 | 谁 | 说明 |
+| --- | --- | :-: | --- |
+| 2 文档召回 | 打分、预算、归档/废弃跳过 | S | |
+| 2 文档召回 | 分数 1.5–3 的边缘候选是否为规格 | M | 只给大纲，一次调用 |
+| 3 规则抽取 | 有 ID / OpenSpec / ADR / Gherkin 结构的文档 | S | |
+| 3 规则抽取 | 无结构文档拆成原子规则 | M | 每条要引用原文行，代码校验 |
+| 4 critical | 五区词表 | S | |
+| 7 §1/§2 | Specific（模糊词表，INCOSE R7） | S | 新：模型的 Specific 不再采用 |
+| 7 §1/§2 | Traceable | S | |
+| 7 §1/§2 | 外部调用的 Failure behaviour（有无超时、有无失败结果） | S | 新：只查新增行为的决策；复述需求的不查 |
+| 7 §1/§2 | 两条规则的数字是否冲突（上限 vs 上限、数值 vs 上限） | S | 新：模型只负责配对；"10% off" 对 "不超过 20%" 判为不冲突 |
+| 7 §1/§2 | 带 THEN 验收场景的规则视为 Testable | S | 新 |
+| 7 §1/§2 | Clear / Testable / Complete / One behaviour / Feasible / Simple / Verifiable | M | Clear 要给两种读法；Complete 要指出是哪条规则引出的缺失情形（或缺 trigger / response），否则丢弃 |
+| 7 §1/§2 | logic_kind、limits、terms、restates、adds_behaviour、boundary | M | limits 的数字必须在原文或其引用的文件里 |
+| 8 追溯 | 候选实现（BM25）、候选测试（标签、词、import、用例名） | S | |
+| 8 追溯 | 选实现、选测试 | M | 新：设计决策的单元、组件、集成测试必须提到实现符号或 mock 它的文件，否则不算关联 |
+| 8 证据 | Not skipped / Calls the code / Covers stated limits / Crosses the real boundary / Placement / Runs on PR / No test | S | |
+| 8 证据 | Asserts the rule、Suspected not built | M | 引用行必须存在 |
+| 9 优先级、计分、编号 | | S | |
+| 10 Top actions | 测试合并方案 | M | 不产生问题，只影响分组；代码校验并补齐 |
+| 10 Top actions | 分组、排序、记功 | S | |
+| 11–12 | 单元格与行动文字 | M | 引用、编号、数字都由代码校验，不通过就换成代码写的文字 |
+
+**自洽投票**：judge、trace、built、asserts 每个调用问 3 次（`--votes`，默认 3）。一个结论要多数回复同意才算；实现文件取多数；测试关联取并集，因为漏掉一个测试会变成假 "No test"。replay 时没录到的票会跳过，所以 golden cassette 只需要一份回复。
+
+**结果**：同一个 fixture、同一个金标，各跑 5 次 live：
+
+| | recall | precision | 假 P0 | §1 precision | §3 precision | 运行间 Jaccard | 每次 AIU |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| 改动前（第 1–5 轮） | 0.59–0.72 | 0.50–0.63 | 2–10 | 0.30–0.43 | 0.55–1.00 | 0.37–0.82 | 约 2 |
+| 改动后 | 0.72–0.84 | 0.68–0.82 | 2 | 0.57–0.83 | 0.90–1.00 | 0.72–0.89 | 约 4 |
+
+剩下的误报每次都一样，是判断尺度不同，不是随机噪音：
+- DEC-05：`payment.test.ts` 确实通过真实服务测了重试。
+- DEC-06：测试关联到了，报告写成 "Asserts the rule"，金标写的是 "No test"。
+- DEC-11：是否复述需求有争议。
+- REQ-02："$500 to $5,000" 端点是否包含确实没写。
+
+为这些写规则会过拟合 fixture，所以没有改。

@@ -3,7 +3,7 @@
 // code verifies: "Asserts the rule" (must cite an assertion line of a linked test) and "Suspected not built" (must cite
 // a line of the implementing file; only for critical decisions that add behaviour).
 // The first failing check sets the level: None → Blocked → Weak → Checked nightly → meets the standard.
-const { readText, linesOf, numbersIn } = require('./util');
+const { readText, linesOf, numbersIn, need } = require('./util');
 const { STYLE, obj, arr, str } = require('./judge');
 const { termRe } = require('./trace');
 const { isTestFile, SOURCE_EXT } = require('./tests-index');
@@ -21,7 +21,7 @@ async function judgeAsserts(llm, rules, testIndex) {
   const subjects = rules.filter((r) => r.links.length);
   const batches = [];
   for (let i = 0; i < subjects.length; i += 10) batches.push(subjects.slice(i, i + 10));
-  const out = (await Promise.all(batches.map((b, i) => llm.ask(`asserts:${i}`, {
+  const out = (await Promise.all(batches.map((b, i) => llm.votes(`asserts:${i}`, {
     system: STYLE,
     prompt: `For each rule, decide whether any of its tests has an assertion that compares the rule's result or state to an expected value. "Was called", "does not throw", a snapshot, or an assertion about a different behaviour does not count. Cite the assertion line that proves it; if none does, cite the assertion line that comes closest and say in "what" what it checks instead.\n\n${b.map((r) => `<rule id="${r.id}">${r.title}. ${r.text}\n${r.links.map((l) => {
       const t = testIndex.tests.find((x) => x.path === l.path);
@@ -32,14 +32,17 @@ async function judgeAsserts(llm, rules, testIndex) {
     // reasoning fields before the verdict: the model writes what the line checks, then decides
     schema: obj({ rules: arr(obj({ id: str, cite_path: str, cite_line: { type: 'integer' }, what: str, asserts: { type: 'boolean' } })) }),
     maxTokens: 6000,
-  })))).flatMap((o) => o?.rules || []);
+  })))).flat().flatMap((o) => o?.rules || []);
   const map = new Map();
   for (const r of subjects) {
-    const v = out.find((x) => x.id === r.id);
-    const t = v && testIndex.tests.find((x) => x.path === v.cite_path && r.links.some((l) => l.path === x.path));
-    if (!v) continue;
-    // the citation must be an assertion line of a linked test; otherwise the judgment is dropped (check passes as unknown)
-    if (!t || !t.asserts.some((a) => a.line === v.cite_line)) { map.set(r.id, { dropped: true }); continue; }
+    const vs = out.filter((x) => x.id === r.id);
+    if (!vs.length) continue;
+    // the citation must be an assertion line of a linked test; a reply that fails this does not count
+    const ok = vs.filter((v) => testIndex.tests.find((x) => x.path === v.cite_path && r.links.some((l) => l.path === x.path))?.asserts.some((a) => a.line === v.cite_line));
+    // "does not assert" only when most replies say so with a valid citation; otherwise the check passes as unknown
+    const no = ok.filter((v) => !v.asserts);
+    const v = no.length >= need(vs.length) ? no[0] : ok.find((x) => x.asserts);
+    if (!v) { map.set(r.id, { dropped: true }); continue; }
     map.set(r.id, { asserts: v.asserts, path: v.cite_path, line: v.cite_line, what: v.what });
   }
   return map;
@@ -62,7 +65,7 @@ async function judgeBuilt(llm, rules, root, files = []) {
   const subjects = rules.filter((r) => r.kind === 'decision' && r.addsBehaviour && r.critical && r.impl);
   if (!subjects.length) return new Map();
   for (const r of subjects) r._uses = callSites(root, files, r);
-  const out = await llm.ask('built:0', {
+  const outs = await llm.votes('built:0', {
     system: STYLE,
     prompt: `For each design decision, read the code that implements it and say whether the code does what the decision says. Answer "not_built" only when a specific line shows the behaviour is missing or different (for example a call with no timeout, a route that checks login but not the role); cite that line. Answer "built" when it does, citing the line that does it. The <used-at> lines show where other files use the implementing function; a decision can be broken there (a route that mounts the login check but no role check), so cite such a line when it is the one. Answer "unsure" when the code shown cannot tell. Write "why" first, then a verdict that agrees with it: a why that says the behaviour is there is "built".\n\n${subjects.map((r) => {
       const lines = linesOf(readText(root, r.impl.path) || '');
@@ -74,12 +77,15 @@ async function judgeBuilt(llm, rules, root, files = []) {
     maxTokens: 6000,
   });
   const map = new Map();
-  for (const v of out?.decisions || []) {
-    const r = subjects.find((x) => x.id === v.id);
-    if (!r) continue;
-    const lines = linesOf(readText(root, v.path) || '');
+  for (const r of subjects) {
+    const vs = outs.flatMap((o) => o?.decisions || []).filter((v) => v.id === r.id);
+    if (!vs.length) continue;
+    // "not built" is a P0 claim: it needs a cited line shown to the model, in most replies
     const shownPaths = new Set([r.impl.path, ...r._uses.map((u) => u.path)]);
-    if (v.verdict === 'not_built' && (!shownPaths.has(v.path) || !lines[v.line - 1]?.trim())) { map.set(r.id, { dropped: true }); continue; }
+    const cited = vs.filter((v) => v.verdict === 'not_built' && shownPaths.has(v.path) && linesOf(readText(root, v.path) || '')[v.line - 1]?.trim());
+    if (cited.length >= need(vs.length)) { const v = cited[0]; map.set(r.id, { verdict: v.verdict, path: v.path, line: v.line, why: v.why }); continue; }
+    if (vs.some((v) => v.verdict === 'not_built')) { map.set(r.id, { dropped: true }); continue; }
+    const v = vs[0];
     map.set(r.id, { verdict: v.verdict, path: v.path, line: v.line, why: v.why });
   }
   return map;

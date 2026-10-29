@@ -16,7 +16,7 @@ const lineOf = (file, needle, nth = 1) => { let k = 0; const i = FILES[file].spl
 // ---- sections 1 and 2 judgments ---------------------------------------------------------------------------------
 const none = { fails: [], restates: '', adds_behaviour: true, boundary: 'none' };
 const R = (id, o) => ({ id, ...none, logic_kind: 'other', limits: [], terms: [], ...o });
-const fail = (measure, why, o = {}) => ({ measure, part: '', conflict_with: '', why, ...o });
+const fail = (measure, why, o = {}) => ({ why, readings: [], raised_by: '', conflict_with: '', part: '', measure, ...o });
 const requirements = [
   R('REQ-01', { logic_kind: 'calculation', limits: [3, 7, 12].map((v) => ({ value: v, unit: 'years', source: 'src/pricing/rates.json' })), terms: ['premium', 'vehicle age', 'premiumFor'] }),
   R('REQ-02', { logic_kind: 'validation', limits: [{ value: 500, unit: '$', source: 'text' }, { value: 5000, unit: '$', source: 'text' }], terms: ['validateExcess', 'excess'] }),
@@ -28,8 +28,8 @@ const requirements = [
   R('REQ-08', { logic_kind: 'calculation', limits: [{ value: 20, unit: '%', source: 'text' }], fails: [fail('Testable', 'does not say what happens above the cap'), fail('Consistent', 'DEC-11 allows 25%', { conflict_with: 'DEC-11' })], terms: ['discount cap', 'total discount'] }),
   R('REQ-09', { logic_kind: 'ui', fails: [fail('Specific', '"fast" has no number'), fail('Testable', 'no load-time limit')], terms: ['load time'] }),
   R('REQ-10', { logic_kind: 'date', fails: [fail('Testable', '"a reasonable time" gives no limit')], terms: ['isExpired', 'expire'] }),
-  R('REQ-11', { logic_kind: 'calculation', limits: [{ value: 10, unit: '%', source: 'text' }], fails: [fail('Complete', 'does not say how it combines with other discounts', { part: 'the stacking case only' })], terms: ['applyDiscount', 'concession'] }),
-  R('REQ-12', { logic_kind: 'calculation', limits: [{ value: 50, unit: '$', source: 'text' }], fails: [fail('Clear', 'pro rata by day or by month gives two refunds')], terms: ['computeRefund', 'cancellation fee'] }),
+  R('REQ-11', { logic_kind: 'calculation', limits: [{ value: 10, unit: '%', source: 'text' }], fails: [fail('Complete', 'does not say how it combines with other discounts', { part: 'the stacking case only', raised_by: 'DEC-11' })], terms: ['applyDiscount', 'concession'] }),
+  R('REQ-12', { logic_kind: 'calculation', limits: [{ value: 50, unit: '$', source: 'text' }], fails: [fail('Clear', 'pro rata by day or by month gives two refunds', { readings: ['pro rata by days left in the term', 'pro rata by whole months left'] })], terms: ['computeRefund', 'cancellation fee'] }),
 ];
 const restates = (id, req, o = {}) => R(id, { restates: req, adds_behaviour: false, ...o });
 const decisions = [

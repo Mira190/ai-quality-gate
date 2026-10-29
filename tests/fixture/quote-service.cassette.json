@@ -96,10 +96,12 @@
             "id": "REQ-05",
             "fails": [
               {
-                "measure": "Testable",
-                "part": "",
+                "why": "no retry count, no timing, no errors named",
+                "readings": [],
+                "raised_by": "",
                 "conflict_with": "",
-                "why": "no retry count, no timing, no errors named"
+                "part": "",
+                "measure": "Testable"
               }
             ],
             "restates": "",
@@ -130,10 +132,12 @@
             "id": "REQ-07",
             "fails": [
               {
-                "measure": "Testable",
-                "part": "",
+                "why": "\"easy to use\" has no expected result",
+                "readings": [],
+                "raised_by": "",
                 "conflict_with": "",
-                "why": "\"easy to use\" has no expected result"
+                "part": "",
+                "measure": "Testable"
               }
             ],
             "restates": "",
@@ -149,16 +153,20 @@
             "id": "REQ-08",
             "fails": [
               {
-                "measure": "Testable",
-                "part": "",
+                "why": "does not say what happens above the cap",
+                "readings": [],
+                "raised_by": "",
                 "conflict_with": "",
-                "why": "does not say what happens above the cap"
+                "part": "",
+                "measure": "Testable"
               },
               {
-                "measure": "Consistent",
-                "part": "",
+                "why": "DEC-11 allows 25%",
+                "readings": [],
+                "raised_by": "",
                 "conflict_with": "DEC-11",
-                "why": "DEC-11 allows 25%"
+                "part": "",
+                "measure": "Consistent"
               }
             ],
             "restates": "",
@@ -181,16 +189,20 @@
             "id": "REQ-09",
             "fails": [
               {
-                "measure": "Specific",
-                "part": "",
+                "why": "\"fast\" has no number",
+                "readings": [],
+                "raised_by": "",
                 "conflict_with": "",
-                "why": "\"fast\" has no number"
+                "part": "",
+                "measure": "Specific"
               },
               {
-                "measure": "Testable",
-                "part": "",
+                "why": "no load-time limit",
+                "readings": [],
+                "raised_by": "",
                 "conflict_with": "",
-                "why": "no load-time limit"
+                "part": "",
+                "measure": "Testable"
               }
             ],
             "restates": "",
@@ -206,10 +218,12 @@
             "id": "REQ-10",
             "fails": [
               {
-                "measure": "Testable",
-                "part": "",
+                "why": "\"a reasonable time\" gives no limit",
+                "readings": [],
+                "raised_by": "",
                 "conflict_with": "",
-                "why": "\"a reasonable time\" gives no limit"
+                "part": "",
+                "measure": "Testable"
               }
             ],
             "restates": "",
@@ -226,10 +240,12 @@
             "id": "REQ-11",
             "fails": [
               {
-                "measure": "Complete",
-                "part": "the stacking case only",
+                "why": "does not say how it combines with other discounts",
+                "readings": [],
+                "raised_by": "DEC-11",
                 "conflict_with": "",
-                "why": "does not say how it combines with other discounts"
+                "part": "the stacking case only",
+                "measure": "Complete"
               }
             ],
             "restates": "",
@@ -252,10 +268,15 @@
             "id": "REQ-12",
             "fails": [
               {
-                "measure": "Clear",
-                "part": "",
+                "why": "pro rata by day or by month gives two refunds",
+                "readings": [
+                  "pro rata by days left in the term",
+                  "pro rata by whole months left"
+                ],
+                "raised_by": "",
                 "conflict_with": "",
-                "why": "pro rata by day or by month gives two refunds"
+                "part": "",
+                "measure": "Clear"
               }
             ],
             "restates": "",
@@ -413,10 +434,12 @@
             "id": "DEC-11",
             "fails": [
               {
-                "measure": "Trade-off",
-                "part": "",
+                "why": "conflicts with the 20% cap in REQ-08 and does not say which wins",
+                "readings": [],
+                "raised_by": "",
                 "conflict_with": "REQ-08",
-                "why": "conflicts with the 20% cap in REQ-08 and does not say which wins"
+                "part": "",
+                "measure": "Trade-off"
               }
             ],
             "restates": "REQ-08",
@@ -430,10 +453,12 @@
             "id": "DEC-12",
             "fails": [
               {
-                "measure": "Simple",
-                "part": "",
+                "why": "the second in-memory copy serves no requirement",
+                "readings": [],
+                "raised_by": "",
                 "conflict_with": "",
-                "why": "the second in-memory copy serves no requirement"
+                "part": "",
+                "measure": "Simple"
               }
             ],
             "restates": "REQ-03",
@@ -447,10 +472,12 @@
             "id": "DEC-13",
             "fails": [
               {
-                "measure": "Failure behaviour",
-                "part": "",
+                "why": "nothing on a refund the gateway rejects or does not answer",
+                "readings": [],
+                "raised_by": "",
                 "conflict_with": "",
-                "why": "nothing on a refund the gateway rejects or does not answer"
+                "part": "",
+                "measure": "Failure behaviour"
               }
             ],
             "restates": "",

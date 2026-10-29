@@ -22,8 +22,8 @@ function costUsd(model, u) {
 }
 
 class LLM {
-  constructor({ model = 'claude-haiku-5-5', mode = 'live', cassette = null, maxUsd = 2, effort = 'low' } = {}) {
-    this.model = model; this.mode = mode; this.cassettePath = cassette; this.maxUsd = maxUsd; this.effort = effort;
+  constructor({ model = 'claude-haiku-5-5', mode = 'live', cassette = null, maxUsd = 2, effort = 'low', votes = 3 } = {}) {
+    this.model = model; this.mode = mode; this.cassettePath = cassette; this.maxUsd = maxUsd; this.effort = effort; this.nVotes = Math.max(1, votes);
     this.tape = cassette && fs.existsSync(cassette) ? JSON.parse(fs.readFileSync(cassette, 'utf8')) : { model, calls: {} };
     if (mode === 'replay' && this.tape.model) this.model = this.tape.model;
     this.usage = { calls: 0, input_tokens: 0, output_tokens: 0, usd: 0 };
@@ -69,6 +69,18 @@ class LLM {
     try { output = JSON.parse(text); } catch { this.log.push({ key, error: 'invalid JSON' }); return null; }
     if (this.mode === 'record') this.tape.calls[key] = { output, usage: pick(res.usage) };
     return output;
+  }
+
+  /**
+   * The same call asked n times (self-consistency): the caller keeps a judgment only when most replies agree, so a
+   * finding one sample invents and the next drops never reaches the report. Vote k > 0 is keyed "<key>#v<k>"; in replay
+   * and fill a missing vote is skipped (one recorded reply is a majority of one). Returns the non-null replies.
+   */
+  async votes(key, opts) {
+    const keys = [key, ...Array.from({ length: this.nVotes - 1 }, (_, k) => `${key}#v${k + 1}`)];
+    const replay = this.mode === 'replay' || this.mode === 'fill';
+    const out = await Promise.all(keys.map((k, i) => (i && replay && !this.tape.calls[k] ? null : this.ask(k, opts))));
+    return out.filter(Boolean);
   }
 
   add(u) {

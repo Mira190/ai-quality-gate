@@ -162,3 +162,48 @@ test('costUsd uses the Haiku 5.5 card', () => {
   near(costUsd('claude-haiku-5-5', { input_tokens: 50000, output_tokens: 1e6 }), 0.505);
   near(costUsd('claude-haiku-5-5', { input_tokens: 200000, output_tokens: 0 }), 0.1); // long-prompt card above 100K
 });
+
+test('numbers of one unit: code decides the conflict', () => {
+  const { numericConflict, quantities } = require('../src/judge');
+  const R = (text) => ({ text });
+  assert.equal(numericConflict(R('Discounts never exceed 20%.'), R('Discounts stack, up to 25% in total.')), 'conflict');
+  assert.equal(numericConflict(R('Concession card holders get 10% off.'), R('Discounts never exceed 20%.')), 'ok');
+  assert.equal(numericConflict(R('A saved quote shall be kept for 30 days.'), R('A nightly job deletes rows older than 30 days.')), 'ok');
+  assert.equal(numericConflict(R('Sessions expire after 2 hours.'), R('Tokens are valid for at least 3 hours.')), 'conflict');
+  assert.equal(numericConflict(R('Refund minus a $50 fee.'), R('Discounts never exceed 20%.')), null);
+  assert.deepEqual(quantities('choose an excess from $500 to $5,000').map((q) => [q.value, q.role]), [[500, 'floor'], [5000, 'cap']]);
+});
+
+test('Specific and outside-call failure behaviour are code checks', () => {
+  const { vagueTerm, failureGaps } = require('../src/judge');
+  assert.equal(vagueTerm('Quotes should load fast.'), 'fast');
+  assert.equal(vagueTerm('Payment should be retried where possible.'), 'where possible');
+  assert.equal(vagueTerm('The premium shall be the base premium times the band factor.'), null);
+  assert.deepEqual(failureGaps({ text: 'Calls to the CRM have a timeout. A CRM error is logged and returned to the caller.' }), []);
+  assert.deepEqual(failureGaps({ text: 'RefundService.post sends the refund to the payment gateway.' }), ['timeout', 'failure']);
+  assert.deepEqual(failureGaps({ text: 'Gateway calls retry three times.' }), ['timeout']);
+});
+
+test('a model fail counts only with its evidence and a majority of votes', async () => {
+  const { judgeRules } = require('../src/judge');
+  const rules = [
+    { id: 'REQ-01', kind: 'requirement', path: 'r.md', line: 1, title: 'Refund', text: 'Refund is pro rata minus a $50 fee.' },
+    { id: 'REQ-02', kind: 'requirement', path: 'r.md', line: 2, title: 'Discount cap', text: 'Discounts never exceed 20%.' },
+    { id: 'REQ-03', kind: 'requirement', path: 'r.md', line: 3, title: 'Concession', text: 'Concession card holders get 10% off.' },
+  ];
+  const f = (measure, o = {}) => ({ why: 'w', readings: [], raised_by: '', conflict_with: '', part: '', measure, ...o });
+  const reply = (fails) => ({ rules: rules.map((r) => ({ id: r.id, fails: fails[r.id] || [], logic_kind: 'calculation', limits: [], terms: [], restates: '', adds_behaviour: true, boundary: 'none' })) });
+  const clear = f('Clear', { readings: ['by day', 'by month'] });
+  const replies = [
+    reply({ 'REQ-01': [clear, f('Complete')], 'REQ-03': [f('Consistent', { conflict_with: 'REQ-02' })] }),
+    reply({ 'REQ-01': [clear, f('Testable')] }),
+    reply({ 'REQ-01': [f('Clear'), f('Testable')] }),
+  ];
+  const llm = { votes: async () => replies };
+  await judgeRules(llm, rules, { root: '.', fileSet: new Set() });
+  // Clear: 2 of 3 with two readings (the third has none and does not count); Testable: 2 of 3; Complete: no raised_by
+  assert.deepEqual(rules[0].fails.map((x) => x.measure), ['Clear', 'Testable']);
+  // 10% under a 20% cap is no conflict, whatever the model says
+  assert.deepEqual(rules[2].fails, []);
+  assert.deepEqual(rules[1].fails, []);
+});

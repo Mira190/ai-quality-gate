@@ -62,4 +62,15 @@ const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const cell = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\n+/g, ' ');
 const base = (p) => p.split('/').pop();
 
-module.exports = { readText, linesOf, compareRules, idNum, wrap, globToRegExp, globMatch, numbersIn, plural, cell, base };
+// Self-consistency: of n model replies, a judgment needs a strict majority (1 of 1, 2 of 2, 2 of 3).
+const need = (n) => Math.floor(n / 2) + 1;
+// The most frequent value; a tie goes to the earliest reply.
+function mode(values) {
+  const c = new Map();
+  for (const v of values) c.set(v, (c.get(v) || 0) + 1);
+  let best, n = 0;
+  for (const [v, k] of c) if (k > n) { best = v; n = k; }
+  return best;
+}
+
+module.exports = { need, mode, readText, linesOf, compareRules, idNum, wrap, globToRegExp, globMatch, numbersIn, plural, cell, base };

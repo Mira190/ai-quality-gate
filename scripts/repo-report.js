@@ -4,7 +4,7 @@
 //   node scripts/repo-report.js --repo https://github.com/owner/name [--ref main]
 //     [--requirement-url URL]... [--design-url URL]... [--test-doc-url URL]...
 //     [--include GLOB]... [--exclude GLOB]... [--budget-kb 60] [--model claude-haiku-5-5] [--max-usd 2]
-//     [--max-docs 60] [--out out/] [--cassette file.json --record | --replay | --fill] [--offline]
+//     [--max-docs 60] [--votes 3] [--out out/] [--cassette file.json --record | --replay | --fill] [--offline]
 //   --repo may also be a local directory (then --name and --sha name it in the title).
 // Env: ANTHROPIC_API_KEY (live runs), TARGET_REPO_PAT (private repositories, branch protection; never printed).
 const fs = require('node:fs');
@@ -53,7 +53,7 @@ async function main() {
   // fill: replay what the cassette has and write the other prompts to <cassette>.pending.json, to be answered by hand
   const mode = o.replay ? 'replay' : o.fill ? 'fill' : o.offline ? 'offline' : o.record ? 'record' : 'live';
   if ((mode === 'live' || mode === 'record') && !process.env.ANTHROPIC_API_KEY) { console.error('ANTHROPIC_API_KEY is not set'); process.exit(2); }
-  const llm = new LLM({ model: o.model || 'claude-haiku-5-5', mode, cassette: o.cassette || null, maxUsd: Number(o['max-usd'] || 2) });
+  const llm = new LLM({ model: o.model || 'claude-haiku-5-5', mode, cassette: o.cassette || null, maxUsd: Number(o['max-usd'] || 2), votes: Number(o.votes || process.env.VOTES || 3) });
   const date = o.date || new Date().toISOString().slice(0, 10);
   const { ledger, report, details } = await run({ root, repo: name, sha, date, llm, external, budgetKb: Number(o['budget-kb'] || 60), maxDocs: o['max-docs'] ? Number(o['max-docs']) : undefined, include: o.include || [], exclude: o.exclude || [], branchProtection: bp, progress: (m) => console.error(`[repo-report] ${m}`) });
   llm.save();

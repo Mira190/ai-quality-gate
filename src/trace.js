@@ -3,7 +3,7 @@
 // Code builds the candidates (BM25 over source files; tests that carry the rule ID or its search terms) and the
 // model picks among them. Every pick is checked: the path must exist, the line must be in the file, a test must be in
 // the test index. Tests that carry the rule ID (a tag) are always linked, whatever the model says.
-const { readText, linesOf } = require('./util');
+const { readText, linesOf, need, mode } = require('./util');
 const { SOURCE_EXT, isTestFile } = require('./tests-index');
 const { STYLE, obj, arr, str } = require('./judge');
 
@@ -52,6 +52,15 @@ function testCandidates(testIndex, rule, testSearch) {
   return top;
 }
 
+// A design decision says how the code is built, so a unit, component or integration test of it must name the
+// implementing symbol or mock its file (a test of computeRefund in the same file is not a test of RefundService.post).
+// End-to-end tests drive the app from outside and pass; a test that carries the rule ID is linked by its tag before this.
+function touchesImpl(r, t) {
+  if (r.kind !== 'decision' || !r.impl?.symbol || t.level === 'e2e' || t.mocks.some((m) => m.resolved === r.impl.path)) return true;
+  const parts = String(r.impl.symbol).split(/[.#:\s]+/).filter((s) => s.length >= 4);
+  return !parts.length || parts.some((s) => new RegExp(`\\b${escapeRe(s)}\\b`).test(t.text));
+}
+
 async function traceRules(llm, rules, { root, files, testIndex }) {
   const src = files.filter((f) => SOURCE_EXT.some((e) => f.endsWith(e)) && !isTestFile(f) && !/\.config\.|\.d\.ts$/.test(f));
   const texts = new Map(src.map((f) => [f, readText(root, f) || '']));
@@ -68,7 +77,7 @@ async function traceRules(llm, rules, { root, files, testIndex }) {
   }
   const batches = [];
   for (let i = 0; i < rules.length; i += 12) batches.push(rules.slice(i, i + 12));
-  const picks = (await Promise.all(batches.map((b, i) => llm.ask(`trace:${i}`, {
+  const picks = (await Promise.all(batches.map((b, i) => llm.votes(`trace:${i}`, {
     system: STYLE,
     prompt: `For each rule, pick (1) where the code implements it: the file, the line of the function or statement that does it, and the symbol name, or null fields ("" and 0) if no candidate implements it; (2) which candidate test files exercise this rule's behaviour at all, even partly or poorly (a browser test that shows a premium on a page counts for a premium rule; a test that calls the implementing function counts). Later checks judge whether those tests assert the rule, cover its limits and run on PR, so do not leave a test out because it is weak; leave it out only when it tests a different behaviour. Pick only from the candidates shown.\n\n${b.map((r) => {
       const c = candidates(root, files, testIndex, r, testSearch);
@@ -76,16 +85,20 @@ async function traceRules(llm, rules, { root, files, testIndex }) {
     }).join('\n')}`,
     schema: obj({ rules: arr(obj({ id: str, impl_path: str, impl_line: { type: 'integer' }, impl_symbol: str, tests: arr(str) })) }),
     maxTokens: 8000,
-  })))).flatMap((o) => o?.rules || []);
+  })))).flat().flatMap((o) => o?.rules || []);
   const testPaths = new Set(testIndex.tests.map((t) => t.path));
   for (const r of rules) {
-    const p = picks.find((x) => x.id === r.id);
+    // votes: the implementation most replies name (a reply with a line outside the file does not count); tests from
+    // any reply, since a test one reply misses becomes a false "No test" and an extra link can only clear a check
+    const ps = picks.filter((x) => x.id === r.id);
+    const valid = ps.filter((p) => texts.has(p.impl_path) && p.impl_line >= 1 && p.impl_line <= linesOf(texts.get(p.impl_path)).length);
+    const top = mode(valid.map((p) => p.impl_path));
+    const p = valid.filter((x) => x.impl_path === top).length >= need(ps.length) ? valid.find((x) => x.impl_path === top) : null;
     const c = candidates(root, files, testIndex, r, testSearch);
-    const n = p && texts.has(p.impl_path) ? linesOf(texts.get(p.impl_path)).length : 0;
-    r.impl = p && n && p.impl_line >= 1 && p.impl_line <= n ? { path: p.impl_path, line: p.impl_line, symbol: p.impl_symbol } : null;
+    r.impl = p ? { path: p.impl_path, line: p.impl_line, symbol: p.impl_symbol } : null;
     const tagged = c.tests.filter((t) => t.tag).map((t) => ({ path: t.path, source: 'tag' }));
-    const named = (p?.tests || []).filter((t) => testPaths.has(t) && !tagged.some((x) => x.path === t)).map((t) => ({ path: t, source: c.tests.some((x) => x.path === t) ? 'name' : 'AI' }));
-    r.traced = !!p; // no model reply for this rule: its test links are unknown, not absent
+    const named = [...new Set(ps.flatMap((x) => x.tests || []))].filter((t) => testPaths.has(t) && !tagged.some((x) => x.path === t) && touchesImpl(r, testIndex.tests.find((x) => x.path === t))).map((t) => ({ path: t, source: c.tests.some((x) => x.path === t) ? 'name' : 'AI' }));
+    r.traced = ps.length > 0; // no model reply for this rule: its test links are unknown, not absent
     r.links = [...tagged, ...named];
     r.searched = r.terms;
     delete r._code;
