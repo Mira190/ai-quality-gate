@@ -6,11 +6,50 @@
 const { readText, linesOf, numbersIn, need } = require('./util');
 const { STYLE, obj, arr, str } = require('./judge');
 const { termRe } = require('./trace');
-const { isTestFile, SOURCE_EXT } = require('./tests-index');
+const { isTestFile, CODE_EXT } = require('./tests-index');
 
 const CHECK_ORDER = ['Suspected not built', 'No test', 'Not skipped', 'Calls the code', 'Asserts the rule', 'Covers stated limits', 'Crosses the real boundary', 'Placement', 'Runs on PR'];
 const WEAK = new Set(['Suspected not built', 'Not skipped', 'Calls the code', 'Asserts the rule', 'Covers stated limits', 'Crosses the real boundary']);
-const PURE = new Set(['calculation', 'date', 'count']);
+const PURE = new Set(['calculation', 'date', 'count', 'validation']);
+const LEVELS = ['unit', 'component', 'integration', 'e2e'];
+
+// Shift left: the lowest test level that can observe the rule (the test pyramid). Code decides first, from what it can
+// read: the units of the verified limits (money, percent and dates are arithmetic), counting words with a number
+// ("a retry limit" set in config), and whether the implementing function does any I/O. The model's logic kind fills
+// the rest. Pure logic belongs in a unit test; an access check or an outside call in a component test (a route with
+// its middleware, the real adapter against a fake server), so only an e2e-only rule of those kinds is flagged.
+const MONEY_OR_DATE = /^(%|\$|€|£|¥|usd|eur|gbp|aud|cents?|percent|days?|weeks?|months?|years?|hours?)$/i;
+const COUNTING = /\b(retr(y|ies|ied)|attempts?|times|at most|up to|maximum|max|limits?|no more than)\b/i;
+const IO = /\bawait\b|\bfetch\(|\baxios\b|\bhttps?\.|\.query\(|\.execute\(|\bfs\.|readFile|writeFile|\.save\(|\.send\(|\brequests\.|\bopen\(|subprocess|\bsocket\b|\bdb\.|\bthis\.(db|client|http|repo)\b|\bctx\.|\breq\.|\bres\./;
+
+function implBody(root, impl) {
+  const lines = linesOf(readText(root, impl.path) || ''), from = impl.line - 1;
+  if (!lines[from]) return null;
+  if (/\.py$/.test(impl.path)) {
+    const ind = /^\s*/.exec(lines[from])[0].length, out = [lines[from]];
+    for (let j = from + 1; j < lines.length && j < from + 120 && (!lines[j].trim() || /^\s*/.exec(lines[j])[0].length > ind); j++) out.push(lines[j]);
+    return out.join('\n');
+  }
+  let depth = 0, opened = false;
+  const out = [];
+  for (let j = from; j < lines.length && j < from + 120; j++) {
+    out.push(lines[j]);
+    for (const ch of lines[j].replace(/(['"`])(?:\\.|(?!\1).)*\1/g, '')) { if (ch === '{') { depth++; opened = true; } else if (ch === '}') depth--; }
+    if (opened && depth <= 0) break;
+    if (!opened && /[;)]\s*$/.test(lines[j]) && j > from) break; // a one-line arrow or statement
+  }
+  return out.join('\n');
+}
+
+function belongsAt(r, root) {
+  if (PURE.has(r.logicKind)) return { level: 'unit', by: `${r.logicKind} rule` };
+  if (r.limits.some((l) => MONEY_OR_DATE.test(l.unit || ''))) return { level: 'unit', by: 'its limits are amounts or dates' };
+  if (r.limits.length && COUNTING.test(`${r.title} ${r.text}`)) return { level: 'unit', by: 'it counts to a stated limit' };
+  const body = r.impl && root ? implBody(root, r.impl) : null;
+  if (body && !IO.test(body) && /\b(function|def|func|=>)\b|=>/.test(body) && !/\b(class|router|app)\b/.test(body.split('\n')[0])) return { level: 'unit', by: `\`${r.impl.symbol}\` does no I/O` };
+  if (r.logicKind === 'access' || r.logicKind === 'io') return { level: 'component', by: `${r.logicKind === 'io' ? 'outside call' : 'access check'}` };
+  return null;
+}
 
 function relevantCases(t, rule) {
   const rel = t.cases.filter((c) => rule.terms.some((term) => termRe(term).test(c.body)) || new RegExp(`\\b${rule.id}\\b`).test(c.body));
@@ -55,7 +94,7 @@ function callSites(root, files, r, max = 8) {
   if (!sym) return [];
   const re = new RegExp(`\\b${sym.replace(/[$]/g, '\\$')}\\b`), out = [];
   for (const f of files) {
-    if (f === r.impl.path || !SOURCE_EXT.some((e) => f.endsWith(e)) || isTestFile(f)) continue;
+    if (f === r.impl.path || !CODE_EXT.some((e) => f.endsWith(e)) || isTestFile(f)) continue;
     linesOf(readText(root, f) || '').forEach((l, i) => { if (out.length < max && re.test(l) && !/^\s*import\b/.test(l)) out.push({ path: f, line: i + 1, text: l.trim().slice(0, 200) }); });
   }
   return out;
@@ -97,7 +136,7 @@ function variants(limit) {
   return scales.map((k) => ({ on: v * k, past: [v * k + 1, v * k - 1, Math.round((v * k + 0.01) * 100) / 100, Math.round((v * k - 0.01) * 100) / 100] }));
 }
 
-function evaluate(rules, { testIndex, ci, srcImports, asserts, built }) {
+function evaluate(rules, { testIndex, ci, srcImports, asserts, built, root }) {
   const byPath = new Map(testIndex.tests.map((t) => [t.path, t]));
   for (const r of rules) {
     const fails = [], tests = r.links.map((l) => byPath.get(l.path));
@@ -139,8 +178,10 @@ function evaluate(rules, { testIndex, ci, srcImports, asserts, built }) {
     // Where the tests run
     const runs = tests.map((t) => ({ path: t.path, level: t.level, ...ci.runs.get(t.path), dbImport: t.imports.find((i) => /['"](pg|mysql2?|mongodb|mongoose|redis|knex|@prisma\/client|typeorm|sequelize)['"]/.test(i.text)) }));
     const onPr = runs.some((x) => x.pr.length);
-    const placement = PURE.has(r.logicKind) && !tests.some((t) => t.level === 'unit');
-    if (placement) fails.push({ check: 'Placement', facts: { logicKind: r.logicKind, runs } });
+    const want = belongsAt(r, root);
+    const lowest = Math.min(...tests.map((t) => LEVELS.indexOf(t.level)));
+    const placement = want && (want.level === 'unit' ? lowest > 0 : lowest === 3);
+    if (placement) fails.push({ check: 'Placement', facts: { logicKind: r.logicKind, belongsAt: want.level, because: want.by, runs } });
     else if (!onPr) fails.push({ check: 'Runs on PR', facts: { runs } });
     const level = r.status === 'Blocked' ? 'Blocked' : fails.some((f) => WEAK.has(f.check)) ? 'Weak' : !onPr ? 'Checked nightly' : 'Meets';
     r.evidence = { fails, level, tests: runs, onPr };
@@ -148,4 +189,4 @@ function evaluate(rules, { testIndex, ci, srcImports, asserts, built }) {
   for (const r of rules) r.evidence.fails.sort((a, b) => CHECK_ORDER.indexOf(a.check) - CHECK_ORDER.indexOf(b.check));
 }
 
-module.exports = { judgeAsserts, judgeBuilt, evaluate, CHECK_ORDER, relevantCases, variants };
+module.exports = { judgeAsserts, judgeBuilt, evaluate, belongsAt, CHECK_ORDER, relevantCases, variants };

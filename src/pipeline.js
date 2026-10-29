@@ -42,7 +42,7 @@ async function run({ root, repo, sha, date, llm, external = [], budgetKb = 60, m
   await traceRules(llm, rules, { root, files, testIndex });
   linkFromTestDocs(rules, testDocs, testIndex);
   const [asserts, built] = await Promise.all([judgeAsserts(llm, rules, testIndex), judgeBuilt(llm, rules, root, files)]);
-  evaluate(rules, { testIndex, ci, srcImports: testIndex.srcImports, asserts, built });
+  evaluate(rules, { testIndex, ci, srcImports: testIndex.srcImports, asserts, built, root });
   progress('sections 3-4 judged');
 
   const issues = buildIssues(rules, ci);

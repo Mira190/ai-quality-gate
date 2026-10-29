@@ -1,0 +1,158 @@
+[
+ {
+  "repo": "athensresearch/athens",
+  "sha": "b463a97a0d28cbc0a29bec55feebcbe54c20de54",
+  "split": "tuned",
+  "labels": "an independent model reviewer read every document; the discovery rules were tuned on this set"
+ },
+ {
+  "repo": "eclipse-opensovd/fault-lib",
+  "sha": "12dac502616701734f90a61edca1326ae2ac6506",
+  "split": "tuned",
+  "labels": "an independent model reviewer read every document; the discovery rules were tuned on this set"
+ },
+ {
+  "repo": "JosephDoUrden/vercel-seo-audit",
+  "sha": "5f2d006cc54e96af9ce5ce3a23ceaa7468e0b6f9",
+  "split": "tuned",
+  "labels": "an independent model reviewer read every document; the discovery rules were tuned on this set"
+ },
+ {
+  "repo": "npryce/adr-tools",
+  "sha": "b3279baf9be2207d1a4f4bbd608fd0b591c72aee",
+  "split": "tuned",
+  "labels": "an independent model reviewer read every document; the discovery rules were tuned on this set"
+ },
+ {
+  "repo": "sindresorhus/got",
+  "sha": "05b4476913da39a47dd8e20d29e250f28b0a6dca",
+  "split": "tuned",
+  "labels": "an independent model reviewer read every document; the discovery rules were tuned on this set"
+ },
+ {
+  "repo": "soc221b/zod-schema-faker",
+  "sha": "44e76938fa91fb27c35ca9f29aebb413308e4331",
+  "split": "tuned",
+  "labels": "an independent model reviewer read every document; the discovery rules were tuned on this set"
+ },
+ {
+  "repo": "roylee0704/gron",
+  "sha": "e78485adab469c8f47aef96f6afff89bb1228400",
+  "split": "held-out",
+  "labels": "read by hand; not used to tune"
+ },
+ {
+  "repo": "PicGo/flutter-picgo",
+  "sha": "184e97d826c124f29e81e2d8f0c80d4945705c92",
+  "split": "held-out",
+  "labels": "read by hand; not used to tune"
+ },
+ {
+  "repo": "google/note-maps",
+  "sha": "a4ce52e0c63c1d2588efd19023704426a34b77bd",
+  "split": "held-out",
+  "labels": "read by hand; not used to tune"
+ },
+ {
+  "repo": "contentful/contentful-cli",
+  "sha": "438a4542e034f0fe24acb0f02c08adf36325aa36",
+  "split": "held-out",
+  "labels": "read by hand; not used to tune"
+ },
+ {
+  "repo": "zhmcclient/python-zhmcclient",
+  "sha": "8f4199dc0c8c278f6363d49202e2729aeb2d924d",
+  "split": "held-out",
+  "labels": "read by hand; not used to tune"
+ },
+ {
+  "repo": "ossf/best-practices-badge",
+  "sha": "e035b3ec8c395f64d061061fe8f2b3dc1b314cbb",
+  "split": "held-out",
+  "labels": "read by hand; not used to tune"
+ },
+ {
+  "repo": "NewLifeX/NewLife.Redis",
+  "sha": "f78618acc25de923bfb3e9c608ecb0da427a10b8",
+  "split": "held-out",
+  "labels": "read by hand; not used to tune"
+ },
+ {
+  "repo": "Fission-AI/OpenSpec",
+  "sha": "6d04a1b58dedc95729d34e4f223d9d483aae210a",
+  "split": "held-out-large",
+  "labels": "independent model reviewers, by directory group with at least 3 documents read per group; not used to tune"
+ },
+ {
+  "repo": "growilabs/growi",
+  "sha": "81220a70acdbb17d40e255c2c8b922302927745c",
+  "split": "held-out-large",
+  "labels": "independent model reviewers, by directory group with at least 3 documents read per group; not used to tune"
+ },
+ {
+  "repo": "Agenta-AI/agenta",
+  "sha": "aaa2701a6ff2c72c8f7817f5735e19bc3ab3b884",
+  "split": "held-out-large",
+  "labels": "independent model reviewers, by directory group with at least 3 documents read per group; not used to tune"
+ },
+ {
+  "repo": "DataDog/libdatadog",
+  "sha": "f129f0a5b74118348738ca1795fd914c7c528157",
+  "split": "test",
+  "labels": "an independent model reviewer read every document after the discovery rules were frozen; evaluated once"
+ },
+ {
+  "repo": "kalbasit/ncps",
+  "sha": "fd10c7b6c64e7ea718c6be84bb74fae1dd2b8d83",
+  "split": "test",
+  "labels": "an independent model reviewer read every document after the discovery rules were frozen; evaluated once"
+ },
+ {
+  "repo": "sebsto/wispr",
+  "sha": "d2cda0f62441e81b7a7463a2cd250ef87fa269cb",
+  "split": "test",
+  "labels": "an independent model reviewer read every document after the discovery rules were frozen; evaluated once"
+ },
+ {
+  "repo": "ossf/criticality_score",
+  "sha": "0e76c6a99d865dddcbd89dff4117f0a54b1abfb8",
+  "split": "test",
+  "labels": "an independent model reviewer read every document after the discovery rules were frozen; evaluated once"
+ },
+ {
+  "repo": "graphif/project-graph",
+  "sha": "5524363cc06d15214364ff5628206726ae94cbb5",
+  "split": "test",
+  "labels": "an independent model reviewer read every document after the discovery rules were frozen; evaluated once"
+ },
+ {
+  "repo": "cloudfoundry/bosh-bootloader",
+  "sha": "41f25908c4e5d1c855c202cf384fe391d31aa124",
+  "split": "test",
+  "labels": "an independent model reviewer read every document after the discovery rules were frozen; evaluated once"
+ },
+ {
+  "repo": "fraillt/bitsery",
+  "sha": "9bebfd4911b8ef52c5a67754ccb87a8fd5223414",
+  "split": "test",
+  "labels": "an independent model reviewer read every document after the discovery rules were frozen; evaluated once"
+ },
+ {
+  "repo": "omry/omegaconf",
+  "sha": "dd41e49fe51c3fa3f2f7f5b71a35f3fc7add38f3",
+  "split": "test",
+  "labels": "an independent model reviewer read every document after the discovery rules were frozen; evaluated once"
+ },
+ {
+  "repo": "de-otio/epimethian-mcp",
+  "sha": "5059062359c737cfc19f92a578f327583c8d5f9c",
+  "split": "test",
+  "labels": "an independent model reviewer read every document after the discovery rules were frozen; evaluated once"
+ },
+ {
+  "repo": "pallets/click",
+  "sha": "2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+  "split": "test",
+  "labels": "an independent model reviewer read every document after the discovery rules were frozen; evaluated once"
+ }
+]

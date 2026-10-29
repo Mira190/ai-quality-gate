@@ -207,3 +207,71 @@ test('a model fail counts only with its evidence and a majority of votes', async
   assert.deepEqual(rules[2].fails, []);
   assert.deepEqual(rules[1].fails, []);
 });
+
+test('a test link must reach the implementation through imports; Python and Go are followed, aliases pass', () => {
+  const { indexTests } = require('../src/tests-index');
+  const { reaches } = require('../src/trace');
+  const { root, files } = repo({
+    'app/pricing/premium.py': 'from .rates import RATES\ndef premium_for(age):\n    return RATES[age]\n',
+    'app/pricing/rates.py': 'RATES = {}\n',
+    'app/pricing/__init__.py': '',
+    'tests/test_premium.py': 'from app.pricing.premium import premium_for\n\nasync def test_band():\n    assert premium_for(3) == 1\n',
+    'pkg/calc.go': 'package pkg\n',
+    'pkg/calc_test.go': 'package pkg\nfunc TestCalc(t *testing.T) {\n\tt.Errorf("bad")\n}\n',
+    'src/refund/amount.ts': 'export const computeRefund = () => 0;\n',
+    'src/refund/service.ts': "import { computeRefund } from './amount';\nexport class RefundService {}\n",
+    'unit/refund.test.ts': "import { computeRefund } from '../src/refund/amount';\nit('a', () => { expect(computeRefund()).toBe(0); });\n",
+    'unit/alias.test.ts': "import { x } from '@/refund/service';\nimport { y } from '../src/refund/amount';\nit('b', () => { expect(x).toBe(y); });\n",
+  });
+  const ti = indexTests(root, files), t = Object.fromEntries(ti.tests.map((x) => [x.path, x]));
+  assert.deepEqual(t['tests/test_premium.py'].cases.map((c) => c.name), ['test_band']);
+  assert.deepEqual(t['pkg/calc_test.go'].cases.map((c) => c.name), ['TestCalc']);
+  assert.equal(t['pkg/calc_test.go'].asserts.length, 1);
+  assert.ok(reaches(t['tests/test_premium.py'], new Set(['app/pricing/rates.py']), ti.srcImports)); // through premium.py
+  assert.ok(reaches(t['pkg/calc_test.go'], new Set(['pkg/calc.go']), ti.srcImports));
+  assert.ok(!reaches(t['pkg/calc_test.go'], new Set(['app/pricing/rates.py']), ti.srcImports));
+  // a test of computeRefund does not reach RefundService (service imports amount, not the other way round)
+  assert.ok(!reaches(t['unit/refund.test.ts'], new Set(['src/refund/service.ts']), ti.srcImports));
+  assert.ok(reaches(t['unit/alias.test.ts'], new Set(['src/refund/service.ts']), ti.srcImports)); // alias: cannot follow, passes
+});
+
+test('discover: design docs by their parts, ADR status headings, superseded lines, templates and guides', () => {
+  const { features, score, SUPERSEDED } = require('../src/discover');
+  const sc = (file, t) => score(features(file, t), t.length);
+  assert.ok(sc('docs/payments.md', '# Payments\n\n## Background\nx\n## Goals\ny\n## Detailed design\nz\n## Alternatives considered\nw\n') >= 3, 'a design doc with no "shall"');
+  assert.ok(sc('a.md', '# 支付\n\n## 背景\n## 目标\n## 方案设计\n## 备选方案\n') >= 3, 'the same in Chinese');
+  assert.ok(sc('doc/adr/0002-x.md', '# 2. Staged parser\n\nDate: 2021-04-04\n\n## Status\n\nProposed\n\n## Context\nx\n## Decision\ny\n') >= 3, 'ADR with a Status heading');
+  assert.equal(sc('src/template.md', '# NUMBER. TITLE\n\nDate: DATE\n\n## Status\n\nSTATUS\n\n## Context\nx\n## Decision\ny\n'), 0, 'a template');
+  assert.ok(sc('docs/tips.md', '# Tips\n\nWhen you call got twice, the cache is used.\nThen it returns.\n') < 1.5, 'prose that starts with When is not Gherkin');
+  assert.ok(sc('docs/guide.md', '# Guide\n\n## Installation\n## Usage\nThe token must be set. It must not be empty.\n') < 3, 'a guide that says "must" is not admitted by code');
+  assert.ok(SUPERSEDED.test('## Status\n\nProposed.\n\nSuperceded by [9. Atomic](0009-atomic.md)\n'));
+  assert.ok(SUPERSEDED.test('## Status\n\nDeprecated\n'));
+});
+
+test('Placement: code decides the lowest level a rule belongs at (shift left)', () => {
+  const { belongsAt } = require('../src/evidence');
+  const { root } = repo({
+    'src/session.ts': 'export function isExpired(at: number, now: number) {\n  return now - at > 30 * 60000;\n}\n',
+    'src/pay.ts': 'export class Pay {\n  async charge(c) {\n    const r = await fetch(url);\n    return r.ok;\n  }\n}\n',
+  });
+  const r = (o) => ({ title: '', text: '', limits: [], logicKind: 'other', impl: null, ...o });
+  assert.equal(belongsAt(r({ logicKind: 'date' }), root).level, 'unit');
+  assert.equal(belongsAt(r({ logicKind: 'io', text: 'Gateway calls have a retry limit set in config.', limits: [{ value: 2, unit: '' }] }), root).level, 'unit', 'a counted limit inside an outside call');
+  assert.equal(belongsAt(r({ impl: { path: 'src/session.ts', line: 1, symbol: 'isExpired' } }), root).by, '`isExpired` does no I/O');
+  assert.equal(belongsAt(r({ logicKind: 'io', impl: { path: 'src/pay.ts', line: 2, symbol: 'Pay.charge' } }), root).level, 'component');
+  assert.equal(belongsAt(r({ logicKind: 'ui' }), root), null);
+});
+
+test('discover: rst headings, genre titles, pip lists, and "must" alone goes to the model', () => {
+  const { features, score } = require('../src/discover');
+  const sc = (file, t) => score(features(file, t), t.length);
+  const rst = 'Design for handling network errors\n==================================\n\nBackground\n----------\nx\n\nProposed solution\n-----------------\ny\n\nAlternatives considered\n-----------------------\nz\n';
+  assert.ok(features('notes/net.rst', rst).parts >= 3, 'rst underlined headings are read');
+  assert.ok(features('docs/data-model.md', '# Note Maps: Data Model\r\n\r\nA note map is a set of notes.\r\n').titled, 'a title that ends with the genre');
+  const gov = '# Governance\n\nThe TSC must meet monthly. Members must vote. A quorum must be present. Decisions must be recorded. Minutes must be public. The lead must report.\n';
+  const g = sc('docs/governance.md', gov);
+  assert.ok(g >= 1.5 && g < 3, '"must" without spec structure is borderline, not admitted');
+  const { NON_SPEC } = require('../src/discover');
+  assert.ok(NON_SPEC.test('requirements-dev.txt') && NON_SPEC.test('minimum-constraints-install.txt'), 'pip dependency lists');
+  assert.ok(!NON_SPEC.test('docs/requirements.md'));
+});

@@ -28,7 +28,8 @@ function checkFacts(i) {
     case 'Asserts the rule': return { closest_assertion: at(f.path, f.line), it_checks_instead: f.what };
     case 'Covers stated limits': return { missing_limits: f.missing.map((l) => `${l.value}${l.unit ? ' ' + l.unit : ''}${l.source !== 'text' ? ` (from \`${l.source}\`)` : ''}`), tests: f.tests.map((t) => ({ test: `\`${t.path}\``, level: t.level, cases: t.cases, input_lines: t.numbers.map((x) => `:${x.line} ${x.text}`) })) };
     case 'Crosses the real boundary': return { mocked_at: f.mocked.map((m) => at(m.path, m.line)) };
-    case 'Placement': case 'Runs on PR': return { logic_kind: i.rule.logicKind, tests: f.runs.map(runFacts) };
+    case 'Placement': return { logic_kind: i.rule.logicKind, belongs_at: f.belongsAt, because: f.because, tests: f.runs.map(runFacts) };
+    case 'Runs on PR': return { logic_kind: i.rule.logicKind, tests: f.runs.map(runFacts) };
     default: return f;
   }
 }

@@ -21,17 +21,23 @@ async function planTests(llm, issues) {
 - issues: the issue numbers it fixes
 - after: keys of tests it extends or that must exist first (for example a case added to a test file another test creates)
 
-${rows.map((i) => `I-${i.n} ${i.priority} ${i.rule.id} "${i.rule.title}" status=${i.rule.status} level=${i.rule.evidence.level} fails on "${i.check}"${i.check === 'Suspected not built' ? ' (confirm with a test that should fail today)' : ''}; tests now: ${i.rule.evidence.tests.map((t) => `${t.path} (${t.level})`).join(', ') || 'none'}`).join('\n')}`,
+${rows.map((i) => `I-${i.n} ${i.priority} ${i.rule.id} "${i.rule.title}" status=${i.rule.status} level=${i.rule.evidence.level} fails on "${i.check}"${i.check === 'Suspected not built' ? ' (confirm with a test that should fail today)' : ''}${i.facts?.belongsAt ? ` (belongs in a ${i.facts.belongsAt} test: ${i.facts.because})` : ''}; tests now: ${i.rule.evidence.tests.map((t) => `${t.path} (${t.level})`).join(', ') || 'none'}`).join('\n')}`,
     schema: obj({ tests: arr(obj({ key: str, level: { type: 'string', enum: ['unit', 'component', 'integration', 'e2e'] }, rules: arr(str), issues: arr({ type: 'integer' }), after: arr(str) })) }),
     maxTokens: 6000,
   });
   const valid = new Set(rows.map((i) => i.n)), ruleIds = new Set(rows.map((i) => i.rule.id));
   const tests = (out?.tests || []).map((t) => ({ ...t, issues: t.issues.filter((n) => valid.has(n)), rules: t.rules.filter((r) => ruleIds.has(r)) })).filter((t) => t.issues.length && t.rules.length);
   for (const t of tests) t.after = t.after.filter((k) => tests.some((x) => x.key === k));
+  // shift left: a test that fixes a Placement row is written at the level code says the rule belongs at, or lower
+  const LEVELS = ['unit', 'component', 'integration', 'e2e'];
+  for (const t of tests) for (const n of t.issues) {
+    const want = rows.find((i) => i.n === n)?.facts?.belongsAt;
+    if (want && LEVELS.indexOf(t.level) > LEVELS.indexOf(want)) t.level = want;
+  }
   // every row must be fixed by some test: add one per uncovered rule
   for (const i of rows) if (!tests.some((t) => t.issues.includes(i.n))) {
     let t = tests.find((x) => x.key === `test-${i.rule.id.toLowerCase()}`);
-    if (!t) tests.push(t = { key: `test-${i.rule.id.toLowerCase()}`, level: 'unit', rules: [i.rule.id], issues: [], after: [], fallback: true });
+    if (!t) tests.push(t = { key: `test-${i.rule.id.toLowerCase()}`, level: i.facts?.belongsAt || 'unit', rules: [i.rule.id], issues: [], after: [], fallback: true });
     t.issues.push(i.n);
   }
   return tests;
