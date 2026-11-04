@@ -73,4 +73,14 @@ function mode(values) {
   return best;
 }
 
-module.exports = { need, mode, readText, linesOf, compareRules, idNum, wrap, globToRegExp, globMatch, numbersIn, plural, cell, base };
+// Deterministic shuffle (mulberry32 seeded): vote k of a call sees the candidates in order k. Seed 0 keeps the order.
+function permute(list, seed) {
+  if (!seed) return list;
+  const a = [...list];
+  let t = (seed * 0x9e3779b9) >>> 0;
+  const rnd = () => { t = (t + 0x6d2b79f5) >>> 0; let x = Math.imul(t ^ (t >>> 15), 1 | t); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+module.exports = { permute, need, mode, readText, linesOf, compareRules, idNum, wrap, globToRegExp, globMatch, numbersIn, plural, cell, base };

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-const SKIP = /(^|\/)(node_modules|vendor|third_party|dist|build|out|coverage|target|\.git|\.next|\.venv|venv|__pycache__|bower_components)(\/|$)/;
+const SKIP = /(^|\/)(node_modules|vendor|third_party|dist|build|out|coverage|target|\.git|\.next|\.venv|venv|__pycache__|bower_components|\.quality-gate-state)(\/|$)/;
 const MAX_FILES = 20000;
 
 function listFiles(root) {

@@ -20,6 +20,8 @@ function runFacts(t) {
 
 function checkFacts(i) {
   const f = i.facts || {};
+  // execution evidence: the mutant is the witness
+  if (f.mutation) return { mutants_that_no_linked_test_caught: f.mutation.map((m) => ({ at: at(i.rule.impl?.path || i.rule.path, m.line), change: `${m.from} → ${m.to}` })), linked_tests_run: (f.tests || []).map((t) => `\`${t}\``) };
   switch (i.check) {
     case 'No test': return { searched_test_files_for: f.searched, implementation: i.rule.impl ? `${at(i.rule.impl.path, i.rule.impl.line)} ${i.rule.impl.symbol}` : 'not found' };
     case 'Suspected not built': return { line: at(f.path, f.line), why: f.why };

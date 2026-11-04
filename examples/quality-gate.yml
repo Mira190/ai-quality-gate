@@ -1,0 +1,39 @@
+# Copy to .github/workflows/quality-gate.yml in the repository to check.
+# Runs on every pull request (the gate) and on pushes to the default branch (writes the baseline pull requests are
+# compared against, so existing debt never blocks a pull request).
+name: Quality gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write     # the gate's single, updated comment
+  security-events: write   # only with sarif: 'true'
+
+concurrency:
+  group: quality-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Only with execute: 'true': install the repository's own dependencies so its tests can run.
+      # - uses: actions/setup-node@v4
+      #   with: { node-version: 22, cache: npm }
+      # - run: npm ci
+      - uses: Mira190/ai-quality-gate@v0
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Rollout: start with enforce: 'false' for two weeks, read the comments, suppress or fix, then enforce.
+          enforce: 'true'
+          sarif: 'true'
+          # execute: 'true'
+          # test-command: npx vitest run {files}

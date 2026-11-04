@@ -482,3 +482,13 @@ workflow：[`.github/workflows/repo-health.yml`](../.github/workflows/repo-healt
 fixture 上：DEC-05 的 Placement 原来 5 次都漏，因为模型把重试上限判成 `io`。现在由计数规则判出，5 次都有。问题召回从 0.75–0.84 升到 0.78–0.88，精度从 0.73–0.82 升到 0.76–0.85。
 
 相关研究、检索选型（grep / RAG）和下一步实验见 [research.md](research.md)。
+
+## 8. v0.2：gate、判定缓存、seam、执行证据（2026-11-04）
+
+调研、设计和 fixture 上的数字见 [research-v2.md](research-v2.md)。要点：
+- 能阻断合并的只有 E/S/V 证据；纯模型判断（M）只作建议。只拦相对 baseline 新增、触及改动文件、未被 suppress 的 finding（`src/gate.js`）。
+- 模型阶段改为逐条目的内容寻址判定缓存，每票打乱候选顺序（`src/llm.js` 的 `batchVotes`）。
+- Placement 只在找到 seam 时给单元测试建议（`src/placement.js`）。
+- 可选执行证据：规则定向 mutant（`src/execute.js`）。
+- composite action：`action.yml`，示例在 `examples/`。
+- golden test 不变：报告仍与 mock 逐字相等。

@@ -23,9 +23,18 @@ function tagText(s, areas = AREAS) {
   return best && { area: best.area, word: best.word };
 }
 
-function tagRules(rules) {
+// extra: the repository's own strong words per area (.quality-gate.yml `critical:`), added to the built-in lists
+function withExtra(extra) {
+  if (!extra || !Object.keys(extra).length) return AREAS;
+  const areas = AREAS.map((a) => ({ ...a, strong: [...a.strong, ...(extra[a.area] || [])] }));
+  for (const [area, words] of Object.entries(extra)) if (!areas.some((a) => a.area === area)) areas.push({ area, strong: words, weak: [] });
+  return areas;
+}
+
+function tagRules(rules, extra) {
   const byId = new Map(rules.map((r) => [r.id, r]));
-  for (const r of rules) if (r.kind === 'requirement' || !r.restates) r.critical = tagText(`${r.title}. ${r.text}`);
+  const areas = withExtra(extra);
+  for (const r of rules) if (r.kind === 'requirement' || !r.restates) r.critical = tagText(`${r.title}. ${r.text}`, areas);
   for (const r of rules) if (r.kind === 'decision' && r.restates) {
     const req = byId.get(r.restates);
     r.critical = req?.critical ? { ...req.critical, inherited: r.restates } : null;

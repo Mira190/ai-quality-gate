@@ -1,0 +1,36 @@
+# .quality-gate.yml at the repository root. Every key is optional; an unknown key fails the run.
+version: 1
+
+gate:
+  fail_on: P1          # P0 | P1 | P2 | P3 | never
+  basis: [E, S, V]     # E executed · S code · V model + code check · M model (never blocks unless listed)
+  new_only: true       # only findings missing from the default branch's baseline block
+
+documents:
+  include: ['docs/specs/**/*.md']
+  exclude: ['docs/archive/**']
+  budget_kb: 60
+
+critical:              # added to the built-in word lists
+  money: [premium, payout]
+  access control: [tenant]
+
+execute:               # used with the action input execute: 'true'
+  test_command: npx vitest run {files}
+  timeout_s: 120
+  max_mutants: 60
+
+model:
+  name: claude-haiku-5-5
+  votes: 3
+  max_usd: 2
+
+suppress:
+  - fingerprint: 3124619a02c0ffee1234   # from the pull-request comment
+    reason: Covered by the contract tests in acme/pricing-contracts
+    until: 2027-03-31
+    by: alice
+  - rule: REQ-07
+    check: Placement
+    reason: The rule lives in a stored procedure; no unit seam until the Q2 migration
+    until: 2027-06-30

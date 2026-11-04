@@ -145,7 +145,7 @@ async function judgeRules(llm, rules, { root, fileSet }) {
     adds_behaviour: { type: 'boolean' },
     boundary: { type: 'string', enum: ['outside_call', 'stored_data', 'none'] },
   })) });
-  const run = (rs, kind, i) => llm.votes(`judge:${kind}:${i}`, {
+  const build = (rs) => ({
     system: STYLE,
     prompt: `${MEASURE_TEXT}
 
@@ -166,10 +166,13 @@ ${listing(rs)}`,
     schema,
     maxTokens: 16000,
   });
-  const batches = (rs, kind) => Array.from({ length: Math.ceil(rs.length / 20) }, (_, i) => run(rs.slice(i * 20, i * 20 + 20), kind, i));
+  // A rule's verdict key: the rule as shown plus the whole rule list (Consistent compares against every other rule), so
+  // a pull request that edits no document gets every section 1-2 verdict back from the memo unchanged.
+  const allHash = all;
+  const ask = (rs, kind) => llm.batchVotes(`judge:${kind}`, rs, { size: 20, hashOf: (r) => JSON.stringify([allHash, listing([r])]), build: (b) => build(b) });
   // every reply for a rule, one per vote
   const replies = new Map();
-  for (const outs of await Promise.all([...batches(reqs, 'requirement'), ...batches(decs, 'decision')])) for (const o of outs) for (const x of o?.rules || []) if (x?.id) (replies.get(x.id) || replies.set(x.id, []).get(x.id)).push(x);
+  for (const xs of await Promise.all([ask(reqs, 'requirement'), ask(decs, 'decision')])) for (const x of xs) if (x?.id) (replies.get(x.id) || replies.set(x.id, []).get(x.id)).push(x);
   const byId = new Map(rules.map((r) => [r.id, r]));
 
   // The facts later stages need: the majority of the replies (terms: their union, since they only widen a search).
@@ -240,6 +243,8 @@ ${listing(rs)}`,
     if (!o.fails.some((x) => x.measure === m && x.conflictWith === r.id)) o.fails.push({ measure: m, part: '', conflictWith: r.id, why: `conflicts with ${r.id}`, mirrored: true });
   }
   for (const r of rules) r.fails.sort((a, b) => order(r, a) - order(r, b));
+  // conflicts whose numbers code compared and found different: the gate counts these as verified, not model-only
+  for (const r of rules) r.numericConflicts = r.fails.filter((f) => f.conflictWith && numericConflict(r, byId.get(f.conflictWith)) === 'conflict').map((f) => f.conflictWith);
   return {};
 }
 const order = (r, f) => (r.kind === 'requirement' ? REQ_MEASURES : DEC_MEASURES).indexOf(f.measure);
