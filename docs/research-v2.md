@@ -91,27 +91,37 @@ Placement 的 seam 结论（fixture）：REQ-01/04/12、DEC-01/02/04 有纯函�
 
 ---
 
-## 5. 下一步（按性价比排序，都还没做）
+## 5. 已落地的调研结论与剩余工作
 
-1. **有用性遥测，每个检查项各自设观察期**（Tricorder + BitsAI-CR）。用 "Outdated Rate" 作代理：被标记的文件或行在之后的提交里被修改了，就算 finding 被处理。不被处理率 ≥10% 进观察期（只作建议），>25% 默认关闭。精度高但没人理的检查项也要撤掉。gate.json 已经有指纹和文件列表，缺一个跨运行的汇总脚本。
-2. **用 Learn-then-Test / 共形弃权为每个阶段定阈值**（2110.01052、2405.01563）。在 fixture 金标和人工标注集上，按"精度 ≥ 目标"反推每个阶段要求的票数（2/3 还是 3/3）。达不到就弃权，标为"未确认"。
-3. **翻票条目单独复判**：一个条目的 3 票不一致，说明它处在势均力敌的边界上（§1-1），单独再问一次，不和别的条目拼 batch（2505.12570：同时变换顺序和分组的自一致性优于逐条判断）。
-4. **一票用混淆标识符**，专门抓靠名字通过的测试（§1-11）。
-5. **mutation 的 arid 列表**：日志、超时、配置开关、指标埋点上的 mutant 不报（Google 15% → 89%）。
-6. **把"选择"改成"验证"**（TVR）：trace 阶段从"从候选里挑"改成"逐条回答：这个测试是否测了这条规则"。代价是调用变多，靠 memo 摊薄。
-7. **结论先还是理由先，做 A/B**。字节的验证器把结论放前面，精度 77%；我们现在是理由在前（前身项目实测更好）。两种结论冲突，按阶段用金标测。
-8. **tree-sitter**：seam 分析、函数体切分、import 现在都是正则，覆盖 JS/TS/Python/Go 的常见写法。tree-sitter 能去掉一类边界错误。
-9. **跨文档的 superseded 关系**（"RFC 0011 取代 0005–0009"）：上一轮 test 组暴露的问题，仍未解决。
+**已落地（v0.2.1）**
+
+| 调研结论 | 落地 | 怎么用 |
+| --- | --- | --- |
+| 有用性遥测，每个检查项各自设观察期（Tricorder 不被处理率 ≥10% 进观察期；BitsAI-CR 用 Outdated Rate 作代理，规则要求约 25%，人工评论在 35–46%） | `scripts/usefulness.js` + `repo-report --history`。默认分支每次运行写一条历史（action 自动保存在缓存里，保留最近 100 条）。一个 finding 首次出现之后它的文件被改过、或者它消失了，就算被处理 | 处理率 < 0.25 且样本 ≥ 10 → 建议写进 `gate.probation`：照常报告，不再阻断。代理会漏算在别处修的情况，所以只给建议，不自动改配置 |
+| 用 Learn-then-Test 定投票阈值（2110.01052），全票不等于正确（2506.07962） | `src/calibrate.js`（精确二项检验，从严到宽做固定序列检验）+ `scripts/calibrate.js`。每个 V/M finding 现在都记录投票一致率 `agreement` | 用金标 ledger 和多次运行跑出每个检查项的 `gate.min_agreement`。一致率低于阈值的 finding 不能阻断。样本不够时（目标 0.9、delta 0.1 至少要 22 条）明确说"不够，继续标注"，不乱给阈值 |
+| 翻票条目单独复判（2505.12570；翻票说明条目处在边界上，§1-1） | `batchVotes` 的 `signature`：一个条目的几票判定不同，就把它单独拿出来、不带任何邻居再问一轮，以单独这一轮的结果为准。统计写在 `gate.json` 的 `splitVotes` | 四个模型阶段都已开启。只在 live 模式生效，回放时没有对应回复，不会触发 |
+| Mutation 的 arid 列表（Google：有产出的 mutant 从 15% 升到 89%） | `execute.js` 的 `ARID`：日志、超时、指标、链路追踪、feature flag 所在的行不做 mutant。**规则本身讲的就是这件事时例外**（"网关调用 10 s 超时"照样会变异超时值） | 自动生效 |
+
+**剩余工作**
+
+1. **一票用混淆标识符**，专门抓靠名字通过的测试（§1-11）。要有一个对各语言都安全的重命名器，等 tree-sitter 接入再做。
+2. **把"选择"改成"验证"**（TVR）：trace 阶段从"从候选里挑"改成"逐条回答这个测试是否测了这条规则"。调用会变多，靠 memo 摊薄。
+3. **结论先还是理由先，做 A/B**（字节的验证器结论在前，精度 77%；前身项目实测理由在前更好）。现在有了 `calibrate.js`，可以按阶段用金标直接比较。
+4. **tree-sitter**：seam 分析、函数体切分、import 现在都靠正则。
+5. **跨文档的 superseded 关系**（"RFC 0011 取代 0005–0009"）。
+6. **真实仓库的人工标注**：上面两个脚本都要靠真实标注才有意义，fixture 只能证明管线能跑通。
 
 ## 6. v0.2 改了什么（代码索引）
 
 | 文件 | 内容 |
 | --- | --- |
-| `src/llm.js` | `batchVotes`：逐条目 verdict memo（版本化，只保留本次用到的条目）；`votes` 支持按票号变化的 prompt |
+| `src/llm.js` | `batchVotes`：逐条目 verdict memo（版本化，只保留本次用到的条目）、翻票条目单独复判；`votes` 支持按票号变化的 prompt |
 | `src/trace.js` `src/evidence.js` `src/judge.js` | 四个模型阶段都改用 `batchVotes`，每票打乱候选顺序；记录 `strongCandidates`、`numericConflicts` |
 | `src/placement.js` | seam 分析（pure / fake / none），import 时 I/O 检测，导出检测，单元测试基础设施检测 |
 | `src/execute.js` | 可选执行证据：极端 mutant + 限值 ±1 + 边界翻转，基线不绿不下结论，子进程去掉密钥，文件强制还原 |
-| `src/gate.js` | 证据分级、指纹、baseline、改动范围、suppression（必须有理由，≤1 年到期）、SARIF 2.1.0、PR 评论 |
+| `src/gate.js` | 证据分级、指纹、baseline、改动范围、suppression（必须有理由，≤1 年到期）、校准后的投票阈值、观察期、SARIF 2.1.0、PR 评论 |
+| `src/calibrate.js` `scripts/calibrate.js` | Learn-then-Test 定投票阈值 |
+| `scripts/usefulness.js` | 每个检查项的处理率，给出观察期建议 |
 | `src/config.js` | `.quality-gate.yml`：严格的结构校验，未知键报错 |
 | `action.yml` | composite action：改动文件、缓存（memo + baseline）、单条 PR 评论、SARIF、artifact、enforce 开关（先只报告、后阻断的灰度） |
 | `examples/` | 消费方 workflow 和配置示例 |

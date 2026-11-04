@@ -169,7 +169,8 @@ ${listing(rs)}`,
   // A rule's verdict key: the rule as shown plus the whole rule list (Consistent compares against every other rule), so
   // a pull request that edits no document gets every section 1-2 verdict back from the memo unchanged.
   const allHash = all;
-  const ask = (rs, kind) => llm.batchVotes(`judge:${kind}`, rs, { size: 20, hashOf: (r) => JSON.stringify([allHash, listing([r])]), build: (b) => build(b) });
+  const sig = (x) => JSON.stringify([(x.fails || []).map((f) => f.measure).sort(), x.logic_kind, x.adds_behaviour, x.restates || '', x.boundary]);
+  const ask = (rs, kind) => llm.batchVotes(`judge:${kind}`, rs, { size: 20, signature: sig, hashOf: (r) => JSON.stringify([allHash, listing([r])]), build: (b) => build(b) });
   // every reply for a rule, one per vote
   const replies = new Map();
   for (const xs of await Promise.all([ask(reqs, 'requirement'), ask(decs, 'decision')])) for (const x of xs) if (x?.id) (replies.get(x.id) || replies.set(x.id, []).get(x.id)).push(x);
@@ -220,8 +221,9 @@ ${listing(rs)}`,
   }
   for (const r of rules) {
     const { cnt, first } = own.get(r.id);
+    const nReplies = (replies.get(r.id) || []).length;
     r.fails = [...first].filter(([k]) => (k.startsWith('~') ? support.get(k) : cnt.get(k)) >= r._k)
-      .map(([, f]) => ({ measure: f.measure, part: f.part || '', conflictWith: f.conflict_with && byId.has(f.conflict_with) ? f.conflict_with : '', why: f.why }))
+      .map(([k, f]) => ({ measure: f.measure, part: f.part || '', conflictWith: f.conflict_with && byId.has(f.conflict_with) ? f.conflict_with : '', why: f.why, agreement: Math.min(1, (k.startsWith('~') ? support.get(k) : cnt.get(k)) / (nReplies || 1)) }))
       .filter((f) => !['Consistent', 'Trade-off'].includes(f.measure) || f.conflictWith);
     if (r.kind === 'requirement') {
       const w = vagueTerm(r.text);

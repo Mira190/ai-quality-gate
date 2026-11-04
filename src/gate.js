@@ -84,6 +84,10 @@ const matches = (s, i) => (s.fingerprint ? s.fingerprint === i.fingerprint : i.r
  */
 function decide(ledger, { policy = {}, baseline = null, changed = null, suppress = [], today } = {}) {
   const failOn = policy.failOn || 'P1', allowed = new Set(policy.basis || ['E', 'S', 'V']), newOnly = policy.newOnly !== false;
+  // calibrated vote thresholds (scripts/calibrate.js) for model-backed findings, and checks on probation (their
+  // usefulness fell below the bar in scripts/usefulness.js): both inform, neither blocks
+  const minAgree = policy.minAgreement || {}, probation = new Set(policy.probation || []);
+  const agreeNeed = (f) => minAgree[f.measure || f.check] ?? minAgree.default ?? 0;
   const base = baseline ? new Set(baseline.fingerprints || []) : null;
   const { valid, problems } = checkSuppressions(suppress, today || ledger.meta.date);
   const byId = new Map(ledger.rules.map((r) => [r.id, r]));
@@ -98,8 +102,10 @@ function decide(ledger, { policy = {}, baseline = null, changed = null, suppress
     f.suppressed = s && !s.expired ? { reason: s.reason, until: s.until, by: s.by || '' } : null;
     if (s?.expired) f.suppressionExpired = s.until;
     const severe = failOn !== 'never' && PRI(f.priority) <= PRI(failOn);
-    f.blocking = severe && allowed.has(f.basis) && (!newOnly || f.isNew) && f.inScope && !f.suppressed;
-    f.why = !severe ? 'below the fail-on priority' : !allowed.has(f.basis) ? `evidence ${f.basis} cannot block` : newOnly && !f.isNew ? 'in the baseline' : !f.inScope ? 'outside the change' : f.suppressed ? 'suppressed' : 'blocks';
+    const onProbation = probation.has(f.measure || f.check);
+    const split = (f.basis === 'V' || f.basis === 'M') && typeof f.agreement === 'number' && f.agreement < agreeNeed(f);
+    f.blocking = severe && allowed.has(f.basis) && (!newOnly || f.isNew) && f.inScope && !f.suppressed && !onProbation && !split;
+    f.why = !severe ? 'below the fail-on priority' : !allowed.has(f.basis) ? `evidence ${f.basis} cannot block` : onProbation ? 'check on probation' : split ? `votes ${Math.round(f.agreement * 100)}% agree, ${Math.round(agreeNeed(f) * 100)}% needed` : newOnly && !f.isNew ? 'in the baseline' : !f.inScope ? 'outside the change' : f.suppressed ? 'suppressed' : 'blocks';
     return f;
   });
   findings.sort((a, b) => b.blocking - a.blocking || PRI(a.priority) - PRI(b.priority) || BASIS_RANK[a.basis] - BASIS_RANK[b.basis]);
@@ -111,7 +117,7 @@ function decide(ledger, { policy = {}, baseline = null, changed = null, suppress
     suppressed: findings.filter((f) => f.suppressed).length,
     byBasis: Object.fromEntries(Object.keys(BASIS_RANK).map((b) => [b, findings.filter((f) => f.basis === b).length])),
   };
-  return { verdict: counts.blocking ? 'fail' : 'pass', findings, counts, problems, policy: { failOn, basis: [...allowed], newOnly } };
+  return { verdict: counts.blocking ? 'fail' : 'pass', findings, counts, problems, policy: { failOn, basis: [...allowed], newOnly, minAgreement: minAgree, probation: [...probation] } };
 }
 
 const toBaseline = (gate, meta) => ({ version: 1, repo: meta.repo, sha: meta.sha, date: meta.date, fingerprints: [...new Set(gate.findings.map((f) => f.fingerprint))].sort() });

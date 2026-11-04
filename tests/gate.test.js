@@ -134,10 +134,80 @@ test('config: unknown keys and bad values are errors, not silent defaults', () =
   fs.writeFileSync(f, 'gate:\n  fail_on: P0\n  basis: [E, S]\n  fial: 1\ncritical:\n  money: [premium]\n');
   const { config, errors } = loadConfig(f);
   assert.deepEqual(errors, ['gate.fial: unknown key']);
-  assert.deepEqual(policyOf(config), { failOn: 'P0', basis: ['E', 'S'], newOnly: true });
+  assert.deepEqual(policyOf(config), { failOn: 'P0', basis: ['E', 'S'], newOnly: true, minAgreement: {}, probation: [] });
   fs.writeFileSync(f, 'gate:\n  fail_on: high\n  basis: [X]\n');
   assert.equal(loadConfig(f).errors.length, 2);
   const { tagRules } = require('../src/critical');
   const [r] = tagRules([{ id: 'REQ-01', kind: 'requirement', title: 'Tenant isolation', text: 'A tenant sees only its own rows.' }], { 'access control': ['tenant'] });
   assert.equal(r.critical.area, 'access control');
+});
+
+test('split votes: an item whose votes disagree is asked again alone, and the solo votes decide', async () => {
+  const { LLM } = require('../src/llm');
+  const llm = new LLM({ mode: 'offline', votes: 3 });
+  llm.mode = 'live';
+  const keys = [];
+  llm.votes = async (key, opts) => {
+    keys.push(key);
+    const items = opts(0).items;
+    if (key.includes(':solo:')) return [0, 1, 2].map(() => ({ rules: items.map((it) => ({ id: it.id, asserts: false })) }));
+    // in the batch, REQ-02 flips between votes (a knife-edge item next to a clear one)
+    return [0, 1, 2].map((k) => ({ rules: items.map((it) => ({ id: it.id, asserts: it.id === 'REQ-01' ? true : k !== 1 })) }));
+  };
+  const out = await llm.batchVotes('asserts', [{ id: 'REQ-01' }, { id: 'REQ-02' }], { size: 10, hashOf: (x) => x.id, signature: (x) => String(x.asserts), build: (b) => ({ items: b }) });
+  assert.deepEqual(keys, ['asserts:0', 'asserts:solo:REQ-02']);
+  assert.deepEqual(out.filter((x) => x.id === 'REQ-02').map((x) => x.asserts), [false, false, false]);
+  assert.deepEqual(out.filter((x) => x.id === 'REQ-01').map((x) => x.asserts), [true, true, true]);
+  assert.deepEqual(llm.splitStats, { asked: 1, settled: 1 });
+});
+
+test('calibrate: Learn then Test picks the loosest vote threshold that keeps precision above target', () => {
+  const { calibrate, binomTail } = require('../src/calibrate');
+  assert.ok(Math.abs(binomTail(10, 10, 0.9) - 0.9 ** 10) < 1e-12);
+  assert.equal(binomTail(5, 0, 0.5), 1);
+  // unanimous: 30 of 30 right; two of three: 6 of 12 right
+  const pairs = [...Array(30)].map(() => ({ agreement: 1, correct: true })).concat([...Array(12)].map((_, k) => ({ agreement: 2 / 3, correct: k < 6 })));
+  const { threshold, table } = calibrate(pairs, { target: 0.8, delta: 0.1 });
+  assert.equal(threshold, 1);
+  assert.equal(table[1].rejected, false);
+  // too few or too wrong: no threshold
+  assert.equal(calibrate([{ agreement: 1, correct: true }, { agreement: 1, correct: false }], { target: 0.9 }).threshold, null);
+});
+
+test('gate: calibrated vote thresholds and probation inform but do not block', () => {
+  const { decide } = require('../src/gate');
+  const r = { id: 'REQ-01', title: 'Cap', text: 'Discounts never exceed 20%.', path: 'r.md', line: 1, kind: 'requirement', links: [{ path: 't.ts', source: 'AI' }], fails: [], evidence: { fails: [] } };
+  const issues = [{ section: 3, rule: r, check: 'Calls the code', priority: 'P1' }, { section: 3, rule: { ...r, text: 'Refund minus fee.' }, check: 'Placement', priority: 'P1' }, { section: 3, rule: { ...r, text: 'Sessions expire.' }, check: 'Covers stated limits', priority: 'P1', agreement: 2 / 3 }];
+  const ledger = { meta: { date: '2026-11-04' }, rules: [r], issues };
+  const g = decide(ledger, { policy: { minAgreement: { default: 1 }, probation: ['Placement'] } });
+  assert.deepEqual(g.findings.map((f) => [f.check, f.blocking, f.why]), [
+    ['Calls the code', true, 'blocks'],
+    ['Placement', false, 'check on probation'],
+    ['Covers stated limits', false, 'votes 67% agree, 100% needed'],
+  ]);
+});
+
+test('usefulness: a finding counts as acted on when its file changed or it disappeared', () => {
+  const { execFileSync } = require('node:child_process');
+  const { root } = repo({ 'src/a.ts': 'a\n', 'src/b.ts': 'b\n' });
+  const git = (...a) => execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { encoding: 'utf8' }).trim();
+  git('init', '-q'); git('add', '-A'); git('commit', '-qm', 'one');
+  const c1 = git('rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(root, 'src/a.ts'), 'a2\n'); git('commit', '-qam', 'two');
+  const c2 = git('rev-parse', 'HEAD');
+  const hist = path.join(root, 'hist'); fs.mkdirSync(hist);
+  const f = (fp, check, file) => ({ fingerprint: fp, check, files: [file] });
+  fs.writeFileSync(path.join(hist, '1.json'), JSON.stringify({ time: '2026-11-01', commit: c1, findings: [f('x1', 'Placement', 'src/a.ts'), f('x2', 'Placement', 'src/b.ts'), f('x3', 'Lint', 'src/b.ts')] }));
+  fs.writeFileSync(path.join(hist, '2.json'), JSON.stringify({ time: '2026-11-02', commit: c2, findings: [f('x2', 'Placement', 'src/b.ts')] }));
+  const out = execFileSync(process.execPath, [path.join(__dirname, '../scripts/usefulness.js'), '--history', hist, '--repo', root, '--min-findings', '1', '--min-actioned', '0.6'], { encoding: 'utf8' });
+  assert.match(out, /\| Placement \| 2 \| 1 \| 50% \| probation \|/, 'x1 acted on (file changed), x2 not');
+  assert.match(out, /\| Lint \| 1 \| 1 \| 100% \| keep \|/, 'x3 acted on (gone)');
+  assert.match(out, /probation: \[Placement\]/);
+});
+
+test('arid: a timeout literal is not mutated unless the rule is about the timeout', () => {
+  const { limitMutants } = require('../src/execute');
+  const src = 'function f(x) {\n  const t = setTimeout(go, 30);\n  return x <= 30;\n}\n';
+  assert.ok(limitMutants(src, { path: 'a.js', line: 1 }, [{ value: 30 }], 'Refund within 30 days').every((m) => m.line === 3));
+  assert.ok(limitMutants(src, { path: 'a.js', line: 1 }, [{ value: 30 }], 'Retry after a setTimeout of 30 ms').some((m) => m.line === 2));
 });

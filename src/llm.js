@@ -111,36 +111,52 @@ class LLM {
    *   build   (batch, batchIndex, vote) → ask() options
    *   field   reply array field ("rules", "decisions"); idField reply id field ("id")
    *   keyOf   batch index → logical key
+   *   signature  reply → string of its verdict; items whose votes give different signatures are asked again alone
    */
-  async batchVotes(stage, items, { size = 12, hashOf, build, field = 'rules', idField = 'id', idOf = (x) => x.id, keyOf = (i) => `${stage}:${i}` }) {
-    const out = [];
+  async batchVotes(stage, items, { size = 12, hashOf, build, field = 'rules', idField = 'id', idOf = (x) => x.id, keyOf = (i) => `${stage}:${i}`, signature = null }) {
+    const per = new Map(); // item → its replies
     let todo = items;
     const hashes = new Map();
+    const hashFor = (it) => crypto.createHash('sha256').update([MEMO_VERSION, this.model, this.effort, this.nVotes, stage, hashOf(it)].join('\u0000')).digest('hex').slice(0, 32);
     if (this.memoPath) {
       todo = [];
       for (const it of items) {
-        const h = crypto.createHash('sha256').update([MEMO_VERSION, this.model, this.effort, this.nVotes, stage, hashOf(it)].join('\u0000')).digest('hex').slice(0, 32);
+        const h = hashFor(it);
         hashes.set(it, h);
         const hit = this.memo.entries[h];
-        if (hit && hit.replies?.length) { this.memoStats.hits++; this.memoUsed.add(h); out.push(...hit.replies.map((r) => ({ ...r, [idField]: idOf(it) }))); } else { this.memoStats.misses++; todo.push(it); }
+        if (hit && hit.replies?.length) { this.memoStats.hits++; this.memoUsed.add(h); per.set(it, hit.replies.map((r) => ({ ...r, [idField]: idOf(it) }))); } else { this.memoStats.misses++; todo.push(it); }
       }
     }
     const batches = [];
     for (let i = 0; i < todo.length; i += size) batches.push(todo.slice(i, i + size));
     const replies = await Promise.all(batches.map((b, i) => this.votes(keyOf(i), (k) => build(b, i, k))));
+    const complete = new Set();
     batches.forEach((b, i) => {
       const flat = replies[i].flatMap((o) => o?.[field] || []);
-      out.push(...flat);
-      if (!this.memoPath || replies[i].length < this.nVotes) return; // a vote failed: do not pin a partial majority
       for (const it of b) {
-        const mine = flat.filter((r) => r?.[idField] === idOf(it));
-        if (!mine.length) continue;
-        const h = hashes.get(it);
-        this.memo.entries[h] = { replies: mine.map(({ [idField]: _, ...rest }) => rest), at: new Date().toISOString().slice(0, 10) };
-        this.memoUsed.add(h);
+        per.set(it, flat.filter((r) => r?.[idField] === idOf(it)));
+        if (replies[i].length >= this.nVotes) complete.add(it);
       }
     });
-    return out;
+    // Split votes mark an item on a knife edge, where batch neighbours and position move the verdict most. Ask it again
+    // alone (no neighbours) and keep that answer: the solo votes decide. Live only: a replayed run has no solo replies.
+    if (signature && (this.mode === 'live' || this.mode === 'record') && this.nVotes > 1) {
+      const split = todo.filter((it) => complete.has(it) && new Set(per.get(it).map(signature)).size > 1);
+      this.splitStats = this.splitStats || { asked: 0, settled: 0 };
+      await Promise.all(split.map(async (it) => {
+        this.splitStats.asked++;
+        const solo = (await this.votes(`${stage}:solo:${idOf(it)}`, (k) => build([it], 0, k))).flatMap((o) => o?.[field] || []).filter((r) => r?.[idField] === idOf(it));
+        if (solo.length >= this.nVotes) { per.set(it, solo); if (new Set(solo.map(signature)).size === 1) this.splitStats.settled++; } else complete.delete(it);
+      }));
+    }
+    if (this.memoPath) for (const it of todo) {
+      // a failed vote: do not pin a partial majority
+      if (!complete.has(it) || !per.get(it)?.length) continue;
+      const h = hashes.get(it);
+      this.memo.entries[h] = { replies: per.get(it).map(({ [idField]: _, ...rest }) => rest), at: new Date().toISOString().slice(0, 10) };
+      this.memoUsed.add(h);
+    }
+    return items.flatMap((it) => per.get(it) || []);
   }
 
   add(u) {

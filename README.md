@@ -35,6 +35,18 @@ node scripts/repo-report.js --repo https://github.com/owner/name --out out
 
 输出：`report.md`、`report-details.md`、`ledger.json`、`gate.json`、`results.sarif`、`comment.md`、`baseline.json`。
 
+## 运维：让 gate 跟着数据变严或变松
+
+```bash
+# 每个检查项的处理率（需要完整 git 历史和 action 保存的历史目录）→ 建议的 gate.probation
+node scripts/usefulness.js --history .quality-gate-state/history --repo .
+```
+
+```bash
+# 用金标 ledger 校准投票阈值（Learn then Test）→ 建议的 gate.min_agreement
+node scripts/calibrate.js gold/ledger.json run1/ledger.json run2/ledger.json --target 0.9 --delta 0.1
+```
+
 ## 文档
 
 - [docs/research-v2.md](docs/research-v2.md)：v0.2 调研与设计（精度、稳定性、Placement 的运行时极限，unknown unknowns）

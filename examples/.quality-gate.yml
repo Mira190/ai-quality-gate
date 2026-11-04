@@ -5,6 +5,10 @@ gate:
   fail_on: P1          # P0 | P1 | P2 | P3 | never
   basis: [E, S, V]     # E executed · S code · V model + code check · M model (never blocks unless listed)
   new_only: true       # only findings missing from the default branch's baseline block
+  min_agreement:       # vote agreement a model-backed finding needs to block (scripts/calibrate.js)
+    default: 0.67
+    Asserts the rule: 1
+  probation: []        # checks that report but never block (scripts/usefulness.js)
 
 documents:
   include: ['docs/specs/**/*.md']

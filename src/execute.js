@@ -24,6 +24,9 @@ const { bodyAt } = require('./placement');
 
 const SECRET_ENV = /^(NODE_TEST_CONTEXT$|ANTHROPIC_|OPENAI_|GITHUB_TOKEN$|GH_TOKEN$|TARGET_REPO_PAT$|ACTIONS_RUNTIME_TOKEN$|ACTIONS_ID_TOKEN)/;
 const scrubbedEnv = () => Object.fromEntries(Object.entries(process.env).filter(([k]) => !SECRET_ENV.test(k)));
+// Arid lines (Google, "Practical Mutation Testing at Scale": suppressing them took productive mutants from 15% to 89%):
+// logging, timeouts, metrics and feature flags. A surviving mutant there says nothing about the rule.
+const ARID = /\b(console\.|logg?er\.|logging\.|log\.(debug|info|warn|error)|print\(|setTimeout|timeouts?\b|timeoutMs|metrics?\.|telemetry|tracer\.|span\.|feature[_-]?flags?|isEnabled\()/i;
 const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 
 function runTests(root, command, files, timeoutS) {
@@ -55,7 +58,7 @@ function extremeMutant(text, impl) {
 
 // Limit mutants: the literal of each stated limit inside the implementing function (or in a constant it names in the
 // same file), nudged by one; and the first comparison operator on that line flipped at its edge.
-function limitMutants(text, impl, limits) {
+function limitMutants(text, impl, limits, ruleText = '') {
   const lines = linesOf(text), body = bodyAt(lines, impl.line, impl.path) || '';
   const bodyLines = linesOf(body).length;
   const consts = [...body.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)].map((m) => m[1]);
@@ -68,6 +71,9 @@ function limitMutants(text, impl, limits) {
     const inBody = i >= impl.line - 1 && i < impl.line - 1 + bodyLines;
     const constLine = consts.some((c) => new RegExp(`\\b${c}\\b\\s*(?::[^=]+)?=`).test(l));
     if (!inBody && !constLine) return;
+    // arid unless the rule is about that very thing ("the gateway call times out after 10 s")
+    const arid = ARID.exec(l);
+    if (arid && !new RegExp(arid[0].replace(/[.()\\]/g, '').replace(/s$/, ''), 'i').test(ruleText)) return;
     let atEdge = inBody && limitConsts.some((c) => new RegExp(`\\b${c}\\b`).test(l));
     for (const lim of limits) {
       const m = litRe(lim).exec(blank(l));
@@ -108,7 +114,7 @@ function probeRules(rules, { root, testIndex, command, timeoutS = 120, maxMutant
     const muts = [];
     const ex = extremeMutant(original, r.impl);
     if (ex && ex !== original) muts.push({ kind: 'extreme', line: r.impl.line, from: `${r.impl.symbol} body`, to: 'return default', text: ex });
-    muts.push(...limitMutants(original, r.impl, r.limits || []));
+    muts.push(...limitMutants(original, r.impl, r.limits || [], `${r.title || ''} ${r.text || ''}`));
     const results = [];
     try {
       for (const m of muts.slice(0, maxMutantsPerRule)) {
@@ -144,4 +150,4 @@ function verdictOf(p) {
   };
 }
 
-module.exports = { probeRules, verdictOf, extremeMutant, limitMutants, runTests, scrubbedEnv };
+module.exports = { ARID, probeRules, verdictOf, extremeMutant, limitMutants, runTests, scrubbedEnv };

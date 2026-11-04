@@ -1,6 +1,6 @@
 {
   "name": "ai-quality-gate",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Repository health report: requirement and design health, test coverage of rules, and CI gate, in the fixed report-summary shape.",
   "license": "UNLICENSED",

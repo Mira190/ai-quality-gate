@@ -147,7 +147,7 @@ runs:
         [ "$AQG_EXECUTE" = true ] && args+=(--execute)
         [ -n "$AQG_TEST_COMMAND" ] && args+=(--test-command "$AQG_TEST_COMMAND")
         # the default branch writes the baseline that pull requests are compared against
-        [ "$AQG_IS_DEFAULT" = true ] && args+=(--write-baseline)
+        [ "$AQG_IS_DEFAULT" = true ] && args+=(--write-baseline --history .quality-gate-state/history --commit "$GITHUB_SHA")
         node "$GITHUB_ACTION_PATH/scripts/repo-report.js" "${args[@]}"
 
     - name: Job summary

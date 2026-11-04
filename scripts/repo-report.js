@@ -7,7 +7,7 @@
 //     [--max-docs 60] [--votes 3] [--out out/] [--cassette file.json --record | --replay | --fill] [--offline]
 //     [--config .quality-gate.yml] [--memo .quality-gate/memo.json] [--baseline baseline.json] [--write-baseline]
 //     [--changed-files changed.txt] [--fail-on P1] [--basis E,S,V] [--all-findings] [--execute] [--test-command CMD]
-//     [--report-url URL] [--gate]
+//     [--report-url URL] [--gate] [--history DIR] [--commit SHA]
 //   --repo may also be a local directory (then --name and --sha name it in the title).
 // Gate outputs (always written): out/gate.json, out/results.sarif, out/comment.md, out/baseline.json. With --gate the
 // exit code is 1 when the gate fails (3 for a config error), so a workflow step can block the merge.
@@ -81,10 +81,18 @@ async function main() {
   const policy = policyOf(config, { failOn: o['fail-on'], basis: o.basis ? String(o.basis).split(',').map((x) => x.trim()) : undefined, newOnly: o['all-findings'] ? false : undefined });
   const gate = decide(ledger, { policy, baseline, changed, suppress: config.suppress || [], today: date });
   const cells = ledger.cells || {};
-  fs.writeFileSync(path.join(out, 'gate.json'), JSON.stringify({ verdict: gate.verdict, counts: gate.counts, policy: gate.policy, problems: gate.problems, baseline: baseline ? { sha: baseline.sha, date: baseline.date } : null, changedFiles: changed ? changed.length : null, findings: gate.findings.map((f) => ({ fingerprint: f.fingerprint, priority: f.priority, basis: f.basis, section: f.section, rule: f.rule?.id || null, check: f.measure || f.check, part: f.part || '', isNew: f.isNew, inScope: f.inScope, suppressed: f.suppressed, blocking: f.blocking, why: f.why, files: f.files, issue: f.n || null })) }, null, 1));
+  fs.writeFileSync(path.join(out, 'gate.json'), JSON.stringify({ repo: name, sha, date, verdict: gate.verdict, splitVotes: llm.splitStats || null, memo: llm.memoPath ? llm.memoStats : null, counts: gate.counts, policy: gate.policy, problems: gate.problems, baseline: baseline ? { sha: baseline.sha, date: baseline.date } : null, changedFiles: changed ? changed.length : null, findings: gate.findings.map((f) => ({ fingerprint: f.fingerprint, priority: f.priority, basis: f.basis, agreement: f.agreement ?? null, section: f.section, rule: f.rule?.id || null, check: f.measure || f.check, part: f.part || '', isNew: f.isNew, inScope: f.inScope, suppressed: f.suppressed, blocking: f.blocking, why: f.why, files: f.files, issue: f.n || null })) }, null, 1));
   fs.writeFileSync(path.join(out, 'results.sarif'), JSON.stringify(toSarif(gate, ledger, { cells, version: VERSION }), null, 1));
   fs.writeFileSync(path.join(out, 'comment.md'), toComment(gate, ledger, { reportUrl: o['report-url'] || '', cells }) + '\n');
   fs.writeFileSync(path.join(out, 'baseline.json'), JSON.stringify(toBaseline(gate, ledger.meta), null, 1));
+  // history for scripts/usefulness.js: one compact entry per run, the newest 100 kept
+  if (o.history) {
+    fs.mkdirSync(o.history, { recursive: true });
+    const time = new Date().toISOString();
+    fs.writeFileSync(path.join(o.history, `${time.replace(/[:.]/g, '-')}.json`), JSON.stringify({ time, commit: o.commit || sha, findings: gate.findings.map((f) => ({ fingerprint: f.fingerprint, check: f.measure || f.check, basis: f.basis, priority: f.priority, files: f.files })) }));
+    const old = fs.readdirSync(o.history).filter((f) => f.endsWith('.json')).sort();
+    for (const f of old.slice(0, Math.max(0, old.length - 100))) fs.unlinkSync(path.join(o.history, f));
+  }
   if (o['write-baseline'] && o.baseline) fs.writeFileSync(o.baseline, JSON.stringify(toBaseline(gate, ledger.meta), null, 1));
   console.error(`[repo-report] gate: ${gate.verdict} (${gate.counts.blocking} blocking, ${gate.counts.newAdvisory} new advisory, ${gate.counts.existing} existing, ${gate.counts.suppressed} suppressed; evidence ${Object.entries(gate.counts.byBasis).map(([k, v]) => `${k}=${v}`).join(' ')})${ledger.meta.memo ? `; memo ${ledger.meta.memo.hits} hits / ${ledger.meta.memo.misses} misses` : ''}`);
   console.error(`[repo-report] wrote ${out}/report.md (${ledger.issues.filter((i) => i.shown).length} issues shown, ${ledger.meta.usage.calls} model calls, ${ledger.meta.aiu.toFixed(2)} AIU)`);

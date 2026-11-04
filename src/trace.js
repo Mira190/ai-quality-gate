@@ -104,6 +104,7 @@ async function traceRules(llm, rules, { root, files, testIndex }) {
   };
   const picks = await llm.batchVotes('trace', rules, {
     size: 12,
+    signature: (x) => `${x.impl_path}|${[...new Set(x.tests || [])].sort().join(',')}`,
     // everything the prompt shows about the rule, in canonical order (vote permutations do not change the verdict key)
     hashOf: (r) => JSON.stringify([r.title, r.text, r._cand.code, r._cand.tests.map((t) => [t.path, t.level, t.tag, t.hits, t.imports, caseList(t)])]),
     build: (b, i, k) => ({

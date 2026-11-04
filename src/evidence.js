@@ -48,6 +48,7 @@ async function judgeAsserts(llm, rules, testIndex) {
   };
   const out = await llm.batchVotes('asserts', subjects, {
     size: 10,
+    signature: (x) => String(x.asserts),
     hashOf: (r) => JSON.stringify([r.title, r.text, r.links.map((l) => testBlock(r, l))]),
     build: (b, i, k) => ({
       system: STYLE,
@@ -67,7 +68,7 @@ async function judgeAsserts(llm, rules, testIndex) {
     const no = ok.filter((v) => !v.asserts);
     const v = no.length >= need(vs.length) ? no[0] : ok.find((x) => x.asserts);
     if (!v) { map.set(r.id, { dropped: true }); continue; }
-    map.set(r.id, { asserts: v.asserts, path: v.cite_path, line: v.cite_line, what: v.what });
+    map.set(r.id, { asserts: v.asserts, path: v.cite_path, line: v.cite_line, what: v.what, agreement: (v.asserts ? ok.filter((x) => x.asserts).length : no.length) / vs.length });
   }
   return map;
 }
@@ -97,6 +98,7 @@ async function judgeBuilt(llm, rules, root, files = []) {
   };
   const replies = await llm.batchVotes('built', subjects, {
     size: Infinity, field: 'decisions',
+    signature: (x) => x.verdict,
     hashOf: block,
     build: (b) => ({
       system: STYLE,
@@ -112,7 +114,7 @@ async function judgeBuilt(llm, rules, root, files = []) {
     // "not built" is a P0 claim: it needs a cited line shown to the model, in most replies
     const shownPaths = new Set([r.impl.path, ...r._uses.map((u) => u.path)]);
     const cited = vs.filter((v) => v.verdict === 'not_built' && shownPaths.has(v.path) && linesOf(readText(root, v.path) || '')[v.line - 1]?.trim());
-    if (cited.length >= need(vs.length)) { const v = cited[0]; map.set(r.id, { verdict: v.verdict, path: v.path, line: v.line, why: v.why }); continue; }
+    if (cited.length >= need(vs.length)) { const v = cited[0]; map.set(r.id, { verdict: v.verdict, path: v.path, line: v.line, why: v.why, agreement: cited.length / vs.length }); continue; }
     if (vs.some((v) => v.verdict === 'not_built')) { map.set(r.id, { dropped: true }); continue; }
     const v = vs[0];
     map.set(r.id, { verdict: v.verdict, path: v.path, line: v.line, why: v.why });
@@ -131,7 +133,7 @@ function evaluate(rules, { testIndex, ci, srcImports, asserts, built, root, prob
   for (const r of rules) {
     const fails = [], tests = r.links.map((l) => byPath.get(l.path));
     const b = built.get(r.id);
-    if (b?.verdict === 'not_built') fails.push({ check: 'Suspected not built', facts: { path: b.path, line: b.line, why: b.why } });
+    if (b?.verdict === 'not_built') fails.push({ check: 'Suspected not built', agreement: b.agreement, facts: { path: b.path, line: b.line, why: b.why } });
     if (!tests.length) {
       fails.push({ check: 'No test', facts: { searched: r.searched, impl: r.impl } });
       r.evidence = { fails, level: 'None', tests: [] };
@@ -155,7 +157,7 @@ function evaluate(rules, { testIndex, ci, srcImports, asserts, built, root, prob
     if (probe) r.probe = probe;
     const a = asserts.get(r.id);
     if (pv.asserts === false) fails.push({ check: 'Asserts the rule', basis: 'E', facts: { mutation: probe.mutants.filter((m) => m.kind === 'extreme'), impl: r.impl, tests: probe.tests } });
-    else if (pv.asserts === null && a && !a.dropped && !a.asserts) fails.push({ check: 'Asserts the rule', ai: true, facts: { path: a.path, line: a.line, what: a.what } });
+    else if (pv.asserts === null && a && !a.dropped && !a.asserts) fails.push({ check: 'Asserts the rule', ai: true, agreement: a.agreement, facts: { path: a.path, line: a.line, what: a.what } });
     // Covers stated limits (boundary values, ISO/IEC/IEEE 29119-4)
     const limitMuts = (probe?.mutants || []).filter((m) => m.kind !== 'extreme');
     if (r.limits.length && pv.edges.length) fails.push({ check: 'Covers stated limits', basis: 'E', facts: { missing: r.limits, limits: r.limits, mutation: pv.edges, tests: [] } });

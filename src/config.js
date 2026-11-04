@@ -7,6 +7,10 @@
 //     fail_on: P1            # P0 | P1 | P2 | P3 | never
 //     basis: [E, S, V]       # evidence that may block (E executed, S code, V model + code check, M model)
 //     new_only: true         # only findings missing from the baseline block
+//     min_agreement:         # vote agreement a V/M finding needs to block (scripts/calibrate.js prints these)
+//       default: 0.67
+//       Asserts the rule: 1
+//     probation: [Placement] # checks that inform but never block (scripts/usefulness.js suggests these)
 //   documents: { include: [globs], exclude: [globs], budget_kb: 60 }
 //   critical:                # extra strong words per area (added to the built-in lists)
 //     money: [premium]
@@ -26,7 +30,7 @@ const YAML = require('yaml');
 
 const SHAPE = {
   version: 'number',
-  gate: { fail_on: 'string', basis: 'array', new_only: 'boolean' },
+  gate: { fail_on: 'string', basis: 'array', new_only: 'boolean', min_agreement: 'object', probation: 'array' },
   documents: { include: 'array', exclude: 'array', budget_kb: 'number' },
   critical: 'object',
   execute: { test_command: 'string', timeout_s: 'number', max_mutants: 'number' },
@@ -53,6 +57,7 @@ function loadConfig(file) {
   const fo = config.gate?.fail_on;
   if (fo && !/^(P[0-3]|never)$/.test(fo)) errors.push('gate.fail_on: must be P0, P1, P2, P3 or never');
   for (const b of config.gate?.basis || []) if (!['E', 'S', 'V', 'M'].includes(b)) errors.push(`gate.basis: unknown evidence "${b}"`);
+  for (const [k, v] of Object.entries(config.gate?.min_agreement || {})) if (typeof v !== 'number' || v < 0 || v > 1) errors.push(`gate.min_agreement.${k}: must be a number from 0 to 1`);
   return { config, errors };
 }
 
@@ -61,6 +66,8 @@ const policyOf = (config, o = {}) => ({
   failOn: o.failOn || config.gate?.fail_on || 'P1',
   basis: o.basis || config.gate?.basis || ['E', 'S', 'V'],
   newOnly: o.newOnly ?? config.gate?.new_only ?? true,
+  minAgreement: config.gate?.min_agreement || {},
+  probation: config.gate?.probation || [],
 });
 
 module.exports = { loadConfig, policyOf };
