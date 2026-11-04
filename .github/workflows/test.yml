@@ -22,3 +22,29 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm test
+
+  # The action itself, end to end, on the fixture repository: offline (no key) and in report-only mode.
+  action:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the fixture repository
+        run: |
+          dir="$RUNNER_TEMP/quote-service"
+          node -e "require('./tests/fixture/quote-service').build(process.argv[1])" "$dir"
+          git -C "$dir" init -q && git -C "$dir" add -A && git -C "$dir" -c user.email=ci@example.com -c user.name=ci commit -qm fixture
+      - name: Gate (replayed model replies)
+        run: |
+          npm ci --ignore-scripts
+          node scripts/repo-report.js --repo "$RUNNER_TEMP/quote-service" --name acme/quote-service --sha a1b2c3d --date 2026-10-22 \
+            --replay --cassette tests/fixture/quote-service.cassette.json --out out
+          node -e "const g=require('./out/gate.json'); if(!['pass','fail'].includes(g.verdict)||!g.findings.length) process.exit(1); console.log(g.verdict, g.counts)"
+          test -s out/results.sarif && test -s out/comment.md

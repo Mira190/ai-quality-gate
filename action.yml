@@ -1,0 +1,206 @@
+# AI quality gate: a pull-request check that traces the repository's requirements and design decisions to code and
+# tests, and blocks only on what it can prove and what the change introduced.
+#
+#   - uses: Mira190/ai-quality-gate@v0
+#     with:
+#       anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+#
+# What blocks (see src/gate.js): a finding at fail-on priority or above, whose evidence is executed (E), code-decided
+# (S) or model-proposed and code-verified (V), that is new against the default branch's baseline, that touches a
+# changed file, and that is not suppressed in .quality-gate.yml. Model-only judgments (M) are posted as advice.
+#
+# State kept between runs (actions/cache, never committed): the verdict memo (the same input gets the same model
+# verdict on every run) and the baseline (written by runs on the default branch).
+name: AI quality gate
+description: Requirement → code → test traceability gate with deterministic evidence first and the model last.
+author: Mira190
+branding:
+  icon: shield
+  color: green
+
+inputs:
+  anthropic-api-key:
+    description: Model key. Empty runs offline (code-decided findings only; sections that need the model show n/a).
+    required: false
+    default: ''
+  fail-on:
+    description: Highest priority that fails the check (P0, P1, P2, P3, never). Overrides .quality-gate.yml.
+    required: false
+    default: ''
+  basis:
+    description: Evidence that may block, comma separated (E, S, V, M). Overrides .quality-gate.yml.
+    required: false
+    default: ''
+  all-findings:
+    description: 'true: every finding can block, not only the ones missing from the baseline.'
+    required: false
+    default: 'false'
+  config:
+    description: Path of the gate config.
+    required: false
+    default: .quality-gate.yml
+  model:
+    description: Model id.
+    required: false
+    default: claude-haiku-5-5
+  max-usd:
+    description: Model spend cap per run, USD.
+    required: false
+    default: '2'
+  votes:
+    description: Votes per model judgment (majority wins).
+    required: false
+    default: '3'
+  execute:
+    description: >-
+      'true': run rule-targeted mutants against the linked tests with test-command (or execute.test_command in the
+      config). This runs your repository's tests on this runner; dependencies must be installed before this step.
+    required: false
+    default: 'false'
+  test-command:
+    description: Command that runs the given test files; {files} is replaced by them (e.g. "npx vitest run {files}").
+    required: false
+    default: ''
+  comment:
+    description: 'true: post or update one pull-request comment (needs pull-requests: write).'
+    required: false
+    default: 'true'
+  sarif:
+    description: 'true: upload findings to code scanning (needs security-events: write).'
+    required: false
+    default: 'false'
+  enforce:
+    description: "'true': fail the step when the gate fails. 'false': report only (a first rollout)."
+    required: false
+    default: 'true'
+
+outputs:
+  verdict:
+    description: pass or fail
+    value: ${{ steps.report.outputs.verdict }}
+  blocking:
+    description: Number of blocking findings
+    value: ${{ steps.report.outputs.blocking }}
+  sarif-path:
+    description: SARIF file
+    value: ${{ steps.report.outputs.sarif_path }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install the gate
+      shell: bash
+      run: npm ci --ignore-scripts --omit=dev --prefix "$GITHUB_ACTION_PATH" --no-audit --no-fund
+
+    - name: Changed files
+      id: changed
+      shell: bash
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        out="$RUNNER_TEMP/aqg-changed.txt"; : > "$out"
+        if [ -n "$BASE_SHA" ]; then
+          git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || true
+          if git diff --name-only "$BASE_SHA" HEAD > "$out" 2>/dev/null; then echo "path=$out" >> "$GITHUB_OUTPUT"; fi
+        fi
+
+    - name: Restore the verdict memo and the baseline
+      uses: actions/cache/restore@v4
+      with:
+        path: .quality-gate-state
+        key: aqg-state-${{ github.event.repository.default_branch }}-${{ github.run_id }}
+        restore-keys: aqg-state-${{ github.event.repository.default_branch }}-
+
+    - name: Run
+      id: report
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        AQG_FAIL_ON: ${{ inputs.fail-on }}
+        AQG_BASIS: ${{ inputs.basis }}
+        AQG_ALL: ${{ inputs.all-findings }}
+        AQG_CONFIG: ${{ inputs.config }}
+        AQG_MODEL: ${{ inputs.model }}
+        AQG_MAX_USD: ${{ inputs.max-usd }}
+        AQG_VOTES: ${{ inputs.votes }}
+        AQG_EXECUTE: ${{ inputs.execute }}
+        AQG_TEST_COMMAND: ${{ inputs.test-command }}
+        AQG_CHANGED: ${{ steps.changed.outputs.path }}
+        AQG_IS_DEFAULT: ${{ github.ref_name == github.event.repository.default_branch && github.event_name != 'pull_request' }}
+        AQG_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        AQG_REPO: ${{ github.repository }}
+        AQG_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      run: |
+        mkdir -p .quality-gate-state
+        args=(--repo "$GITHUB_WORKSPACE" --name "$AQG_REPO" --sha "${AQG_SHA:0:7}" --out "$RUNNER_TEMP/aqg"
+              --config "$AQG_CONFIG" --model "$AQG_MODEL" --max-usd "$AQG_MAX_USD" --votes "$AQG_VOTES"
+              --memo .quality-gate-state/memo.json --baseline .quality-gate-state/baseline.json --report-url "$AQG_RUN_URL")
+        [ -z "$ANTHROPIC_API_KEY" ] && args+=(--offline)
+        [ -n "$AQG_FAIL_ON" ] && args+=(--fail-on "$AQG_FAIL_ON")
+        [ -n "$AQG_BASIS" ] && args+=(--basis "$AQG_BASIS")
+        [ "$AQG_ALL" = true ] && args+=(--all-findings)
+        [ -n "$AQG_CHANGED" ] && args+=(--changed-files "$AQG_CHANGED")
+        [ "$AQG_EXECUTE" = true ] && args+=(--execute)
+        [ -n "$AQG_TEST_COMMAND" ] && args+=(--test-command "$AQG_TEST_COMMAND")
+        # the default branch writes the baseline that pull requests are compared against
+        [ "$AQG_IS_DEFAULT" = true ] && args+=(--write-baseline --history .quality-gate-state/history --commit "$GITHUB_SHA")
+        node "$GITHUB_ACTION_PATH/scripts/repo-report.js" "${args[@]}"
+
+    - name: Job summary
+      if: always() && steps.report.outcome == 'success'
+      shell: bash
+      run: |
+        cat "$RUNNER_TEMP/aqg/comment.md" >> "$GITHUB_STEP_SUMMARY"
+        printf '\n<details><summary>Full report</summary>\n\n' >> "$GITHUB_STEP_SUMMARY"
+        cat "$RUNNER_TEMP/aqg/report.md" >> "$GITHUB_STEP_SUMMARY"
+        printf '\n</details>\n' >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Save the verdict memo and the baseline
+      if: always() && steps.report.outcome == 'success'
+      uses: actions/cache/save@v4
+      with:
+        path: .quality-gate-state
+        key: aqg-state-${{ github.event.repository.default_branch }}-${{ github.run_id }}
+
+    - name: Pull-request comment
+      if: always() && steps.report.outcome == 'success' && inputs.comment == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      env:
+        COMMENT_PATH: ${{ runner.temp }}/aqg/comment.md
+      with:
+        script: |
+          const body = require('fs').readFileSync(process.env.COMMENT_PATH, 'utf8');
+          const marker = '<!-- ai-quality-gate -->';
+          const { owner, repo } = context.repo, issue_number = context.issue.number;
+          const all = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
+          const mine = all.find((c) => c.user?.type === 'Bot' && c.body?.startsWith(marker));
+          if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+          else await github.rest.issues.createComment({ owner, repo, issue_number, body });
+
+    - name: Code scanning
+      if: always() && steps.report.outcome == 'success' && inputs.sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ runner.temp }}/aqg/results.sarif
+        category: ai-quality-gate
+
+    - name: Upload the report
+      if: always() && steps.report.outcome == 'success'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ai-quality-gate-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/aqg
+        retention-days: 30
+
+    - name: Enforce
+      if: steps.report.outcome == 'success' && inputs.enforce == 'true' && steps.report.outputs.verdict == 'fail'
+      shell: bash
+      env:
+        BLOCKING: ${{ steps.report.outputs.blocking }}
+      run: |
+        echo "::error title=AI quality gate::$BLOCKING blocking finding(s). See the pull-request comment or the job summary."
+        exit 1

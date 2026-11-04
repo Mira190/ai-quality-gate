@@ -4,6 +4,10 @@
 // Modes: live (call the API), record (live + save), replay (cassette only; a missing key is an error),
 // offline (no model: every call returns null, so the report has only what code decides plus plain fallback cells).
 const fs = require('node:fs');
+const crypto = require('node:crypto');
+
+// Bump when a prompt or a schema changes meaning: every memoised verdict made under the old wording is then re-asked.
+const MEMO_VERSION = 'v1';
 
 // USD per million tokens (https://platform.claude.com/docs/en/about-claude/pricing). Haiku 5.5 has a second card above 100K prompt tokens.
 const PRICES = {
@@ -22,8 +26,15 @@ function costUsd(model, u) {
 }
 
 class LLM {
-  constructor({ model = 'claude-haiku-5-5', mode = 'live', cassette = null, maxUsd = 2, effort = 'low', votes = 3 } = {}) {
+  constructor({ model = 'claude-haiku-5-5', mode = 'live', cassette = null, maxUsd = 2, effort = 'low', votes = 3, memo = null } = {}) {
     this.model = model; this.mode = mode; this.cassettePath = cassette; this.maxUsd = maxUsd; this.effort = effort; this.nVotes = Math.max(1, votes);
+    // Verdict memo: per-item replies keyed by a hash of everything the model saw about that item. Off in replay and fill
+    // (the cassette is the memo there) and offline (nothing to remember).
+    this.memoPath = memo && ['live', 'record'].includes(mode) ? memo : null;
+    this.memo = { version: MEMO_VERSION, entries: {} };
+    if (this.memoPath && fs.existsSync(this.memoPath)) { try { const m = JSON.parse(fs.readFileSync(this.memoPath, 'utf8')); if (m.version === MEMO_VERSION) this.memo = m; } catch { /* a corrupt memo is a cold start */ } }
+    this.memoUsed = new Set();
+    this.memoStats = { hits: 0, misses: 0 };
     this.tape = cassette && fs.existsSync(cassette) ? JSON.parse(fs.readFileSync(cassette, 'utf8')) : { model, calls: {} };
     if (mode === 'replay' && this.tape.model) this.model = this.tape.model;
     this.usage = { calls: 0, input_tokens: 0, output_tokens: 0, usd: 0 };
@@ -79,8 +90,73 @@ class LLM {
   async votes(key, opts) {
     const keys = [key, ...Array.from({ length: this.nVotes - 1 }, (_, k) => `${key}#v${k + 1}`)];
     const replay = this.mode === 'replay' || this.mode === 'fill';
-    const out = await Promise.all(keys.map((k, i) => (i && replay && !this.tape.calls[k] ? null : this.ask(k, opts))));
+    // opts may be a function of the vote number: each vote then sees the same facts in a different order, so a verdict
+    // that only the first-listed candidate wins (position bias) does not get a majority
+    const out = await Promise.all(keys.map((k, i) => (i && replay && !this.tape.calls[k] ? null : this.ask(k, typeof opts === 'function' ? opts(i) : opts))));
     return out.filter(Boolean);
+  }
+
+  /**
+   * Votes over many items, batched, with a per-item verdict memo. Returns every reply object for every item (one per
+   * vote; each carries the item's current id in `idField`).
+   *
+   * Why per item: a batched prompt makes one item's verdict depend on its neighbours, so an edit to one rule used to
+   * re-roll the verdicts of the eleven rules batched with it. With the memo, an item whose own inputs (hashOf) did not
+   * change gets back exactly the replies it got before; only changed items are asked again, batched among themselves.
+   * Same input, same verdict, run after run: the model's sampling noise is paid once per distinct input.
+   *
+   *   stage   logical key prefix; batch i is keyed `${stage}:${i}` (cassette-compatible)
+   *   size    items per batch (Infinity: one call)
+   *   hashOf  item → string of everything the prompt shows about the item
+   *   build   (batch, batchIndex, vote) → ask() options
+   *   field   reply array field ("rules", "decisions"); idField reply id field ("id")
+   *   keyOf   batch index → logical key
+   *   signature  reply → string of its verdict; items whose votes give different signatures are asked again alone
+   */
+  async batchVotes(stage, items, { size = 12, hashOf, build, field = 'rules', idField = 'id', idOf = (x) => x.id, keyOf = (i) => `${stage}:${i}`, signature = null }) {
+    const per = new Map(); // item → its replies
+    let todo = items;
+    const hashes = new Map();
+    const hashFor = (it) => crypto.createHash('sha256').update([MEMO_VERSION, this.model, this.effort, this.nVotes, stage, hashOf(it)].join('\u0000')).digest('hex').slice(0, 32);
+    if (this.memoPath) {
+      todo = [];
+      for (const it of items) {
+        const h = hashFor(it);
+        hashes.set(it, h);
+        const hit = this.memo.entries[h];
+        if (hit && hit.replies?.length) { this.memoStats.hits++; this.memoUsed.add(h); per.set(it, hit.replies.map((r) => ({ ...r, [idField]: idOf(it) }))); } else { this.memoStats.misses++; todo.push(it); }
+      }
+    }
+    const batches = [];
+    for (let i = 0; i < todo.length; i += size) batches.push(todo.slice(i, i + size));
+    const replies = await Promise.all(batches.map((b, i) => this.votes(keyOf(i), (k) => build(b, i, k))));
+    const complete = new Set();
+    batches.forEach((b, i) => {
+      const flat = replies[i].flatMap((o) => o?.[field] || []);
+      for (const it of b) {
+        per.set(it, flat.filter((r) => r?.[idField] === idOf(it)));
+        if (replies[i].length >= this.nVotes) complete.add(it);
+      }
+    });
+    // Split votes mark an item on a knife edge, where batch neighbours and position move the verdict most. Ask it again
+    // alone (no neighbours) and keep that answer: the solo votes decide. Live only: a replayed run has no solo replies.
+    if (signature && (this.mode === 'live' || this.mode === 'record') && this.nVotes > 1) {
+      const split = todo.filter((it) => complete.has(it) && new Set(per.get(it).map(signature)).size > 1);
+      this.splitStats = this.splitStats || { asked: 0, settled: 0 };
+      await Promise.all(split.map(async (it) => {
+        this.splitStats.asked++;
+        const solo = (await this.votes(`${stage}:solo:${idOf(it)}`, (k) => build([it], 0, k))).flatMap((o) => o?.[field] || []).filter((r) => r?.[idField] === idOf(it));
+        if (solo.length >= this.nVotes) { per.set(it, solo); if (new Set(solo.map(signature)).size === 1) this.splitStats.settled++; } else complete.delete(it);
+      }));
+    }
+    if (this.memoPath) for (const it of todo) {
+      // a failed vote: do not pin a partial majority
+      if (!complete.has(it) || !per.get(it)?.length) continue;
+      const h = hashes.get(it);
+      this.memo.entries[h] = { replies: per.get(it).map(({ [idField]: _, ...rest }) => rest), at: new Date().toISOString().slice(0, 10) };
+      this.memoUsed.add(h);
+    }
+    return items.flatMap((it) => per.get(it) || []);
   }
 
   add(u) {
@@ -93,6 +169,12 @@ class LLM {
   get aiu() { return Math.round(this.usage.usd * AIU_PER_USD * 100) / 100; }
 
   save() {
+    if (this.memoPath) {
+      // keep only the verdicts this run used or made: the memo follows the repository instead of growing forever
+      const entries = Object.fromEntries(Object.entries(this.memo.entries).filter(([h]) => this.memoUsed.has(h)));
+      fs.mkdirSync(require('node:path').dirname(this.memoPath), { recursive: true });
+      fs.writeFileSync(this.memoPath, JSON.stringify({ version: MEMO_VERSION, entries }) + '\n');
+    }
     if (this.mode === 'fill' && this.cassettePath) fs.writeFileSync(this.cassettePath.replace(/\.json$/, '') + '.pending.json', JSON.stringify(this.pending || {}, null, 1));
     if (this.mode !== 'record' || !this.cassettePath) return;
     this.tape.model = this.model;
@@ -101,4 +183,4 @@ class LLM {
 }
 const pick = (u = {}) => ({ input_tokens: u.input_tokens, output_tokens: u.output_tokens, cache_read_input_tokens: u.cache_read_input_tokens || 0, cache_creation_input_tokens: u.cache_creation_input_tokens || 0 });
 
-module.exports = { LLM, costUsd, AIU_PER_USD };
+module.exports = { LLM, costUsd, AIU_PER_USD, MEMO_VERSION };

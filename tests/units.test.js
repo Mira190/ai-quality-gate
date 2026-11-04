@@ -199,7 +199,8 @@ test('a model fail counts only with its evidence and a majority of votes', async
     reply({ 'REQ-01': [clear, f('Testable')] }),
     reply({ 'REQ-01': [f('Clear'), f('Testable')] }),
   ];
-  const llm = { votes: async () => replies };
+  const { LLM } = require('../src/llm');
+  const llm = Object.assign(new LLM({ mode: 'offline' }), { votes: async () => replies });
   await judgeRules(llm, rules, { root: '.', fileSet: new Set() });
   // Clear: 2 of 3 with two readings (the third has none and does not count); Testable: 2 of 3; Complete: no raised_by
   assert.deepEqual(rules[0].fails.map((x) => x.measure), ['Clear', 'Testable']);

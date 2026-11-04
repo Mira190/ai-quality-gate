@@ -28,9 +28,9 @@ const rank = (p) => Number(p.slice(1));
 function buildIssues(rules, ci) {
   const out = [];
   const reqs = rules.filter((r) => r.kind === 'requirement'), decs = rules.filter((r) => r.kind === 'decision');
-  const docRows = (rs, section, measures) => rs.flatMap((r) => r.fails.map((f) => ({ section, rule: r, measure: f.measure, part: f.part, conflictWith: f.conflictWith, why: f.why, priority: docPriority(r, f), order: measures.indexOf(f.measure) })));
+  const docRows = (rs, section, measures) => rs.flatMap((r) => r.fails.map((f) => ({ section, rule: r, measure: f.measure, part: f.part, conflictWith: f.conflictWith, why: f.why, agreement: f.agreement, priority: docPriority(r, f), order: measures.indexOf(f.measure) })));
   // a rule the model did not trace has no test rows: "No test" would be a guess from missing data
-  const testRows = (rs, section) => rs.filter((r) => r.traced !== false).flatMap((r) => r.evidence.fails.map((f) => ({ section, rule: r, check: f.check, facts: f.facts, ai: f.ai, priority: testPriority(r, f), order: CHECK_ORDER.indexOf(f.check) })));
+  const testRows = (rs, section) => rs.filter((r) => r.traced !== false).flatMap((r) => r.evidence.fails.map((f) => ({ section, rule: r, check: f.check, facts: f.facts, ai: f.ai, agreement: f.agreement, priority: testPriority(r, f), order: CHECK_ORDER.indexOf(f.check) })));
   const sort = (rows) => rows.sort((a, b) => rank(a.priority) - rank(b.priority) || compareRules(a.rule, b.rule) || a.order - b.order);
   out.push(...sort(docRows(reqs, 1, REQ_M)), ...sort(docRows(decs, 2, DEC_M)));
   out.push(...sort(testRows(reqs, 3)), ...sort(testRows(decs.filter((d) => d.addsBehaviour), 4)));

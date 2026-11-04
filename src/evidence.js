@@ -3,7 +3,7 @@
 // code verifies: "Asserts the rule" (must cite an assertion line of a linked test) and "Suspected not built" (must cite
 // a line of the implementing file; only for critical decisions that add behaviour).
 // The first failing check sets the level: None → Blocked → Weak → Checked nightly → meets the standard.
-const { readText, linesOf, numbersIn, need } = require('./util');
+const { readText, linesOf, numbersIn, need, permute } = require('./util');
 const { STYLE, obj, arr, str } = require('./judge');
 const { termRe } = require('./trace');
 const { isTestFile, CODE_EXT } = require('./tests-index');
@@ -20,26 +20,8 @@ const LEVELS = ['unit', 'component', 'integration', 'e2e'];
 // its middleware, the real adapter against a fake server), so only an e2e-only rule of those kinds is flagged.
 const MONEY_OR_DATE = /^(%|\$|€|£|¥|usd|eur|gbp|aud|cents?|percent|days?|weeks?|months?|years?|hours?)$/i;
 const COUNTING = /\b(retr(y|ies|ied)|attempts?|times|at most|up to|maximum|max|limits?|no more than)\b/i;
-const IO = /\bawait\b|\bfetch\(|\baxios\b|\bhttps?\.|\.query\(|\.execute\(|\bfs\.|readFile|writeFile|\.save\(|\.send\(|\brequests\.|\bopen\(|subprocess|\bsocket\b|\bdb\.|\bthis\.(db|client|http|repo)\b|\bctx\.|\breq\.|\bres\./;
-
-function implBody(root, impl) {
-  const lines = linesOf(readText(root, impl.path) || ''), from = impl.line - 1;
-  if (!lines[from]) return null;
-  if (/\.py$/.test(impl.path)) {
-    const ind = /^\s*/.exec(lines[from])[0].length, out = [lines[from]];
-    for (let j = from + 1; j < lines.length && j < from + 120 && (!lines[j].trim() || /^\s*/.exec(lines[j])[0].length > ind); j++) out.push(lines[j]);
-    return out.join('\n');
-  }
-  let depth = 0, opened = false;
-  const out = [];
-  for (let j = from; j < lines.length && j < from + 120; j++) {
-    out.push(lines[j]);
-    for (const ch of lines[j].replace(/(['"`])(?:\\.|(?!\1).)*\1/g, '')) { if (ch === '{') { depth++; opened = true; } else if (ch === '}') depth--; }
-    if (opened && depth <= 0) break;
-    if (!opened && /[;)]\s*$/.test(lines[j]) && j > from) break; // a one-line arrow or statement
-  }
-  return out.join('\n');
-}
+const { implBody, IO, placementFor, misplaced } = require('./placement');
+const { verdictOf } = require('./execute');
 
 function belongsAt(r, root) {
   if (PURE.has(r.logicKind)) return { level: 'unit', by: `${r.logicKind} rule` };
@@ -58,20 +40,24 @@ function relevantCases(t, rule) {
 
 async function judgeAsserts(llm, rules, testIndex) {
   const subjects = rules.filter((r) => r.links.length);
-  const batches = [];
-  for (let i = 0; i < subjects.length; i += 10) batches.push(subjects.slice(i, i + 10));
-  const out = (await Promise.all(batches.map((b, i) => llm.votes(`asserts:${i}`, {
-    system: STYLE,
-    prompt: `For each rule, decide whether any of its tests has an assertion that compares the rule's result or state to an expected value. "Was called", "does not throw", a snapshot, or an assertion about a different behaviour does not count. Cite the assertion line that proves it; if none does, cite the assertion line that comes closest and say in "what" what it checks instead.\n\n${b.map((r) => `<rule id="${r.id}">${r.title}. ${r.text}\n${r.links.map((l) => {
-      const t = testIndex.tests.find((x) => x.path === l.path);
-      const cases = relevantCases(t, r);
-      const lines = new Set(cases.flatMap((c) => t.asserts.filter((a) => a.line >= c.line && a.line <= c.end).map((a) => a.line)));
-      return `<test path="${t.path}">\n${cases.slice(0, 15).map((c) => `  case ${c.line}: ${c.name}${c.skipped ? ' (skipped)' : ''}`).join('\n')}\n${t.asserts.filter((a) => lines.has(a.line)).slice(0, 25).map((a) => `  ${a.line}: ${a.text.slice(0, 200)}`).join('\n')}\n</test>`;
-    }).join('\n')}\n</rule>`).join('\n')}`,
-    // reasoning fields before the verdict: the model writes what the line checks, then decides
-    schema: obj({ rules: arr(obj({ id: str, cite_path: str, cite_line: { type: 'integer' }, what: str, asserts: { type: 'boolean' } })) }),
-    maxTokens: 6000,
-  })))).flat().flatMap((o) => o?.rules || []);
+  const testBlock = (r, l) => {
+    const t = testIndex.tests.find((x) => x.path === l.path);
+    const cases = relevantCases(t, r);
+    const lines = new Set(cases.flatMap((c) => t.asserts.filter((a) => a.line >= c.line && a.line <= c.end).map((a) => a.line)));
+    return `<test path="${t.path}">\n${cases.slice(0, 15).map((c) => `  case ${c.line}: ${c.name}${c.skipped ? ' (skipped)' : ''}`).join('\n')}\n${t.asserts.filter((a) => lines.has(a.line)).slice(0, 25).map((a) => `  ${a.line}: ${a.text.slice(0, 200)}`).join('\n')}\n</test>`;
+  };
+  const out = await llm.batchVotes('asserts', subjects, {
+    size: 10,
+    signature: (x) => String(x.asserts),
+    hashOf: (r) => JSON.stringify([r.title, r.text, r.links.map((l) => testBlock(r, l))]),
+    build: (b, i, k) => ({
+      system: STYLE,
+      prompt: `For each rule, decide whether any of its tests has an assertion that compares the rule's result or state to an expected value. "Was called", "does not throw", a snapshot, or an assertion about a different behaviour does not count. Cite the assertion line that proves it; if none does, cite the assertion line that comes closest and say in "what" what it checks instead.\n\n${b.map((r) => `<rule id="${r.id}">${r.title}. ${r.text}\n${permute(r.links, k).map((l) => testBlock(r, l)).join('\n')}\n</rule>`).join('\n')}`,
+      // reasoning fields before the verdict: the model writes what the line checks, then decides
+      schema: obj({ rules: arr(obj({ id: str, cite_path: str, cite_line: { type: 'integer' }, what: str, asserts: { type: 'boolean' } })) }),
+      maxTokens: 6000,
+    }),
+  });
   const map = new Map();
   for (const r of subjects) {
     const vs = out.filter((x) => x.id === r.id);
@@ -82,7 +68,7 @@ async function judgeAsserts(llm, rules, testIndex) {
     const no = ok.filter((v) => !v.asserts);
     const v = no.length >= need(vs.length) ? no[0] : ok.find((x) => x.asserts);
     if (!v) { map.set(r.id, { dropped: true }); continue; }
-    map.set(r.id, { asserts: v.asserts, path: v.cite_path, line: v.cite_line, what: v.what });
+    map.set(r.id, { asserts: v.asserts, path: v.cite_path, line: v.cite_line, what: v.what, agreement: (v.asserts ? ok.filter((x) => x.asserts).length : no.length) / vs.length });
   }
   return map;
 }
@@ -104,25 +90,31 @@ async function judgeBuilt(llm, rules, root, files = []) {
   const subjects = rules.filter((r) => r.kind === 'decision' && r.addsBehaviour && r.critical && r.impl);
   if (!subjects.length) return new Map();
   for (const r of subjects) r._uses = callSites(root, files, r);
-  const outs = await llm.votes('built:0', {
-    system: STYLE,
-    prompt: `For each design decision, read the code that implements it and say whether the code does what the decision says. Answer "not_built" only when a specific line shows the behaviour is missing or different (for example a call with no timeout, a route that checks login but not the role); cite that line. Answer "built" when it does, citing the line that does it. The <used-at> lines show where other files use the implementing function; a decision can be broken there (a route that mounts the login check but no role check), so cite such a line when it is the one. Answer "unsure" when the code shown cannot tell. Write "why" first, then a verdict that agrees with it: a why that says the behaviour is there is "built".\n\n${subjects.map((r) => {
-      const lines = linesOf(readText(root, r.impl.path) || '');
-      const from = Math.max(1, r.impl.line - 25), to = Math.min(lines.length, r.impl.line + 45);
-      const uses = r._uses.length ? `\n<used-at>\n${r._uses.map((u) => `${u.path}:${u.line}: ${u.text}`).join('\n')}\n</used-at>` : '';
-      return `<decision id="${r.id}">${r.title}. ${r.text}\n<code path="${r.impl.path}">\n${lines.slice(from - 1, to).map((l, i) => `${from + i}: ${l}`).join('\n')}\n</code>${uses}\n</decision>`;
-    }).join('\n')}`,
-    schema: obj({ decisions: arr(obj({ id: str, path: str, line: { type: 'integer' }, why: str, verdict: { type: 'string', enum: ['built', 'not_built', 'unsure'] } })) }),
-    maxTokens: 6000,
+  const block = (r) => {
+    const lines = linesOf(readText(root, r.impl.path) || '');
+    const from = Math.max(1, r.impl.line - 25), to = Math.min(lines.length, r.impl.line + 45);
+    const uses = r._uses.length ? `\n<used-at>\n${r._uses.map((u) => `${u.path}:${u.line}: ${u.text}`).join('\n')}\n</used-at>` : '';
+    return `<decision id="${r.id}">${r.title}. ${r.text}\n<code path="${r.impl.path}">\n${lines.slice(from - 1, to).map((l, i) => `${from + i}: ${l}`).join('\n')}\n</code>${uses}\n</decision>`;
+  };
+  const replies = await llm.batchVotes('built', subjects, {
+    size: Infinity, field: 'decisions',
+    signature: (x) => x.verdict,
+    hashOf: block,
+    build: (b) => ({
+      system: STYLE,
+      prompt: `For each design decision, read the code that implements it and say whether the code does what the decision says. Answer "not_built" only when a specific line shows the behaviour is missing or different (for example a call with no timeout, a route that checks login but not the role); cite that line. Answer "built" when it does, citing the line that does it. The <used-at> lines show where other files use the implementing function; a decision can be broken there (a route that mounts the login check but no role check), so cite such a line when it is the one. Answer "unsure" when the code shown cannot tell. Write "why" first, then a verdict that agrees with it: a why that says the behaviour is there is "built".\n\n${b.map(block).join('\n')}`,
+      schema: obj({ decisions: arr(obj({ id: str, path: str, line: { type: 'integer' }, why: str, verdict: { type: 'string', enum: ['built', 'not_built', 'unsure'] } })) }),
+      maxTokens: 6000,
+    }),
   });
   const map = new Map();
   for (const r of subjects) {
-    const vs = outs.flatMap((o) => o?.decisions || []).filter((v) => v.id === r.id);
+    const vs = replies.filter((v) => v.id === r.id);
     if (!vs.length) continue;
     // "not built" is a P0 claim: it needs a cited line shown to the model, in most replies
     const shownPaths = new Set([r.impl.path, ...r._uses.map((u) => u.path)]);
     const cited = vs.filter((v) => v.verdict === 'not_built' && shownPaths.has(v.path) && linesOf(readText(root, v.path) || '')[v.line - 1]?.trim());
-    if (cited.length >= need(vs.length)) { const v = cited[0]; map.set(r.id, { verdict: v.verdict, path: v.path, line: v.line, why: v.why }); continue; }
+    if (cited.length >= need(vs.length)) { const v = cited[0]; map.set(r.id, { verdict: v.verdict, path: v.path, line: v.line, why: v.why, agreement: cited.length / vs.length }); continue; }
     if (vs.some((v) => v.verdict === 'not_built')) { map.set(r.id, { dropped: true }); continue; }
     const v = vs[0];
     map.set(r.id, { verdict: v.verdict, path: v.path, line: v.line, why: v.why });
@@ -136,12 +128,12 @@ function variants(limit) {
   return scales.map((k) => ({ on: v * k, past: [v * k + 1, v * k - 1, Math.round((v * k + 0.01) * 100) / 100, Math.round((v * k - 0.01) * 100) / 100] }));
 }
 
-function evaluate(rules, { testIndex, ci, srcImports, asserts, built, root }) {
+function evaluate(rules, { testIndex, ci, srcImports, asserts, built, root, probes = new Map() }) {
   const byPath = new Map(testIndex.tests.map((t) => [t.path, t]));
   for (const r of rules) {
     const fails = [], tests = r.links.map((l) => byPath.get(l.path));
     const b = built.get(r.id);
-    if (b?.verdict === 'not_built') fails.push({ check: 'Suspected not built', facts: { path: b.path, line: b.line, why: b.why } });
+    if (b?.verdict === 'not_built') fails.push({ check: 'Suspected not built', agreement: b.agreement, facts: { path: b.path, line: b.line, why: b.why } });
     if (!tests.length) {
       fails.push({ check: 'No test', facts: { searched: r.searched, impl: r.impl } });
       r.evidence = { fails, level: 'None', tests: [] };
@@ -159,10 +151,17 @@ function evaluate(rules, { testIndex, ci, srcImports, asserts, built, root }) {
       fails.push({ check: 'Calls the code', facts: { impl: r.impl, imports: nonE2e.map((t) => ({ path: t.path, imports: t.imports.filter((i) => i.resolved).map((i) => ({ line: i.line, text: i.text })) })) } });
     }
     // Asserts the rule (AI, cited)
+    // Execution beats the model: a killed mutant proves the tests check the rule; a surviving extreme mutant proves
+    // they do not (basis E). The model's verdict is used only when no probe ran.
+    const probe = probes.get(r.id), pv = verdictOf(probe);
+    if (probe) r.probe = probe;
     const a = asserts.get(r.id);
-    if (a && !a.dropped && !a.asserts) fails.push({ check: 'Asserts the rule', ai: true, facts: { path: a.path, line: a.line, what: a.what } });
+    if (pv.asserts === false) fails.push({ check: 'Asserts the rule', basis: 'E', facts: { mutation: probe.mutants.filter((m) => m.kind === 'extreme'), impl: r.impl, tests: probe.tests } });
+    else if (pv.asserts === null && a && !a.dropped && !a.asserts) fails.push({ check: 'Asserts the rule', ai: true, agreement: a.agreement, facts: { path: a.path, line: a.line, what: a.what } });
     // Covers stated limits (boundary values, ISO/IEC/IEEE 29119-4)
-    if (r.limits.length) {
+    const limitMuts = (probe?.mutants || []).filter((m) => m.kind !== 'extreme');
+    if (r.limits.length && pv.edges.length) fails.push({ check: 'Covers stated limits', basis: 'E', facts: { missing: r.limits, limits: r.limits, mutation: pv.edges, tests: [] } });
+    else if (r.limits.length && !(limitMuts.length && limitMuts.every((m) => m.killed))) {
       const nums = new Set(tests.flatMap((t) => [...numbersIn(t.text)]));
       const missing = r.limits.filter((l) => !variants(l).some((x) => nums.has(x.on) && x.past.some((p) => nums.has(p))));
       if (missing.length) {
@@ -178,10 +177,11 @@ function evaluate(rules, { testIndex, ci, srcImports, asserts, built, root }) {
     // Where the tests run
     const runs = tests.map((t) => ({ path: t.path, level: t.level, ...ci.runs.get(t.path), dbImport: t.imports.find((i) => /['"](pg|mysql2?|mongodb|mongoose|redis|knex|@prisma\/client|typeorm|sequelize)['"]/.test(i.text)) }));
     const onPr = runs.some((x) => x.pr.length);
-    const want = belongsAt(r, root);
-    const lowest = Math.min(...tests.map((t) => LEVELS.indexOf(t.level)));
-    const placement = want && (want.level === 'unit' ? lowest > 0 : lowest === 3);
-    if (placement) fails.push({ check: 'Placement', facts: { logicKind: r.logicKind, belongsAt: want.level, because: want.by, runs } });
+    // the ideal level (belongsAt) is advice only when a seam makes it reachable (placement.js); no seam, no advice
+    const want = placementFor(r, root, testIndex, belongsAt(r, root));
+    r.placement = want && { ideal: want.ideal, level: want.level, seam: want.seam, infra: want.infra };
+    const placement = misplaced(want, tests);
+    if (placement) fails.push({ check: 'Placement', facts: { logicKind: r.logicKind, belongsAt: want.level, because: want.by, seam: want.seam && want.seam.kind !== 'none' ? { kind: want.seam.kind, path: want.seam.path, line: want.seam.line, symbol: want.seam.symbol } : null, newSetup: !want.infra, runs } });
     else if (!onPr) fails.push({ check: 'Runs on PR', facts: { runs } });
     const level = r.status === 'Blocked' ? 'Blocked' : fails.some((f) => WEAK.has(f.check)) ? 'Weak' : !onPr ? 'Checked nightly' : 'Meets';
     r.evidence = { fails, level, tests: runs, onPr };

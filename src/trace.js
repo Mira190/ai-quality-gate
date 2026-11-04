@@ -4,7 +4,7 @@
 // model picks among them. Every pick is checked: the path must exist, the line must be in the file, a test must be in
 // the test index. Tests that carry the rule ID (a tag) are always linked, whatever the model says.
 const path = require('node:path');
-const { readText, linesOf, need, mode } = require('./util');
+const { readText, linesOf, need, mode, permute } = require('./util');
 const { CODE_EXT, isTestFile } = require('./tests-index');
 const { STYLE, obj, arr, str } = require('./judge');
 
@@ -96,17 +96,24 @@ async function traceRules(llm, rules, { root, files, testIndex }) {
       return { path: c.path, lines: hits };
     });
   }
-  const batches = [];
-  for (let i = 0; i < rules.length; i += 12) batches.push(rules.slice(i, i + 12));
-  const picks = (await Promise.all(batches.map((b, i) => llm.votes(`trace:${i}`, {
-    system: STYLE,
-    prompt: `For each rule, pick (1) where the code implements it: the file, the line of the function or statement that does it, and the symbol name, or null fields ("" and 0) if no candidate implements it; (2) which candidate test files exercise this rule's behaviour at all, even partly or poorly (a browser test that shows a premium on a page counts for a premium rule; a test that calls the implementing function counts). Later checks judge whether those tests assert the rule, cover its limits and run on PR, so do not leave a test out because it is weak; leave it out only when it tests a different behaviour. Pick only from the candidates shown.\n\n${b.map((r) => {
-      const c = candidates(root, files, testIndex, r, testSearch);
-      return `<rule id="${r.id}">${r.title}. ${r.text}\n<code-candidates>\n${c.code.map((x) => `${x.path}\n${x.lines.map((l) => `  ${l.n}: ${l.l.trim().slice(0, 160)}`).join('\n')}`).join('\n')}\n</code-candidates>\n<test-candidates>\n${c.tests.map((t) => `${t.path} (${t.level}, ${t.cases} cases; ${t.tag ? 'names the rule ID' : t.hits.length ? `contains ${t.hits.map((h) => `"${h}"`).join(', ')}` : t.imports ? `imports ${t.imports}` : 'similar case names'})\n${testIndex.tests.find((x) => x.path === t.path).cases.slice(0, 12).map((k) => `  ${k.line}: ${k.name}`).join('\n')}`).join('\n') || '(none)'}\n</test-candidates>\n</rule>`;
-    }).join('\n')}`,
-    schema: obj({ rules: arr(obj({ id: str, impl_path: str, impl_line: { type: 'integer' }, impl_symbol: str, tests: arr(str) })) }),
-    maxTokens: 8000,
-  })))).flat().flatMap((o) => o?.rules || []);
+  for (const r of rules) r._cand = candidates(root, files, testIndex, r, testSearch);
+  const caseList = (t) => testIndex.tests.find((x) => x.path === t.path).cases.slice(0, 12).map((k) => `  ${k.line}: ${k.name}`).join('\n');
+  const ruleBlock = (r, k) => {
+    const c = r._cand;
+    return `<rule id="${r.id}">${r.title}. ${r.text}\n<code-candidates>\n${permute(c.code, k).map((x) => `${x.path}\n${x.lines.map((l) => `  ${l.n}: ${l.l.trim().slice(0, 160)}`).join('\n')}`).join('\n')}\n</code-candidates>\n<test-candidates>\n${permute(c.tests, k).map((t) => `${t.path} (${t.level}, ${t.cases} cases; ${t.tag ? 'names the rule ID' : t.hits.length ? `contains ${t.hits.map((h) => `"${h}"`).join(', ')}` : t.imports ? `imports ${t.imports}` : 'similar case names'})\n${caseList(t)}`).join('\n') || '(none)'}\n</test-candidates>\n</rule>`;
+  };
+  const picks = await llm.batchVotes('trace', rules, {
+    size: 12,
+    signature: (x) => `${x.impl_path}|${[...new Set(x.tests || [])].sort().join(',')}`,
+    // everything the prompt shows about the rule, in canonical order (vote permutations do not change the verdict key)
+    hashOf: (r) => JSON.stringify([r.title, r.text, r._cand.code, r._cand.tests.map((t) => [t.path, t.level, t.tag, t.hits, t.imports, caseList(t)])]),
+    build: (b, i, k) => ({
+      system: STYLE,
+      prompt: `For each rule, pick (1) where the code implements it: the file, the line of the function or statement that does it, and the symbol name, or null fields ("" and 0) if no candidate implements it; (2) which candidate test files exercise this rule's behaviour at all, even partly or poorly (a browser test that shows a premium on a page counts for a premium rule; a test that calls the implementing function counts). Later checks judge whether those tests assert the rule, cover its limits and run on PR, so do not leave a test out because it is weak; leave it out only when it tests a different behaviour. Pick only from the candidates shown; their order means nothing.\n\n${b.map((r) => ruleBlock(r, k)).join('\n')}`,
+      schema: obj({ rules: arr(obj({ id: str, impl_path: str, impl_line: { type: 'integer' }, impl_symbol: str, tests: arr(str) })) }),
+      maxTokens: 8000,
+    }),
+  });
   for (const r of rules) {
     // votes: the implementation most replies name (a reply with a line outside the file does not count). A test link
     // needs most replies too, and a non-e2e test must reach the implementation through its imports: on the live runs
@@ -115,7 +122,7 @@ async function traceRules(llm, rules, { root, files, testIndex }) {
     const valid = ps.filter((p) => texts.has(p.impl_path) && p.impl_line >= 1 && p.impl_line <= linesOf(texts.get(p.impl_path)).length);
     const top = mode(valid.map((p) => p.impl_path));
     const p = valid.filter((x) => x.impl_path === top).length >= need(ps.length) ? valid.find((x) => x.impl_path === top) : null;
-    const c = candidates(root, files, testIndex, r, testSearch);
+    const c = r._cand;
     r.impl = p ? { path: p.impl_path, line: p.impl_line, symbol: p.impl_symbol } : null;
     const tagged = c.tests.filter((t) => t.tag).map((t) => ({ path: t.path, source: 'tag' }));
     const named = files.filter((f) => r.text.includes(f));
@@ -129,7 +136,10 @@ async function traceRules(llm, rules, { root, files, testIndex }) {
     r.traced = ps.length > 0; // no model reply for this rule: its test links are unknown, not absent
     r.links = [...tagged, ...linked];
     r.searched = r.terms;
-    delete r._code;
+    // test files that name the rule ID, contain one of its terms, or import a code candidate: when there are none,
+    // "No test" rests on the search alone (code), not on the model turning candidates down
+    r.strongCandidates = c.tests.filter((t) => t.tag || t.hits.length || t.imports).length;
+    delete r._code; delete r._cand;
   }
 }
 

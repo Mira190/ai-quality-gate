@@ -9,6 +9,7 @@ const { analyzeCI } = require('./ci');
 const { classifyDocs, atomize, judgeRules, statusOf } = require('./judge');
 const { traceRules } = require('./trace');
 const { judgeAsserts, judgeBuilt, evaluate } = require('./evidence');
+const { probeRules } = require('./execute');
 const { buildIssues } = require('./issues');
 const { planTests, buildActions } = require('./actions');
 const { writeCells, writeActions } = require('./write');
@@ -18,7 +19,7 @@ const { readText, numbersIn, linesOf, base, compareRules } = require('./util');
 // Sources the pipeline never reads in this version; the run line names them so a reader knows what the answer cannot cover.
 const NEVER_READ = ['Jira', 'Confluence', 'PR history'];
 
-async function run({ root, repo, sha, date, llm, external = [], budgetKb = 60, maxDocs, include = [], exclude = [], branchProtection = 'not readable', progress = () => {} }) {
+async function run({ root, repo, sha, date, llm, external = [], budgetKb = 60, maxDocs, include = [], exclude = [], branchProtection = 'not readable', critical = null, execute = null, progress = () => {} }) {
   const files = listFiles(root), fileSet = new Set(files);
   progress(`files: ${files.length}`);
   const docsIn = external.filter((e) => e.kindHint !== 'test' && e.text);
@@ -36,13 +37,15 @@ async function run({ root, repo, sha, date, llm, external = [], budgetKb = 60, m
   const ci = analyzeCI(root, files, testIndex);
   await judgeRules(llm, rules, { root, fileSet });
   for (const r of rules) r.status = statusOf(r);
-  tagRules(rules);
+  tagRules(rules, critical);
   progress('sections 1-2 judged');
 
   await traceRules(llm, rules, { root, files, testIndex });
   linkFromTestDocs(rules, testDocs, testIndex);
   const [asserts, built] = await Promise.all([judgeAsserts(llm, rules, testIndex), judgeBuilt(llm, rules, root, files)]);
-  evaluate(rules, { testIndex, ci, srcImports: testIndex.srcImports, asserts, built, root });
+  // execution evidence (opt-in, the repository's own workflow only): rule-targeted mutants against the linked tests
+  const probes = execute?.command ? probeRules(rules, { root, testIndex, command: execute.command, timeoutS: execute.timeoutS || 120, maxTotal: execute.maxMutants || 60, log: (m) => progress(`probe ${m}`) }) : new Map();
+  evaluate(rules, { testIndex, ci, srcImports: testIndex.srcImports, asserts, built, root, probes });
   progress('sections 3-4 judged');
 
   const issues = buildIssues(rules, ci);
@@ -77,7 +80,7 @@ async function run({ root, repo, sha, date, llm, external = [], budgetKb = 60, m
     s5: { x: ci.checks.filter((c) => c.ok).length, n: ci.checks.length },
   };
   const ledger = {
-    meta: { repo, sha, date, model: llm.model, aiu: llm.aiu, usage: llm.usage, llmLog: llm.log },
+    meta: { repo, sha, date, model: llm.model, aiu: llm.aiu, usage: llm.usage, llmLog: llm.log, memo: llm.memoPath ? llm.memoStats : null, executed: probes.size },
     sources: {
       // documents with requirements first, then design documents, each by path
       read: disc.read.map((d) => ({ path: d.path, ...(extracted.perDoc.get(d.path) || { requirements: 0, decisions: 0 }) })).filter((d) => d.requirements + d.decisions).sort((a, b) => (b.requirements > 0) - (a.requirements > 0) || a.path.localeCompare(b.path)),
