@@ -1,0 +1,580 @@
+[
+ {
+  "repo": "axios/axios",
+  "sha": "fb88a1b133c1a2d774713070b8ca25f7bcd382ac",
+  "language": "js",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": true,
+   "format": false,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": "vitest.config.js has no coverage config; run-ci.yml:44 `vitest run --project unit` without --coverage",
+   "dependency": ".github/workflows/run-ci.yml:53 uses actions/dependency-review-action",
+   "format": "prettier only in lint-staged (package.json, pre-commit hook), not in CI; eslint.config.js has no prettier plugin",
+   "lint": ".github/workflows/run-ci.yml:35 npm run lint -> eslint lib/**/*.js",
+   "typecheck": ".github/workflows/run-ci.yml:178/217 npm run test:module:cjs|esm -> mocha/vitest tests (tests/module/*/tests/typings.module.test.*) that spawn `tsc --noEmit -p tsconfig.json` on typing fixtures",
+   "tests": ".github/workflows/run-ci.yml:44 npm run test:vitest:unit -> vitest run --project unit"
+  },
+  "notes": "Typecheck is indirect: tsc --noEmit runs inside module tests to check index.d.ts typings against TS fixtures (not a tsc over the source, which is plain JS). zizmor (workflow linter) and lockfile-lint run on PR but are not dependency vulnerability scans.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "medium",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "expressjs/express",
+  "sha": "43fca52d28a422c8be48fd489cbd4f2d6152bab6",
+  "language": "js",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": false,
+   "lint": true,
+   "typecheck": false,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": ".github/workflows/ci.yml:80 npm run test-ci -> `nyc ... npm test`; lcov uploaded to Coveralls ci.yml:115",
+   "dependency": "no dependency vulnerability scan in any PR-triggered workflow (codeql.yml is CodeQL only; scorecard.yml not PR-triggered)",
+   "format": "no formatter; .eslintrc.yml has a few stylistic rules (indent, no-trailing-spaces, eol-last) but is not a formatter",
+   "lint": ".github/workflows/ci.yml:42 npm run lint -> eslint .",
+   "typecheck": "plain JS, no type checking",
+   "tests": ".github/workflows/ci.yml:80 npm run test-ci -> nyc npm test -> mocha"
+  },
+  "notes": "legacy.yml (also PR-triggered) repeats test-ci with nyc. Format false because eslint only has a handful of stylistic rules, not a formatter or standard style.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "medium",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "sindresorhus/got",
+  "sha": "6b5aafc1cd538998728be6f45c65b0f80bae01b2",
+  "language": "ts",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": false,
+   "format": false,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": "main.yml:26 `npm run test` does not use c8 (only the unused `test:coverage` script does)",
+   "dependency": "no dependency vulnerability scan in any PR-triggered workflow",
+   "format": "xo without prettier option (package.json xo config has no prettier:true); no formatter step",
+   "lint": ".github/workflows/main.yml:26 npm run test -> `xo && tsc --noEmit && node --test`",
+   "typecheck": ".github/workflows/main.yml:26 npm run test -> tsc --noEmit",
+   "tests": ".github/workflows/main.yml:26 npm run test -> node --test test/*.ts"
+  },
+  "notes": "Everything runs via `npm test` = `xo && tsc --noEmit && node --test`. xo does enforce some @stylistic rules by default, but per labeling rules xo counts for format only when configured with prettier, which it isn't.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "medium",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "colinhacks/zod",
+  "sha": "93b7a62a64bc62561590e81f4fed4cbdca507692",
+  "language": "ts",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": "vitest.config.ts has no coverage settings; test.yml:37 `vitest run` without --coverage",
+   "dependency": "no dependency vulnerability scan in any PR-triggered workflow",
+   "format": ".github/workflows/test.yml:52 nub run format:check -> `biome check .` (biome.jsonc formatter.enabled=true)",
+   "lint": ".github/workflows/test.yml:53 nub run lint:check -> `biome lint .`",
+   "typecheck": ".github/workflows/test.yml:41 nub run --filter @zod/integration test:all -> `tsc --project fixtures/...`; also vitest.config.ts typecheck.enabled=true checker=tsc for test.yml:37",
+   "tests": ".github/workflows/test.yml:37 nub run test -> vitest run"
+  },
+  "notes": "`nub` is the package runner used in place of npm/pnpm. test.yml:41 runs for every matrix leg; test.yml:39 (resolution tests) is skipped on the 'latest' TS leg.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "date-fns/date-fns",
+  "sha": "a9739fb3e5384a810e90d7376446f6d84ecc5029",
+  "language": "ts",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": false,
+   "format": false,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": "coverage.yaml (`vitest run --coverage`) is workflow_dispatch only; PR test runs have no coverage",
+   "dependency": "no dependency vulnerability scan in any PR-triggered workflow",
+   "format": "oxfmt is defined as mise task `format` but never run in a PR workflow",
+   "lint": ".github/workflows/code_quality.yaml:18 mise //:lint -> mise.toml task lint = `pnpm oxlint`",
+   "typecheck": ".github/workflows/code_quality.yaml:15 mise //:types -> mise.toml task types = `pnpm tsc --build`",
+   "tests": ".github/workflows/node_tests.yaml:15 mise //pkgs/core:test/node -> scripts/test/node.sh -> `pnpm vitest run --project main`"
+  },
+  "notes": "Commands go through mise tasks (mise.toml, pkgs/core/mise.toml), not package.json scripts (root package.json has none).",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "pinojs/pino",
+  "sha": "b29dbe97820630e7128e464c50263b427965ec99",
+  "language": "js",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": true,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": ".github/workflows/ci.yml:66 npm run test-ci -> npm run borp -> `borp --coverage --check-coverage --lines 95 ...`",
+   "dependency": ".github/workflows/ci.yml:35 uses actions/dependency-review-action (job runs when event is pull_request)",
+   "format": ".github/workflows/ci.yml:66 npm run test-ci -> npm run lint -> eslint with neostandard (eslint.config.js), which includes @stylistic formatting rules by default",
+   "lint": ".github/workflows/ci.yml:66 npm run test-ci -> npm run lint -> eslint .",
+   "typecheck": ".github/workflows/ci.yml:66 npm run test-ci -> npm run test-types -> `tsc && tstyche ...` (tsconfig.json noEmit:true)",
+   "tests": ".github/workflows/ci.yml:66 npm run test-ci -> borp (node test runner)"
+  },
+  "notes": "lint/coverage/types all run via `npm run test-ci` = `lint && transpile && borp(--coverage --check-coverage) && test-types`. Format=true because neostandard (standard-style) enforces formatting via @stylistic rules; there is no dedicated formatter.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "medium",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "fastify/fastify",
+  "sha": "1b954e5602261115b67708c73a9729231d70d2a0",
+  "language": "js",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": true,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": ".github/workflows/ci.yml:45 uses ./.github/workflows/coverage-nix.yml -> coverage-nix.yml:34 npm run coverage:ci-check-coverage -> `borp --coverage --check-coverage --lines 100` (same in coverage-win.yml)",
+   "dependency": ".github/workflows/ci.yml:33 uses fastify/workflows/.github/workflows/nested-quality.yml@ef591e2 -> its dependency-review job (actions/dependency-review-action, if event is pull_request)",
+   "format": "eslint with neostandard (eslint.config.js) via the lint job of the remote reusable workflow; neostandard enforces @stylistic formatting rules",
+   "lint": ".github/workflows/ci.yml:33 nested-quality.yml (lint: true) -> `npm run lint` -> eslint",
+   "typecheck": ".github/workflows/ci.yml:144 npm run test:types -> tstyche (type tests in test/types/*.tst.ts, checked with the TypeScript compiler)",
+   "tests": ".github/workflows/ci.yml:87 npm run unit -> borp"
+  },
+  "notes": "Lint and dependency review come from a REMOTE reusable workflow (fastify/workflows nested-quality.yml at the pinned sha), not a local one, so a tool that only follows local `./.github/workflows` would miss them. Typecheck is via tstyche type tests, not a plain tsc run; the package is JS with .d.ts typings. Format via neostandard, same reasoning as pino.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "medium",
+   "format": "medium",
+   "lint": "medium",
+   "typecheck": "medium",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "honojs/hono",
+  "sha": "8b7f9e97d661dbc8e933cf81dc36fec8d35b9146",
+  "language": "ts",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": ".github/workflows/ci.yml:61 pnpm run test -> vp test --run with vitest.config.ts coverage.enabled=true (v8); also ci.yml:95 deno test --coverage; codecov upload ci.yml:35",
+   "dependency": "no dependency vulnerability scan in any PR-triggered workflow",
+   "format": ".github/workflows/ci.yml:58 pnpm run check -> `vp check` (Vite+), which runs the formatter in check mode (fmt config in vite.config.ts)",
+   "lint": ".github/workflows/ci.yml:58 pnpm run check -> `vp check`, which runs the linter (oxlint, lint config in vite.config.ts)",
+   "typecheck": ".github/workflows/ci.yml:61 pnpm run test -> `tsc -p tsconfig.spec.json && vp test --run`",
+   "tests": ".github/workflows/ci.yml:61 pnpm run test -> vp test --run (vitest)"
+  },
+  "notes": "`vp` is the Vite+ CLI. `vp check` = format check + lint (+ type checks), based on the Vite+ docs, not on anything in this repo. A dedicated `format` script (`vp fmt --check`) and `lint` script exist but CI calls only `check`. autofix.yml runs `check:fix` and pushes the fixes back; it is not a check.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "medium",
+   "lint": "medium",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "vitest-dev/vitest",
+  "sha": "1b2380c880f920d0dc35f1f2e76f3edb3f8aa319",
+  "language": "ts",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": "no coverage measurement of vitest itself: ci.yml:213 test:ci:coverage runs test/coverage-test, which tests vitest's coverage feature on fixtures; test/unit/vite.config.ts has coverage config but not enabled",
+   "dependency": "no dependency vulnerability scan in any PR-triggered workflow (semgrep.yml is schedule/dispatch only; knip/zizmor are not vuln scans)",
+   "format": ".github/workflows/ci.yml:61 pnpm run lint -> `oxlint && oxfmt --check`",
+   "lint": ".github/workflows/ci.yml:61 pnpm run lint -> oxlint",
+   "typecheck": ".github/workflows/ci.yml:64 pnpm run typecheck -> `tsc -p tsconfig.check.json --noEmit`",
+   "tests": ".github/workflows/ci.yml:213 pnpm run test:ci:unit (matrix suite=unit) -> pnpm -r ... run test"
+  },
+  "notes": "Coverage is ambiguous: the 'coverage' matrix suite tests the coverage feature (istanbul/v8 providers) on fixtures; it does not measure vitest's own code coverage. Labeled false.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "medium",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "psf/requests",
+  "sha": "3c7baaa05ab4aa49cc819ce3a819d260de19c157",
+  "language": "python",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": ".github/workflows/run-tests.yml:63 make ci -> `pytest tests --junitxml=report.xml` (no --cov; pytest addopts only --doctest-modules). `make coverage` exists but CI doesn't call it",
+   "dependency": "no dependency vulnerability scan in any PR-triggered workflow (codeql-analysis.yml is CodeQL)",
+   "format": ".github/workflows/lint.yml:24 pre-commit run --all-files -> .pre-commit-config.yaml ruff-format hook (fails when files change, --show-diff-on-failure)",
+   "lint": ".github/workflows/lint.yml:24 pre-commit -> ruff-check hook",
+   "typecheck": ".github/workflows/typecheck.yml:139 python -m pyright src/requests/",
+   "tests": ".github/workflows/run-tests.yml:63 make ci -> pytest tests"
+  },
+  "notes": "Lint and format run through pre-commit in CI.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "pallets/flask",
+  "sha": "49943b5a94413a530761350f04e896f76e8d620e",
+  "language": "python",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": "tox env_run_base runs plain `pytest -v --tb=short`; [tool.coverage] config exists but coverage is never invoked",
+   "dependency": "no dependency vulnerability scan in any PR-triggered workflow",
+   "format": ".github/workflows/pre-commit.yaml:29 pre-commit run --all-files -> ruff-format hook",
+   "lint": ".github/workflows/pre-commit.yaml:29 pre-commit -> ruff-check hook",
+   "typecheck": ".github/workflows/tests.yaml:93 tox run -e typing -> pyproject [tool.tox.env.typing] `mypy`",
+   "tests": ".github/workflows/tests.yaml:72 tox run (TOX_ENV=py3.x) -> pytest"
+  },
+  "notes": "tox config is in pyproject.toml [tool.tox]. The tox env is chosen by the TOX_ENV env var in the matrix.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "encode/httpx",
+  "sha": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254",
+  "language": "python",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": ".github/workflows/test-suite.yml:32 scripts/test -> `coverage run -m pytest`; test-suite.yml:34 scripts/coverage -> `coverage report --fail-under=100`",
+   "dependency": "no dependency vulnerability scan in any PR-triggered workflow",
+   "format": ".github/workflows/test-suite.yml:28 scripts/check -> `ruff format httpx tests --diff` (exits non-zero on diff)",
+   "lint": ".github/workflows/test-suite.yml:28 scripts/check -> `ruff check httpx tests`",
+   "typecheck": ".github/workflows/test-suite.yml:28 scripts/check -> `mypy httpx tests`",
+   "tests": ".github/workflows/test-suite.yml:32 scripts/test -> coverage run -m pytest"
+  },
+  "notes": "All commands are in shell scripts under scripts/.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "fastapi/typer",
+  "sha": "f2183bffb2bae9a79b56e69561cbae32969451a3",
+  "language": "python",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": ".github/workflows/test.yml:69 scripts/test.sh -> `pytest --cov ...`; test.yml:120 coverage report --fail-under=100",
+   "dependency": "no dependency vulnerability scan in any PR-triggered workflow (guard-dependencies.yml only reads PR metadata)",
+   "format": ".github/workflows/pre-commit.yml:56 prek run (continue-on-error) re-raised by pre-commit.yml:91 `exit 1` if outcome==failure -> hook local-ruff-format `ruff format --exit-non-zero-on-format`",
+   "lint": ".github/workflows/pre-commit.yml:56/91 prek -> hook local-ruff-check `ruff check --fix --exit-non-zero-on-fix`",
+   "typecheck": ".github/workflows/pre-commit.yml:56/91 prek -> hooks local-mypy `mypy typer` and local-ty `ty check typer`",
+   "tests": ".github/workflows/test.yml:69 uv run bash scripts/test.sh -> pytest"
+  },
+  "notes": "Ambiguous: the prek/pre-commit step (pre-commit.yml:56) has continue-on-error: true, but a later step 'Error out on pre-commit errors' (pre-commit.yml:91, `if: steps.precommit.outcome == 'failure'` -> `exit 1`) fails the job anyway, so format/lint/typecheck CAN fail the PR. Labeled true. A literal 'skip continue-on-error steps' rule would give false. prek runs only on files changed vs the base ref (--from-ref origin/$GITHUB_BASE_REF).",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "medium",
+   "lint": "medium",
+   "typecheck": "medium",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "spf13/cobra",
+  "sha": "adbc8813901bba65827259daa8e22ff94ec1f30e",
+  "language": "go",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": "na",
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret-scanning step in any PR-triggered workflow",
+   "coverage": ".github/workflows/test.yml:93 make richtest -> `richgo test -v ./...` (no -cover)",
+   "dependency": "no dependency vulnerability scan in any PR-triggered workflow (gosec in golangci-lint is SAST, not a dependency scan)",
+   "format": ".github/workflows/test.yml:50 golangci-lint-action (v2 config .golangci.yml `formatters: enable: [gofmt, goimports]`; `golangci-lint run` reports formatter issues)",
+   "lint": ".github/workflows/test.yml:50 golangci/golangci-lint-action (errcheck, govet, staticcheck, ...)",
+   "typecheck": "Go: na",
+   "tests": ".github/workflows/test.yml:93 make richtest -> richgo test ./..."
+  },
+  "notes": "Format comes only from golangci-lint v2 formatters (gofmt/goimports) in .golangci.yml; Makefile `fmt` target (gofmt -l) is not called in CI.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "medium",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "gin-gonic/gin",
+  "sha": "0f09c3a9b4626d9fe9979cf4d0521d6ae32ab646",
+  "language": "go",
+  "labels": {
+   "secret": true,
+   "coverage": true,
+   "dependency": true,
+   "format": true,
+   "lint": true,
+   "typecheck": "na",
+   "tests": true
+  },
+  "evidence": {
+   "secret": ".github/workflows/trivy-scan.yml:47 aquasecurity/trivy-action scanners \"vuln,secret,misconfig\" with exit-code \"1\" (also :30 SARIF run)",
+   "coverage": ".github/workflows/gin.yml:81 make test -> `go test -covermode=count -coverprofile=profile.out`; codecov upload gin.yml:84",
+   "dependency": ".github/workflows/trivy-scan.yml:47 trivy fs scan with `vuln` scanner, exit-code 1",
+   "format": ".github/workflows/gin.yml:27 golangci-lint-action v2.11 (.golangci.yml formatters: gofmt, gofumpt, goimports)",
+   "lint": ".github/workflows/gin.yml:27 golangci/golangci-lint-action (revive, gosec, errorlint, ...)",
+   "typecheck": "Go: na",
+   "tests": ".github/workflows/gin.yml:81 make test -> go test per package"
+  },
+  "notes": "Secret=true only because Trivy's built-in `secret` scanner is enabled. It is not a dedicated tool like gitleaks; judge it as 'or similar'. The trivy step that can fail is the table one (exit-code 1); the SARIF step uses the default exit-code 0. Makefile fmt-check is not used in CI; format comes from golangci-lint v2 formatters.",
+  "confidence": {
+   "secret": "medium",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "medium",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "gitleaks/gitleaks",
+  "sha": "5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c",
+  "language": "go",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": false,
+   "format": false,
+   "lint": false,
+   "typecheck": "na",
+   "tests": true
+  },
+  "evidence": {
+   "secret": "gitleaks.yml (gitleaks-action) is triggered only by push/workflow_dispatch, not pull_request -> does not count",
+   "coverage": ".github/workflows/test.yml:34 `go test -json ./... --race` without -cover",
+   "dependency": "no dependency vulnerability scan in any PR-triggered workflow",
+   "format": "no gofmt/golangci-lint in PR workflows (Makefile `format` = go fmt (writes) is not used in CI)",
+   "lint": ".golangci.yaml exists but no workflow runs golangci-lint; test.yml runs only build/test/go generate",
+   "typecheck": "Go: na",
+   "tests": ".github/workflows/test.yml:34 gotestsum -- go test ./... --race"
+  },
+  "notes": "Trap case: the secret scanner (gitleaks-action) exists but only on push, so secret=false. `go test` runs a small built-in subset of vet checks on its own; not counted as lint.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)"
+ },
+ {
+  "repo": "mira190/ai-quality-gate",
+  "sha": "c6aaf38b7490231b7d159756d632ec28be322447",
+  "language": "js",
+  "labelledBy": "hand (dogfood: this repository)",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": false,
+   "format": false,
+   "lint": false,
+   "typecheck": false,
+   "tests": true
+  },
+  "evidence": {
+   "tests": ".github/workflows/test.yml:24 npm test -> node --test \"tests/*.test.js\" (on pull_request)",
+   "secret": "no step",
+   "coverage": "node --test without coverage flags",
+   "dependency": "no step",
+   "format": "no step",
+   "lint": "no step",
+   "typecheck": "plain JS, no tsc"
+  },
+  "notes": "test runner is the built-in node --test",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  }
+ }
+]
