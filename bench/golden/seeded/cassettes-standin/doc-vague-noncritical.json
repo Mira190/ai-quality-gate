@@ -493,6 +493,223 @@
     ]
    },
    "usage": {}
+  },
+  "trace:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "impl_path": "src/refund.js",
+      "impl_line": 8,
+      "impl_symbol": "canRefund",
+      "tests": [
+       "tests/unit/refund.test.js",
+       "e2e/refund.spec.js"
+      ]
+     },
+     {
+      "id": "REQ-02",
+      "impl_path": "src/refund.js",
+      "impl_line": 13,
+      "impl_symbol": "refundAmount",
+      "tests": [
+       "tests/unit/refund.test.js",
+       "tests/component/admin.test.js",
+       "e2e/refund.spec.js"
+      ]
+     },
+     {
+      "id": "REQ-03",
+      "impl_path": "src/orders.js",
+      "impl_line": 6,
+      "impl_symbol": "pageOrders",
+      "tests": [
+       "tests/unit/orders.test.js"
+      ]
+     },
+     {
+      "id": "REQ-04",
+      "impl_path": "src/admin.js",
+      "impl_line": 4,
+      "impl_symbol": "requireAdmin",
+      "tests": [
+       "tests/component/admin.test.js"
+      ]
+     },
+     {
+      "id": "DEC-01",
+      "impl_path": "src/gateway.js",
+      "impl_line": 9,
+      "impl_symbol": "postRefund",
+      "tests": [
+       "tests/component/gateway.test.js"
+      ]
+     },
+     {
+      "id": "DEC-02",
+      "impl_path": "src/refund-service.js",
+      "impl_line": 13,
+      "impl_symbol": "RefundService.refund",
+      "tests": [
+       "tests/unit/refund-service.test.js"
+      ]
+     },
+     {
+      "id": "DEC-03",
+      "impl_path": "src/orders.js",
+      "impl_line": 5,
+      "impl_symbol": "pageOrders",
+      "tests": [
+       "tests/unit/orders.test.js"
+      ]
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "trace:0#v1": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "impl_path": "src/refund.js",
+      "impl_line": 6,
+      "impl_symbol": "canRefund",
+      "tests": [
+       "tests/unit/refund.test.js",
+       "e2e/refund.spec.js"
+      ]
+     },
+     {
+      "id": "REQ-02",
+      "impl_path": "src/refund.js",
+      "impl_line": 12,
+      "impl_symbol": "refundAmount",
+      "tests": [
+       "tests/unit/refund.test.js",
+       "e2e/refund.spec.js"
+      ]
+     },
+     {
+      "id": "REQ-03",
+      "impl_path": "src/orders.js",
+      "impl_line": 4,
+      "impl_symbol": "pageOrders",
+      "tests": [
+       "tests/unit/orders.test.js"
+      ]
+     },
+     {
+      "id": "REQ-04",
+      "impl_path": "src/admin.js",
+      "impl_line": 3,
+      "impl_symbol": "requireAdmin",
+      "tests": [
+       "tests/component/admin.test.js"
+      ]
+     },
+     {
+      "id": "DEC-01",
+      "impl_path": "src/gateway.js",
+      "impl_line": 4,
+      "impl_symbol": "postRefund",
+      "tests": [
+       "tests/component/gateway.test.js"
+      ]
+     },
+     {
+      "id": "DEC-02",
+      "impl_path": "src/refund-service.js",
+      "impl_line": 11,
+      "impl_symbol": "RefundService.refund",
+      "tests": [
+       "tests/unit/refund-service.test.js"
+      ]
+     },
+     {
+      "id": "DEC-03",
+      "impl_path": "src/orders.js",
+      "impl_line": 4,
+      "impl_symbol": "pageOrders",
+      "tests": [
+       "tests/unit/orders.test.js"
+      ]
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "trace:0#v2": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "impl_path": "src/refund.js",
+      "impl_line": 8,
+      "impl_symbol": "canRefund",
+      "tests": [
+       "tests/unit/refund.test.js",
+       "e2e/refund.spec.js"
+      ]
+     },
+     {
+      "id": "REQ-02",
+      "impl_path": "src/refund.js",
+      "impl_line": 13,
+      "impl_symbol": "refundAmount",
+      "tests": [
+       "tests/unit/refund.test.js",
+       "e2e/refund.spec.js"
+      ]
+     },
+     {
+      "id": "REQ-03",
+      "impl_path": "src/orders.js",
+      "impl_line": 6,
+      "impl_symbol": "pageOrders",
+      "tests": [
+       "tests/unit/orders.test.js"
+      ]
+     },
+     {
+      "id": "REQ-04",
+      "impl_path": "src/admin.js",
+      "impl_line": 4,
+      "impl_symbol": "requireAdmin",
+      "tests": [
+       "tests/component/admin.test.js"
+      ]
+     },
+     {
+      "id": "DEC-01",
+      "impl_path": "src/gateway.js",
+      "impl_line": 9,
+      "impl_symbol": "postRefund",
+      "tests": [
+       "tests/component/gateway.test.js"
+      ]
+     },
+     {
+      "id": "DEC-02",
+      "impl_path": "src/refund-service.js",
+      "impl_line": 13,
+      "impl_symbol": "RefundService.refund",
+      "tests": [
+       "tests/unit/refund-service.test.js"
+      ]
+     },
+     {
+      "id": "DEC-03",
+      "impl_path": "src/orders.js",
+      "impl_line": 5,
+      "impl_symbol": "pageOrders",
+      "tests": [
+       "tests/unit/orders.test.js"
+      ]
+     }
+    ]
+   },
+   "usage": {}
   }
  }
 }
