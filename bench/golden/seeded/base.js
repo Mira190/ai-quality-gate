@@ -54,7 +54,7 @@ Calls to the payment gateway in \`src/gateway.js\` time out after 5 seconds. On 
 Serves: REQ-01
 
 ### DEC-02 Refunds are idempotent
-\`RefundService.refund\` stores each result by order ID and returns the stored result when the same order is refunded again, so a refund sent twice is paid once.
+\`RefundService.refund\` stores each result by order ID and returns the stored result when the same order is refunded again, so a refund sent twice is paid once. If the store cannot be read or written, \`refund\` fails before anything is sent to the gateway, so a store failure never pays twice.
 Serves: REQ-02
 
 ## Orders
@@ -167,8 +167,10 @@ export class RefundService {
   }
 
   async refund(order, now = Date.now()) {
+    // a store that cannot be read or written throws here, before the gateway is called
     if (this.store.has(order.id)) return this.store.get(order.id);
     if (!canRefund(order.purchasedAt, now)) return { status: 'REJECTED' };
+    this.store.set(order.id, { status: 'IN_PROGRESS' });
     const result = await postRefund(this.gatewayUrl, order.id, refundAmount(order.pricePaid));
     this.store.set(order.id, result);
     return result;

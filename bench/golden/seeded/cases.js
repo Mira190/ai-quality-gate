@@ -242,7 +242,7 @@ const CASES = [
     allow: ['S2 DEC-01 Verifiable'],
     apply: (f) => edit(f, 'docs/design.md', 'Calls to the payment gateway in `src/gateway.js` time out after 5 seconds. On a timeout or a gateway error the refund is stored as `PENDING` and retried by the nightly job.', 'Refunds are posted to the payment gateway by `src/gateway.js` over HTTPS.') },
   { id: 'doc-untraceable', needs: 'code', what: 'DEC-02 has neither a Serves line nor a reason', expect: ['S2 DEC-02 Traceable'],
-    apply: (f) => edit(f, 'docs/design.md', 'so a refund sent twice is paid once.\nServes: REQ-02\n', 'so a refund sent twice is paid once.\n') },
+    apply: (f) => edit(f, 'docs/design.md', 'so a store failure never pays twice.\nServes: REQ-02\n', 'so a store failure never pays twice.\n') },
   { id: 'neg-doc-rewording', needs: 'model', what: 'REQ-01 reworded in EARS form with the same meaning', expect: [],
     apply: (f) => edit(f, 'docs/requirements.md', 'The system shall accept a refund request made within 30 days of purchase and reject a request made after day 30.', 'When a customer requests a refund, the system shall accept the request if it is made no later than 30 days after purchase, and shall reject it otherwise.') },
 ];

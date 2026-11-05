@@ -6,6 +6,7 @@
 //
 // seeded   bench/golden/seeded: a clean repository plus one case per seeded defect (and negative cases that must
 //          stay clean). Every case says which issues it must produce; anything else reported is a false alarm.
+//          fill: score from stand-in answers (scripts/llm-standin.js, --cassettes <dir>), 1 vote.
 //          offline: only what code decides (section 5, Specific, Traceable, critical tags) is scored; the rest of
 //          each case is marked "not evaluable". live/record/replay score everything; record saves each case's model
 //          replies to bench/golden/seeded/cassettes/<case>.json so later runs replay them for free.
@@ -47,13 +48,14 @@ async function seeded({ mode = 'offline', only = new Set() } = {}) {
   const { run } = require('../src/pipeline');
   const { LLM } = require('../src/llm');
   const { CASES, filesOf } = require('../bench/golden/seeded/cases');
-  const tapes = path.join(ROOT, 'bench/golden/seeded/cassettes');
+  const tapes = opt('cassettes') ? path.resolve(opt('cassettes')) : path.join(ROOT, 'bench/golden/seeded/cassettes');
   const results = [];
   for (const c of CASES.filter((x) => !only.size || only.has(x.id))) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), `golden-${c.id}-`));
     for (const [p, text] of Object.entries(filesOf(c))) { fs.mkdirSync(path.dirname(path.join(dir, p)), { recursive: true }); fs.writeFileSync(path.join(dir, p), text); }
-    const cassette = mode === 'record' || mode === 'replay' ? path.join(tapes, `${c.id}.json`) : null;
-    if (mode === 'replay' && !fs.existsSync(cassette)) { results.push({ c, skipped: 'no cassette' }); continue; }
+    // fill: replay what the cassette has (a stand-in's answers, see scripts/llm-standin.js); a missing call is null
+    const cassette = ['record', 'replay', 'fill'].includes(mode) ? path.join(tapes, `${c.id}.json`) : null;
+    if ((mode === 'replay' || mode === 'fill') && !fs.existsSync(cassette)) { results.push({ c, skipped: 'no cassette' }); continue; }
     if (cassette) fs.mkdirSync(tapes, { recursive: true });
     const llm = new LLM({ model: opt('model', 'claude-haiku-5-5'), mode, cassette, maxUsd: Number(opt('max-usd', 2)), votes: Number(opt('votes', 3)) });
     let out;
