@@ -69,6 +69,10 @@ inputs:
     description: 'true: upload findings to code scanning (needs security-events: write).'
     required: false
     default: 'false'
+  batch-api:
+    description: "'true': runs on the default branch (the baseline) go through Message Batches at half price; slower (minutes to hours). Pull requests always call the API directly."
+    required: false
+    default: 'false'
   enforce:
     description: "'true': fail the step when the gate fails. 'false': report only (a first rollout)."
     required: false
@@ -84,6 +88,9 @@ outputs:
   sarif-path:
     description: SARIF file
     value: ${{ steps.report.outputs.sarif_path }}
+  affected-tests:
+    description: Space-separated test files that guard the rules this change touches (run these first)
+    value: ${{ steps.report.outputs.affected_tests }}
 
 runs:
   using: composite
@@ -102,10 +109,12 @@ runs:
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
       run: |
-        out="$RUNNER_TEMP/aqg-changed.txt"; : > "$out"
+        out="$RUNNER_TEMP/aqg-changed.txt"; diff="$RUNNER_TEMP/aqg-changes.diff"; : > "$out"
         if [ -n "$BASE_SHA" ]; then
           git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || true
           if git diff --name-only "$BASE_SHA" HEAD > "$out" 2>/dev/null; then echo "path=$out" >> "$GITHUB_OUTPUT"; fi
+          # the diff itself: change impact (unguarded changes, spec drift), mutants on changed rules, pending tests
+          if git diff -U0 "$BASE_SHA" HEAD > "$diff" 2>/dev/null; then echo "diff=$diff" >> "$GITHUB_OUTPUT"; fi
         fi
 
     - name: Restore the verdict memo and the baseline
@@ -130,6 +139,8 @@ runs:
         AQG_EXECUTE: ${{ inputs.execute }}
         AQG_TEST_COMMAND: ${{ inputs.test-command }}
         AQG_CHANGED: ${{ steps.changed.outputs.path }}
+        AQG_DIFF: ${{ steps.changed.outputs.diff }}
+        AQG_BATCH: ${{ inputs.batch-api }}
         AQG_IS_DEFAULT: ${{ github.ref_name == github.event.repository.default_branch && github.event_name != 'pull_request' }}
         AQG_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         AQG_REPO: ${{ github.repository }}
@@ -144,10 +155,12 @@ runs:
         [ -n "$AQG_BASIS" ] && args+=(--basis "$AQG_BASIS")
         [ "$AQG_ALL" = true ] && args+=(--all-findings)
         [ -n "$AQG_CHANGED" ] && args+=(--changed-files "$AQG_CHANGED")
+        [ -n "$AQG_DIFF" ] && args+=(--diff "$AQG_DIFF")
         [ "$AQG_EXECUTE" = true ] && args+=(--execute)
         [ -n "$AQG_TEST_COMMAND" ] && args+=(--test-command "$AQG_TEST_COMMAND")
         # the default branch writes the baseline that pull requests are compared against
         [ "$AQG_IS_DEFAULT" = true ] && args+=(--write-baseline --history .quality-gate-state/history --commit "$GITHUB_SHA")
+        [ "$AQG_IS_DEFAULT" = true ] && [ "$AQG_BATCH" = true ] && args+=(--batch-api)
         node "$GITHUB_ACTION_PATH/scripts/repo-report.js" "${args[@]}"
 
     - name: Job summary

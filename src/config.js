@@ -19,7 +19,12 @@
 //     test_command: "npx vitest run {files}"
 //     timeout_s: 120
 //     max_mutants: 60
-//   model: { name: claude-haiku-5-5, votes: 3, max_usd: 2 }
+//     scope: diff            # diff (default with a diff: only rules the change edits) or all
+//   model:
+//     name: claude-haiku-5-5
+//     votes: 3                # or per stage: { default: 3, built: 1, asserts: 1 }
+//     adaptive: true          # two votes first, the third only when they disagree
+//     max_usd: 2
 //   suppress:
 //     - fingerprint: 3f2a…    # or rule: REQ-07 + check: Placement
 //       reason: "Covered by the contract test suite in another repository"
@@ -33,8 +38,8 @@ const SHAPE = {
   gate: { fail_on: 'string', basis: 'array', new_only: 'boolean', min_agreement: 'object', probation: 'array' },
   documents: { include: 'array', exclude: 'array', budget_kb: 'number' },
   critical: 'object',
-  execute: { test_command: 'string', timeout_s: 'number', max_mutants: 'number' },
-  model: { name: 'string', votes: 'number', max_usd: 'number' },
+  execute: { test_command: 'string', timeout_s: 'number', max_mutants: 'number', scope: 'string' },
+  model: { name: 'string', votes: 'votes', max_usd: 'number', adaptive: 'boolean' },
   suppress: 'array',
 };
 
@@ -43,7 +48,7 @@ function validate(o, shape, at, errs) {
     const want = shape[k];
     if (!want) { errs.push(`${at}${k}: unknown key`); continue; }
     if (typeof want === 'object') { if (typeof v !== 'object' || Array.isArray(v)) errs.push(`${at}${k}: must be a mapping`); else validate(v, want, `${at}${k}.`, errs); continue; }
-    const ok = want === 'array' ? Array.isArray(v) : want === 'object' ? v && typeof v === 'object' && !Array.isArray(v) : typeof v === want;
+    const ok = want === 'votes' ? typeof v === 'number' || (v && typeof v === 'object' && Object.values(v).every((n) => typeof n === 'number' && n >= 1)) : want === 'array' ? Array.isArray(v) : want === 'object' ? v && typeof v === 'object' && !Array.isArray(v) : typeof v === want;
     if (!ok) errs.push(`${at}${k}: must be ${want === 'array' ? 'a list' : `a ${want}`}`);
   }
 }
@@ -55,6 +60,7 @@ function loadConfig(file) {
   const errors = [];
   validate(config, SHAPE, '', errors);
   const fo = config.gate?.fail_on;
+  if (config.execute?.scope && !['diff', 'all'].includes(config.execute.scope)) errors.push('execute.scope: must be diff or all');
   if (fo && !/^(P[0-3]|never)$/.test(fo)) errors.push('gate.fail_on: must be P0, P1, P2, P3 or never');
   for (const b of config.gate?.basis || []) if (!['E', 'S', 'V', 'M'].includes(b)) errors.push(`gate.basis: unknown evidence "${b}"`);
   for (const [k, v] of Object.entries(config.gate?.min_agreement || {})) if (typeof v !== 'number' || v < 0 || v > 1) errors.push(`gate.min_agreement.${k}: must be a number from 0 to 1`);

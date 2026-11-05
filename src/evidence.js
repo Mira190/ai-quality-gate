@@ -52,7 +52,8 @@ async function judgeAsserts(llm, rules, testIndex) {
     hashOf: (r) => JSON.stringify([r.title, r.text, r.links.map((l) => testBlock(r, l))]),
     build: (b, i, k) => ({
       system: STYLE,
-      prompt: `For each rule, decide whether any of its tests has an assertion that compares the rule's result or state to an expected value. "Was called", "does not throw", a snapshot, or an assertion about a different behaviour does not count. Cite the assertion line that proves it; if none does, cite the assertion line that comes closest and say in "what" what it checks instead.\n\n${b.map((r) => `<rule id="${r.id}">${r.title}. ${r.text}\n${permute(r.links, k).map((l) => testBlock(r, l)).join('\n')}\n</rule>`).join('\n')}`,
+      prefix: `For each rule, decide whether any of its tests has an assertion that compares the rule's result or state to an expected value. "Was called", "does not throw", a snapshot, or an assertion about a different behaviour does not count. Cite the assertion line that proves it; if none does, cite the assertion line that comes closest and say in "what" what it checks instead.`,
+      prompt: b.map((r) => `<rule id="${r.id}">${r.title}. ${r.text}\n${permute(r.links, k).map((l) => testBlock(r, l)).join('\n')}\n</rule>`).join('\n'),
       // reasoning fields before the verdict: the model writes what the line checks, then decides
       schema: obj({ rules: arr(obj({ id: str, cite_path: str, cite_line: { type: 'integer' }, what: str, asserts: { type: 'boolean' } })) }),
       maxTokens: 6000,
@@ -102,7 +103,8 @@ async function judgeBuilt(llm, rules, root, files = []) {
     hashOf: block,
     build: (b) => ({
       system: STYLE,
-      prompt: `For each design decision, read the code that implements it and say whether the code does what the decision says. Answer "not_built" only when a specific line shows the behaviour is missing or different (for example a call with no timeout, a route that checks login but not the role); cite that line. Answer "built" when it does, citing the line that does it. The <used-at> lines show where other files use the implementing function; a decision can be broken there (a route that mounts the login check but no role check), so cite such a line when it is the one. Answer "unsure" when the code shown cannot tell. Write "why" first, then a verdict that agrees with it: a why that says the behaviour is there is "built".\n\n${b.map(block).join('\n')}`,
+      prefix: `For each design decision, read the code that implements it and say whether the code does what the decision says. Answer "not_built" only when a specific line shows the behaviour is missing or different (for example a call with no timeout, a route that checks login but not the role); cite that line. Answer "built" when it does, citing the line that does it. The <used-at> lines show where other files use the implementing function; a decision can be broken there (a route that mounts the login check but no role check), so cite such a line when it is the one. Answer "unsure" when the code shown cannot tell. Write "why" first, then a verdict that agrees with it: a why that says the behaviour is there is "built".`,
+      prompt: b.map(block).join('\n'),
       schema: obj({ decisions: arr(obj({ id: str, path: str, line: { type: 'integer' }, why: str, verdict: { type: 'string', enum: ['built', 'not_built', 'unsure'] } })) }),
       maxTokens: 6000,
     }),

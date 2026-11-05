@@ -6,7 +6,11 @@ PR 时运行的仓库质量门禁：从需求和设计文档抽出规则，追�
 - Gate：只有执行（E）、代码（S）、模型提出且代码校验（V）的证据能阻断；纯模型判断（M）只作建议；只拦相对 baseline 新增、触及改动文件、未被 suppress 的 finding
 - 稳定性：逐条目的内容寻址判定缓存，输入不变则判定不变
 - Placement：只在代码里找到 seam 时才建议下沉到单元测试
-- 可选执行证据：规则定向 mutant（极端 mutant / 限值 ±1 / 边界翻转）跑关联测试
+- 可选执行证据：规则定向 mutant（极端 mutant / 限值 ±1 / 边界翻转）跑关联测试；有 diff 时只做被改动的规则
+- diff 级影响分析：改了规则实现却没有达标测试守护、代码与文档数值不一致（双向），并给出要先跑的测试
+- 追溯链变成显式标记：已校验的链接生成 `// covers REQ-07` 补丁，没有测试的规则生成待实现测试和边界值表
+- 前移到写代码的时候：MCP server 和 Claude Code hook，让 coding agent 编辑文件时就知道要守住哪些规则（`agent/`）
+- 成本：判定缓存、自适应投票、prompt caching、按阶段设票数、baseline 运行可走 Batch API（半价）
 
 ## 用法（GitHub Action）
 
@@ -33,7 +37,7 @@ jobs:
 node scripts/repo-report.js --repo https://github.com/owner/name --out out
 ```
 
-输出：`report.md`、`report-details.md`、`ledger.json`、`gate.json`、`results.sarif`、`comment.md`、`baseline.json`。
+输出：`report.md`、`report-details.md`、`ledger.json`、`gate.json`、`results.sarif`、`comment.md`、`baseline.json`、`affected.json`、`construct.patch`、`construct.json`。
 
 ## 运维：让 gate 跟着数据变严或变松
 
