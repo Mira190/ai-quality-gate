@@ -748,6 +748,177 @@
    },
    "usage": {},
    "hash": "b7c8522c9847"
+  },
+  "asserts:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "cite_path": "tests/unit/refund.test.js",
+      "cite_line": 9,
+      "what": "Expects canRefund at day 30 toBe(true); day 31 is expected false at line 12.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-02",
+      "cite_path": "tests/unit/refund.test.js",
+      "cite_line": 21,
+      "what": "Expects refundAmount(100) toBe 85; the $15 and $14 cases expect 0 (lines 24, 30). A Python test also expects 85 at tests/test_refund.py line 5.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-03",
+      "cite_path": "tests/unit/orders.test.js",
+      "cite_line": 11,
+      "what": "Expects a 51-order page to have length 50, i.e. checks the 50-per-page limit.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-04",
+      "cite_path": "tests/component/admin.test.js",
+      "cite_line": 13,
+      "what": "Expects HTTP 403 for a non-admin fee change.",
+      "asserts": true
+     },
+     {
+      "id": "DEC-01",
+      "cite_path": "tests/component/gateway.test.js",
+      "cite_line": 21,
+      "what": "Expects status PENDING for a timed-out or failed gateway call.",
+      "asserts": true
+     },
+     {
+      "id": "DEC-02",
+      "cite_path": "tests/unit/refund-service.test.js",
+      "cite_line": 12,
+      "what": "Expects the second refund result toEqual the first, i.e. the stored result is returned. The store-failure path is not tested.",
+      "asserts": true
+     },
+     {
+      "id": "DEC-03",
+      "cite_path": "tests/unit/orders.test.js",
+      "cite_line": 15,
+      "what": "Expects the first order of a 3-order list to have id 2 (newest first).",
+      "asserts": true
+     }
+    ]
+   },
+   "usage": {},
+   "hash": "48c0b5b9171a"
+  },
+  "asserts:0#v1": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "cite_path": "tests/unit/refund.test.js",
+      "cite_line": 9,
+      "what": "canRefund at day 30 compared with toBe(true); day 31 rejection at line 12 is the same kind of check.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-02",
+      "cite_path": "tests/unit/refund.test.js",
+      "cite_line": 21,
+      "what": "refundAmount(100) compared with toBe(85), price minus the $15 fee. The Python test at tests/test_refund.py line 5 makes the same comparison.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-03",
+      "cite_path": "tests/unit/orders.test.js",
+      "cite_line": 11,
+      "what": "pageOrders(orders(51)) compared with toHaveLength(50), so the page is capped at 50.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-04",
+      "cite_path": "tests/component/admin.test.js",
+      "cite_line": 13,
+      "what": "Non-admin request: res.status compared with toBe(403).",
+      "asserts": true
+     },
+     {
+      "id": "DEC-01",
+      "cite_path": "tests/component/gateway.test.js",
+      "cite_line": 21,
+      "what": "Gateway call after a 5001 ms wait: status compared with toBe('PENDING').",
+      "asserts": true
+     },
+     {
+      "id": "DEC-02",
+      "cite_path": "tests/unit/refund-service.test.js",
+      "cite_line": 12,
+      "what": "Second refund result compared with toEqual(first), the stored result.",
+      "asserts": true
+     },
+     {
+      "id": "DEC-03",
+      "cite_path": "tests/unit/orders.test.js",
+      "cite_line": 15,
+      "what": "pageOrders(orders(3))[0].id compared with toBe(2): newest order first.",
+      "asserts": true
+     }
+    ]
+   },
+   "usage": {},
+   "hash": "48c0b5b9171a"
+  },
+  "asserts:0#v2": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "cite_path": "tests/unit/refund.test.js",
+      "cite_line": 9,
+      "what": "Line 9 compares canRefund at day 30 to true; line 12 compares day 31 to false.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-02",
+      "cite_path": "tests/unit/refund.test.js",
+      "cite_line": 21,
+      "what": "Line 21 compares refundAmount(100) to 85, the price minus the $15 fee.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-03",
+      "cite_path": "tests/unit/orders.test.js",
+      "cite_line": 8,
+      "what": "Line 8 compares the length of the page for 50 orders to 50.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-04",
+      "cite_path": "tests/component/admin.test.js",
+      "cite_line": 13,
+      "what": "Line 13 compares the status for a non-admin request to 403.",
+      "asserts": true
+     },
+     {
+      "id": "DEC-01",
+      "cite_path": "tests/component/gateway.test.js",
+      "cite_line": 21,
+      "what": "Line 21 compares the status after a gateway failure to 'PENDING'.",
+      "asserts": true
+     },
+     {
+      "id": "DEC-02",
+      "cite_path": "tests/unit/refund-service.test.js",
+      "cite_line": 12,
+      "what": "Line 12 compares the second refund result to the first stored result.",
+      "asserts": true
+     },
+     {
+      "id": "DEC-03",
+      "cite_path": "tests/unit/orders.test.js",
+      "cite_line": 15,
+      "what": "Line 15 compares the id of the first order for 3 orders to 2, the newest.",
+      "asserts": true
+     }
+    ]
+   },
+   "usage": {},
+   "hash": "48c0b5b9171a"
   }
  }
 }

@@ -63,6 +63,39 @@ A real-repository check caught a bug before it shipped: react-router's `useBlock
 test" by code, but `__tests__/dom/use-blocker-test.tsx` exists. A `\b` written in a template string meant a backspace,
 not a word boundary, so the safety search matched nothing. Fixed, and covered by a unit test.
 
+## Sections 1–4 with a stand-in model (2026-11-05)
+
+No API key here, so other agents stood in for the model: `scripts/llm-standin.js` writes every model call the
+cassettes lack as a request; an agent (Claude Haiku, told to read only the request files) answers in the call's JSON
+schema; the answers go into `seeded/cassettes-standin/`. Three agents answered one vote each, so the pipeline's
+majority-of-3 rule worked as with the API. Full table: `RESULTS-standin.md`; re-score with
+`node scripts/eval-golden.js --track seeded --mode fill --votes 3 --cassettes bench/golden/seeded/cassettes-standin`.
+
+| | Seeded defects found | Issues that were seeded | Clean cases with a false alarm | False P0 |
+| --- | :-: | :-: | :-: | :-: |
+| Sections 1–5, stand-in model, 3 votes | 51 of 54 (94%) | 51 of 60 (85%) | 0 of 19 | 0 |
+| Sections 1–2 only | 9 of 9 | 9 of 9 | 0 | 0 |
+
+Of the 9 extra issues, 4 are defensible (no running test asserts a rule whose cases are all skipped; a 45-day
+decision whose only test asserts day 31 is rejected; an HTTPS decision nothing tests). The rest, and 2 of the 3 misses,
+are one weakness: a general browser test the model links to a rule turns a P0 "No test" into P1 rows (limits,
+placement, assertion), so the gap is still reported, one priority too low; and a test of a copy of the code is dropped
+by the import check instead of reported as "Calls the code". The third miss: "Suspected not built" is checked for design
+decisions only, so an admin route that checks the login but not the role is caught only through its tests.
+
+The runs also found 6 bugs in the tool, all fixed with a unit test: a status code taken as a limit (HTTP 403, twice);
+values either side of an edge (4999/5001 ms) not counted as covering it; "retried by the nightly job" read as counting
+to a limit; the cases that assert a rule cut from the model's view (search terms are phrases, tests say `toBe(403)`);
+and a general browser test hiding that all of a rule's own cases are skipped. The first round also found a real gap in
+our "clean" base (DEC-02 said nothing about its store failing), which the base now states.
+
+On the quote-service fixture (`adjudication/quote-service/`), an independent reviewer judged the 28 findings only one
+side reported: the tool with a stand-in model got 30 of 36 shown findings right (88%) and found 30 of the 33 true
+ones; the hand-written mock got 25 of 27 right and found 25, missing a real defect (a gateway call with no timeout).
+
+Caveats: the stand-in is an agent on a Claude model answering the production prompts, not the production API; the
+seeded repository is small and was written knowing the checks. Confirm with `--mode record` when a key is available.
+
 ## Run it
 
 ```bash
