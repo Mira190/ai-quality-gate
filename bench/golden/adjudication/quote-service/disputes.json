@@ -1,0 +1,226 @@
+[
+ {
+  "n": 1,
+  "finding": "S1 REQ-08 Testable",
+  "rule": "REQ-08 (requirement) Discount cap. Discounts never exceed 20%.",
+  "source": "docs/requirements.md:19",
+  "claim": "the rule fails the measure \"Testable\": does not say what happens above the cap",
+  "facts": "does not say what happens above the cap"
+ },
+ {
+  "n": 2,
+  "finding": "S3 REQ-10 Not skipped",
+  "rule": "REQ-10 (requirement) Session expiry. Sessions must expire in a reasonable time.",
+  "source": "docs/requirements.md:23",
+  "claim": "the rule's tests fail the check \"Not skipped\"",
+  "facts": "{\"skipped\":[{\"path\":\"unit/session.test.ts\",\"line\":18,\"name\":\"expires a session after the idle limit\"},{\"path\":\"unit/session.test.ts\",\"line\":24,\"name\":\"keeps an active session alive\"}]}"
+ },
+ {
+  "n": 3,
+  "finding": "S3 REQ-07 No test",
+  "rule": "REQ-07 (requirement) Quote page usability. The quote page should be easy to use.",
+  "source": "docs/requirements.md:17",
+  "claim": "the rule's tests fail the check \"No test\"",
+  "facts": "{\"searched\":[\"quote page\",\"REQ-07\"],\"impl\":null}"
+ },
+ {
+  "n": 4,
+  "finding": "S4 DEC-06 No test",
+  "rule": "DEC-06 (decision) Payment is idempotent. Each charge carries an idempotency key. `PaymentService.charge` stores the key with the result and returns the stored result when the same key comes again, so a request sent twice charges once.",
+  "source": "docs/design.md:33",
+  "claim": "the rule's tests fail the check \"No test\"",
+  "facts": "{\"searched\":[\"idempotency\",\"same key\",\"charge\",\"DEC-06\"],\"impl\":{\"path\":\"src/payment/service.ts\",\"line\":18,\"symbol\":\"PaymentService.charge\"}}"
+ },
+ {
+  "n": 5,
+  "finding": "S4 DEC-08 Suspected not built",
+  "rule": "DEC-08 (decision) Admin routes check the role. Every `/admin` route checks that the user has the admin role and answers 403 otherwise.",
+  "source": "docs/design.md:48",
+  "claim": "the rule's tests fail the check \"Suspected not built\"",
+  "facts": "{\"path\":\"src/routes/admin.ts\",\"line\":12,\"why\":\"the route checks the login only, not the admin role\"}"
+ },
+ {
+  "n": 6,
+  "finding": "S4 DEC-05 Calls the code",
+  "rule": "DEC-05 (decision) Gateway timeout and retry limit. Calls to the payment gateway have a timeout and a retry limit, both set in `config/payment.json`; after the last retry the purchase fails with `PAYMENT_UNAVAILABLE`.",
+  "source": "docs/design.md:29",
+  "claim": "the rule's tests fail the check \"Calls the code\"",
+  "facts": "{\"impl\":{\"path\":\"src/payment/gateway-adapter.ts\",\"line\":8,\"symbol\":\"GatewayAdapter.charge\"},\"imports\":[{\"path\":\"integration/payment-sim.test.ts\",\"imports\":[{\"line\":2,\"text\":\"import settings from '../config/payment.json';\"},{\"line\":3,\"text\":\"import { PaymentSimulator } from '../src/payment/simulator';\"}]}]}"
+ },
+ {
+  "n": 7,
+  "finding": "S1 REQ-05 Clear",
+  "rule": "REQ-05 (requirement) Payment retried on failure. Payment should be retried where possible.",
+  "source": "docs/requirements.md:13",
+  "claim": "the rule fails the measure \"Clear\": 'Payment should be retried where possible' allows two readings: retry only temporary gateway failures, or retry every declined payment.",
+  "facts": "'Payment should be retried where possible' allows two readings: retry only temporary gateway failures, or retry every declined payment."
+ },
+ {
+  "n": 8,
+  "finding": "S1 REQ-05 Complete",
+  "rule": "REQ-05 (requirement) Payment retried on failure. Payment should be retried where possible.",
+  "source": "docs/requirements.md:13",
+  "claim": "the rule fails the measure \"Complete\" (the case where every retry fails): Does not say what happens when the retries run out; DEC-05 raises that case.",
+  "facts": "Does not say what happens when the retries run out; DEC-05 raises that case."
+ },
+ {
+  "n": 9,
+  "finding": "S1 REQ-06 Complete",
+  "rule": "REQ-06 (requirement) Document, CRM update, event log. After a purchase, the system shall email the policy document, send one update to the CRM and write one event-log entry.",
+  "source": "docs/requirements.md:15",
+  "claim": "the rule fails the measure \"Complete\" (the CRM error case only): Does not say what happens when the CRM update fails; DEC-07 raises that case.",
+  "facts": "Does not say what happens when the CRM update fails; DEC-07 raises that case."
+ },
+ {
+  "n": 10,
+  "finding": "S1 REQ-06 Consistent",
+  "rule": "REQ-06 (requirement) Document, CRM update, event log. After a purchase, the system shall email the policy document, send one update to the CRM and write one event-log entry.",
+  "source": "docs/requirements.md:15",
+  "claim": "the rule fails the measure \"Consistent\": conflicts with DEC-07",
+  "facts": "conflicts with DEC-07"
+ },
+ {
+  "n": 11,
+  "finding": "S1 REQ-08 Complete",
+  "rule": "REQ-08 (requirement) Discount cap. Discounts never exceed 20%.",
+  "source": "docs/requirements.md:19",
+  "claim": "the rule fails the measure \"Complete\" (the stacking case only): Does not say how discounts combine; DEC-11 raises the stacking case.",
+  "facts": "Does not say how discounts combine; DEC-11 raises the stacking case."
+ },
+ {
+  "n": 12,
+  "finding": "S1 REQ-12 Testable",
+  "rule": "REQ-12 (requirement) Cancellation refund. Refund is pro rata minus a $50 fee.",
+  "source": "docs/requirements.md:27",
+  "claim": "the rule fails the measure \"Testable\": The base for the pro rata amount (premium, term length, cancellation date) is not stated, so the expected refund cannot be written.",
+  "facts": "The base for the pro rata amount (premium, term length, cancellation date) is not stated, so the expected refund cannot be written."
+ },
+ {
+  "n": 13,
+  "finding": "S1 REQ-06 One behaviour",
+  "rule": "REQ-06 (requirement) Document, CRM update, event log. After a purchase, the system shall email the policy document, send one update to the CRM and write one event-log entry.",
+  "source": "docs/requirements.md:15",
+  "claim": "the rule fails the measure \"One behaviour\": Three separate behaviours (email the policy document, one CRM update, one event-log entry) are joined in one rule.",
+  "facts": "Three separate behaviours (email the policy document, one CRM update, one event-log entry) are joined in one rule."
+ },
+ {
+  "n": 14,
+  "finding": "S2 DEC-06 Failure behaviour",
+  "rule": "DEC-06 (decision) Payment is idempotent. Each charge carries an idempotency key. `PaymentService.charge` stores the key with the result and returns the stored result when the same key comes again, so a request sent twice charges once.",
+  "source": "docs/design.md:33",
+  "claim": "the rule fails the measure \"Failure behaviour\": Stores the idempotency key with the result, but does not say what happens when that write or the later read fails.",
+  "facts": "Stores the idempotency key with the result, but does not say what happens when that write or the later read fails."
+ },
+ {
+  "n": 15,
+  "finding": "S2 DEC-07 Trade-off",
+  "rule": "DEC-07 (decision) CRM timeout; errors surfaced. Calls to the CRM have a timeout. A CRM error is logged and returned to the caller; the purchase still completes.",
+  "source": "docs/design.md:39",
+  "claim": "the rule fails the measure \"Trade-off\": A CRM failure leaves REQ-06's CRM update unsent. The design says the purchase still completes, but it does not state this conflict with REQ-06.",
+  "facts": "A CRM failure leaves REQ-06's CRM update unsent. The design says the purchase still completes, but it does not state this conflict with REQ-06."
+ },
+ {
+  "n": 16,
+  "finding": "S2 DEC-03 Failure behaviour",
+  "rule": "DEC-03 (decision) Saved quotes. Saved quotes live in the `quotes` table; a nightly job deletes rows older than 30 days.",
+  "source": "docs/design.md:20",
+  "claim": "the rule fails the measure \"Failure behaviour\": Stored data (the quotes table), but the design does not say what happens when a write or a delete fails.",
+  "facts": "Stored data (the quotes table), but the design does not say what happens when a write or a delete fails."
+ },
+ {
+  "n": 17,
+  "finding": "S2 DEC-09 Failure behaviour",
+  "rule": "DEC-09 (decision) Policy document email. The notification service emails the policy document as a PDF.",
+  "source": "docs/design.md:43",
+  "claim": "the rule fails the measure \"Failure behaviour\": says nothing about a timeout or a failure",
+  "facts": "says nothing about a timeout or a failure"
+ },
+ {
+  "n": 18,
+  "finding": "S3 REQ-10 Asserts the rule",
+  "rule": "REQ-10 (requirement) Session expiry. Sessions must expire in a reasonable time.",
+  "source": "docs/requirements.md:23",
+  "claim": "the rule's tests fail the check \"Asserts the rule\"",
+  "facts": "{\"path\":\"unit/session.test.ts\",\"line\":20,\"what\":\"Checks that isExpired returns true after the idle limit, but this assertion is in the case marked (skipped), so it never runs. The running session tests check only the role (line 7) and that session ids differ (line 13).\"}"
+ },
+ {
+  "n": 19,
+  "finding": "S3 REQ-07 Asserts the rule",
+  "rule": "REQ-07 (requirement) Quote page usability. The quote page should be easy to use.",
+  "source": "docs/requirements.md:17",
+  "claim": "the rule's tests fail the check \"Asserts the rule\"",
+  "facts": "{\"path\":\"e2e/quote.spec.ts\",\"line\":8,\"what\":\"Checks the displayed premium text equals '$540.00'. This is a price check, not a check of how easy the quote page is to use.\"}"
+ },
+ {
+  "n": 20,
+  "finding": "S3 REQ-07 Runs on PR",
+  "rule": "REQ-07 (requirement) Quote page usability. The quote page should be easy to use.",
+  "source": "docs/requirements.md:17",
+  "claim": "the rule's tests fail the check \"Runs on PR\"",
+  "facts": "{\"runs\":[{\"path\":\"e2e/quote.spec.ts\",\"level\":\"e2e\",\"pr\":[],\"other\":[{\"workflow\":\"nightly.yml\",\"line\":30}],\"excluded\":[]}]}"
+ },
+ {
+  "n": 21,
+  "finding": "S4 DEC-05 Suspected not built",
+  "rule": "DEC-05 (decision) Gateway timeout and retry limit. Calls to the payment gateway have a timeout and a retry limit, both set in `config/payment.json`; after the last retry the purchase fails with `PAYMENT_UNAVAILABLE`.",
+  "source": "docs/design.md:29",
+  "claim": "the rule's tests fail the check \"Suspected not built\"",
+  "facts": "{\"path\":\"src/payment/gateway-adapter.ts\",\"line\":10,\"why\":\"The retry loop on lines 9-12 uses settings.maxRetries and throws PAYMENT_UNAVAILABLE on line 13, but the gateway call on line 10 is a fetch with no timeout. The decision requires a timeout, so the timeout part is missing.\"}"
+ },
+ {
+  "n": 22,
+  "finding": "S4 DEC-11 No test",
+  "rule": "DEC-11 (decision) Discounts stack up to 25%. Discounts stack, up to 25% in total.",
+  "source": "docs/design.md:88",
+  "claim": "the rule's tests fail the check \"No test\"",
+  "facts": "{\"searched\":[\"Discounts stack\",\"25% in total\",\"DEC-11\"],\"impl\":{\"path\":\"src/pricing/discount.ts\",\"line\":8,\"symbol\":\"applyDiscount\"}}"
+ },
+ {
+  "n": 23,
+  "finding": "S4 DEC-04 Covers stated limits",
+  "rule": "DEC-04 (decision) Premium rounding. Premiums are rounded half up to whole cents by `roundPremium` in `src/pricing/round.ts`.",
+  "source": "docs/design.md:14",
+  "claim": "the rule's tests fail the check \"Covers stated limits\"",
+  "facts": "{\"missing\":[{\"value\":100,\"unit\":\"\",\"source\":\"src/pricing/round.ts\"}],\"limits\":[{\"value\":100,\"unit\":\"\",\"source\":\"src/pricing/round.ts\"}],\"tests\":[{\"path\":\"unit/rounding.test.ts\",\"cases\":2,\"level\":\"unit\",\"numbers\":[{\"line\":6,\"text\":\"expect(roundPremium(10.005)).toBe(10.01);\"},{\"line\":10,\"text\":\"expect(roundPremium(10.004)).toBe(10.0);\"}]},{\"path\":\"e2e/quote.spec.ts\",\"cases\":9,\"level\":\"e2e\",\"numbers\":[{\"line\":6,\"text\":\"await page.fill('#vehicle-age', '1');\"},{\"line\":8,\"text\":\"await expect(page.locator('#premium')).toHaveText('$540.00');\"},{\"line\":13,\"text\":\"await page.fill('#vehicle-age', '5');\"},{\"line\":15,\"text\":\"await expect(page.locator('#premium')).toHaveText('$600.00');\"},{\"line\":20,\"text"
+ },
+ {
+  "n": 24,
+  "finding": "S4 DEC-06 Asserts the rule",
+  "rule": "DEC-06 (decision) Payment is idempotent. Each charge carries an idempotency key. `PaymentService.charge` stores the key with the result and returns the stored result when the same key comes again, so a request sent twice charges once.",
+  "source": "docs/design.md:33",
+  "claim": "the rule's tests fail the check \"Asserts the rule\"",
+  "facts": "{\"path\":\"integration/payment.test.ts\",\"line\":9,\"what\":\"Checks that a single charge returns ok true. It does not send the same idempotency key twice or count gateway calls, so charging once per key is not tested.\"}"
+ },
+ {
+  "n": 25,
+  "finding": "S4 DEC-06 Runs on PR",
+  "rule": "DEC-06 (decision) Payment is idempotent. Each charge carries an idempotency key. `PaymentService.charge` stores the key with the result and returns the stored result when the same key comes again, so a request sent twice charges once.",
+  "source": "docs/design.md:33",
+  "claim": "the rule's tests fail the check \"Runs on PR\"",
+  "facts": "{\"runs\":[{\"path\":\"integration/payment.test.ts\",\"level\":\"integration\",\"pr\":[],\"other\":[{\"workflow\":\"nightly.yml\",\"line\":12}],\"excluded\":[]}]}"
+ },
+ {
+  "n": 26,
+  "finding": "S4 DEC-03 Placement",
+  "rule": "DEC-03 (decision) Saved quotes. Saved quotes live in the `quotes` table; a nightly job deletes rows older than 30 days.",
+  "source": "docs/design.md:20",
+  "claim": "the rule's tests fail the check \"Placement\"",
+  "facts": "{\"logicKind\":\"date\",\"belongsAt\":\"unit\",\"because\":\"date rule\",\"runs\":[{\"path\":\"e2e/retrieve.spec.ts\",\"level\":\"e2e\",\"pr\":[],\"other\":[{\"workflow\":\"nightly.yml\",\"line\":30}],\"excluded\":[]}]}"
+ },
+ {
+  "n": 27,
+  "finding": "S4 DEC-10 No test",
+  "rule": "DEC-10 (decision) Quote page cache. Quote pages are served from a CDN cache.",
+  "source": "docs/design.md:54",
+  "claim": "the rule's tests fail the check \"No test\"",
+  "facts": "{\"searched\":[\"CDN cache\",\"Quote pages\",\"DEC-10\"],\"impl\":null}"
+ },
+ {
+  "n": 28,
+  "finding": "S4 DEC-12 No test",
+  "rule": "DEC-12 (decision) Service area list. The postcode check reads the service area list from `config/areas.csv` and also keeps a second copy of it in an in-memory index that nothing reads.",
+  "source": "docs/design.md:23",
+  "claim": "the rule's tests fail the check \"No test\"",
+  "facts": "{\"searched\":[\"in-memory index\",\"service area list\",\"config/areas.csv\",\"DEC-12\"],\"impl\":{\"path\":\"src/eligibility.ts\",\"line\":3,\"symbol\":\"areas\"}}"
+ }
+]

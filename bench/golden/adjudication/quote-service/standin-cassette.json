@@ -1,0 +1,1112 @@
+{
+ "model": "stand-in (agent)",
+ "calls": {
+  "judge:requirement:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 3,
+        "unit": "years",
+        "source": "src/pricing/rates.json"
+       },
+       {
+        "value": 7,
+        "unit": "years",
+        "source": "src/pricing/rates.json"
+       },
+       {
+        "value": 12,
+        "unit": "years",
+        "source": "src/pricing/rates.json"
+       },
+       {
+        "value": 0.9,
+        "unit": "",
+        "source": "src/pricing/rates.json"
+       },
+       {
+        "value": 1,
+        "unit": "",
+        "source": "src/pricing/rates.json"
+       },
+       {
+        "value": 1.2,
+        "unit": "",
+        "source": "src/pricing/rates.json"
+       },
+       {
+        "value": 1.5,
+        "unit": "",
+        "source": "src/pricing/rates.json"
+       }
+      ],
+      "terms": [
+       "maxAge",
+       "vehicle age",
+       "age band",
+       "base premium"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [],
+      "logic_kind": "validation",
+      "limits": [
+       {
+        "value": 500,
+        "unit": "$",
+        "source": "text"
+       },
+       {
+        "value": 5000,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "excess",
+       "$5,000",
+       "reject any other amount"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [],
+      "logic_kind": "validation",
+      "limits": [],
+      "terms": [
+       "postcodes in the service area list",
+       "offer a quote"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [
+       {
+        "value": 30,
+        "unit": "days",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "saved quote",
+       "kept for 30 days",
+       "then deleted"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-05",
+      "fails": [
+       {
+        "why": "'Payment should be retried where possible' allows two readings: retry only temporary gateway failures, or retry every declined payment.",
+        "readings": [
+         "retry only temporary gateway failures",
+         "retry every declined payment"
+        ],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Clear"
+       },
+       {
+        "why": "No retry count or retry condition is stated, and 'where possible' cannot be turned into an expected result.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       },
+       {
+        "why": "Does not say what happens when the retries run out; DEC-05 raises that case.",
+        "readings": [],
+        "raised_by": "DEC-05",
+        "conflict_with": "",
+        "part": "the case where every retry fails",
+        "measure": "Complete"
+       }
+      ],
+      "logic_kind": "io",
+      "limits": [],
+      "terms": [
+       "Payment retried on failure",
+       "where possible"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-06",
+      "fails": [
+       {
+        "why": "Three separate behaviours (email the policy document, one CRM update, one event-log entry) are joined in one rule.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "One behaviour"
+       },
+       {
+        "why": "Does not say what happens when the CRM update fails; DEC-07 raises that case.",
+        "readings": [],
+        "raised_by": "DEC-07",
+        "conflict_with": "",
+        "part": "the CRM error case only",
+        "measure": "Complete"
+       }
+      ],
+      "logic_kind": "io",
+      "limits": [],
+      "terms": [
+       "policy document",
+       "one update to the CRM",
+       "event-log entry"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-07",
+      "fails": [
+       {
+        "why": "'Easy to use' has no measurable outcome, so a tester cannot write an expected result.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "ui",
+      "limits": [],
+      "terms": [
+       "quote page",
+       "easy to use"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-08",
+      "fails": [
+       {
+        "why": "DEC-11 lets discounts stack up to 25% in total, which conflicts with the 20% cap.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "DEC-11",
+        "part": "",
+        "measure": "Consistent"
+       },
+       {
+        "why": "Does not say how discounts combine; DEC-11 raises the stacking case.",
+        "readings": [],
+        "raised_by": "DEC-11",
+        "conflict_with": "",
+        "part": "the stacking case only",
+        "measure": "Complete"
+       }
+      ],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 20,
+        "unit": "%",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "Discounts never exceed 20%",
+       "discount cap"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-09",
+      "fails": [
+       {
+        "why": "'Load fast' gives no time limit, so no expected result can be written.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "load fast",
+       "Quotes should load"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-10",
+      "fails": [
+       {
+        "why": "'Reasonable time' gives no duration, so a tester cannot write the expected expiry.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "access",
+      "limits": [],
+      "terms": [
+       "Sessions must expire",
+       "reasonable time"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-11",
+      "fails": [
+       {
+        "why": "Does not say whether the 10% combines with other discounts; DEC-11 raises the stacking case.",
+        "readings": [],
+        "raised_by": "DEC-11",
+        "conflict_with": "",
+        "part": "the stacking case only",
+        "measure": "Complete"
+       }
+      ],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 10,
+        "unit": "%",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "Concession card holders",
+       "10% off"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-12",
+      "fails": [
+       {
+        "why": "'Pro rata' does not say over what period (days of the term, or months of a year), so two readings give different refunds.",
+        "readings": [
+         "pro rata by days of the policy term left",
+         "pro rata by whole months left in a 12-month year"
+        ],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Clear"
+       },
+       {
+        "why": "The base for the pro rata amount (premium, term length, cancellation date) is not stated, so the expected refund cannot be written.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 50,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "pro rata",
+       "$50 fee"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 3,
+        "unit": "years",
+        "source": "src/pricing/rates.json"
+       },
+       {
+        "value": 7,
+        "unit": "years",
+        "source": "src/pricing/rates.json"
+       },
+       {
+        "value": 12,
+        "unit": "years",
+        "source": "src/pricing/rates.json"
+       },
+       {
+        "value": 0.9,
+        "unit": "",
+        "source": "src/pricing/rates.json"
+       },
+       {
+        "value": 1,
+        "unit": "",
+        "source": "src/pricing/rates.json"
+       },
+       {
+        "value": 1.2,
+        "unit": "",
+        "source": "src/pricing/rates.json"
+       },
+       {
+        "value": 1.5,
+        "unit": "",
+        "source": "src/pricing/rates.json"
+       }
+      ],
+      "terms": [
+       "band factor",
+       "age bands",
+       "rates.json"
+      ],
+      "restates": "REQ-01",
+      "adds_behaviour": false,
+      "boundary": "none"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "validation",
+      "limits": [],
+      "terms": [
+       "quote form",
+       "before pricing",
+       "allowed range"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [
+       {
+        "why": "Stored data (the quotes table), but the design does not say what happens when a write or a delete fails.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Failure behaviour"
+       }
+      ],
+      "logic_kind": "date",
+      "limits": [
+       {
+        "value": 30,
+        "unit": "days",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "quotes table",
+       "nightly job",
+       "older than 30 days"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-04",
+      "fails": [],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 100,
+        "unit": "",
+        "source": "src/pricing/round.ts"
+       }
+      ],
+      "terms": [
+       "roundPremium",
+       "half up",
+       "whole cents"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "DEC-05",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 10000,
+        "unit": "ms",
+        "source": "config/payment.json"
+       },
+       {
+        "value": 2,
+        "unit": "",
+        "source": "config/payment.json"
+       }
+      ],
+      "terms": [
+       "timeoutMs",
+       "maxRetries",
+       "PAYMENT_UNAVAILABLE"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-06",
+      "fails": [
+       {
+        "why": "Stores the idempotency key with the result, but does not say what happens when that write or the later read fails.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Failure behaviour"
+       }
+      ],
+      "logic_kind": "io",
+      "limits": [],
+      "terms": [
+       "idempotency key",
+       "PaymentService.charge",
+       "same key"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-07",
+      "fails": [
+       {
+        "why": "A CRM failure leaves REQ-06's CRM update unsent. The design says the purchase still completes, but it does not state this conflict with REQ-06.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "REQ-06",
+        "part": "",
+        "measure": "Trade-off"
+       }
+      ],
+      "logic_kind": "io",
+      "limits": [],
+      "terms": [
+       "CRM error",
+       "purchase still completes",
+       "CRM timeout"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-08",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "/admin",
+       "admin role",
+       "403"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "DEC-09",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [],
+      "terms": [
+       "notification service",
+       "as a PDF",
+       "emails the policy document"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-10",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "CDN cache",
+       "Quote pages"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "DEC-11",
+      "fails": [
+       {
+        "why": "Discounts stack up to 25% in total, which conflicts with REQ-08's 20% cap. The design does not state the conflict or which side wins.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "REQ-08",
+        "part": "",
+        "measure": "Trade-off"
+       }
+      ],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 25,
+        "unit": "%",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "Discounts stack",
+       "25% in total"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "DEC-12",
+      "fails": [
+       {
+        "why": "The second in-memory copy of the service area list is read by nothing, and no requirement or stated reason needs it.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Simple"
+       }
+      ],
+      "logic_kind": "validation",
+      "limits": [
+       {
+        "value": 2000,
+        "unit": "",
+        "source": "config/areas.csv"
+       },
+       {
+        "value": 2010,
+        "unit": "",
+        "source": "config/areas.csv"
+       },
+       {
+        "value": 3000,
+        "unit": "",
+        "source": "config/areas.csv"
+       }
+      ],
+      "terms": [
+       "in-memory index",
+       "service area list",
+       "config/areas.csv"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "DEC-13",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [],
+      "terms": [
+       "RefundService.post",
+       "payment gateway",
+       "policy is cancelled"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "trace:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "impl_path": "src/pricing/premium.ts",
+      "impl_line": 5,
+      "impl_symbol": "premiumFor",
+      "tests": [
+       "e2e/quote.spec.ts"
+      ]
+     },
+     {
+      "id": "REQ-02",
+      "impl_path": "src/pricing/excess.ts",
+      "impl_line": 4,
+      "impl_symbol": "validateExcess",
+      "tests": [
+       "unit/excess.test.ts"
+      ]
+     },
+     {
+      "id": "REQ-03",
+      "impl_path": "src/eligibility.ts",
+      "impl_line": 6,
+      "impl_symbol": "isEligible",
+      "tests": [
+       "integration/eligibility.test.ts"
+      ]
+     },
+     {
+      "id": "REQ-04",
+      "impl_path": "src/quote/repo.ts",
+      "impl_line": 18,
+      "impl_symbol": "isPastRetention",
+      "tests": [
+       "e2e/retrieve.spec.ts",
+       "integration/quote-repo.test.ts"
+      ]
+     },
+     {
+      "id": "REQ-05",
+      "impl_path": "src/payment/service.ts",
+      "impl_line": 19,
+      "impl_symbol": "PaymentService.charge",
+      "tests": [
+       "integration/payment.test.ts",
+       "integration/payment-sim.test.ts"
+      ]
+     },
+     {
+      "id": "REQ-06",
+      "impl_path": "src/notify/notification.ts",
+      "impl_line": 10,
+      "impl_symbol": "NotificationService.afterPurchase",
+      "tests": [
+       "component/notification.test.ts",
+       "integration/purchase.test.ts",
+       "e2e/buy.spec.ts"
+      ]
+     },
+     {
+      "id": "REQ-07",
+      "impl_path": "",
+      "impl_line": 0,
+      "impl_symbol": "",
+      "tests": [
+       "e2e/quote.spec.ts"
+      ]
+     },
+     {
+      "id": "REQ-08",
+      "impl_path": "src/pricing/discount.ts",
+      "impl_line": 4,
+      "impl_symbol": "applyDiscount",
+      "tests": []
+     },
+     {
+      "id": "REQ-09",
+      "impl_path": "",
+      "impl_line": 0,
+      "impl_symbol": "",
+      "tests": []
+     },
+     {
+      "id": "REQ-10",
+      "impl_path": "src/auth/session.ts",
+      "impl_line": 13,
+      "impl_symbol": "isExpired",
+      "tests": [
+       "unit/session.test.ts"
+      ]
+     },
+     {
+      "id": "REQ-11",
+      "impl_path": "src/pricing/discount.ts",
+      "impl_line": 6,
+      "impl_symbol": "applyDiscount",
+      "tests": []
+     },
+     {
+      "id": "REQ-12",
+      "impl_path": "src/refund/amount.ts",
+      "impl_line": 4,
+      "impl_symbol": "computeRefund",
+      "tests": [
+       "unit/refund.test.ts"
+      ]
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "trace:1": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "impl_path": "src/pricing/premium.ts",
+      "impl_line": 5,
+      "impl_symbol": "premiumFor",
+      "tests": [
+       "e2e/quote.spec.ts"
+      ]
+     },
+     {
+      "id": "DEC-02",
+      "impl_path": "src/pricing/excess.ts",
+      "impl_line": 4,
+      "impl_symbol": "validateExcess",
+      "tests": [
+       "unit/excess.test.ts"
+      ]
+     },
+     {
+      "id": "DEC-03",
+      "impl_path": "src/quote/repo.ts",
+      "impl_line": 18,
+      "impl_symbol": "isPastRetention",
+      "tests": [
+       "e2e/retrieve.spec.ts",
+       "integration/quote-repo.test.ts"
+      ]
+     },
+     {
+      "id": "DEC-04",
+      "impl_path": "src/pricing/round.ts",
+      "impl_line": 2,
+      "impl_symbol": "roundPremium",
+      "tests": [
+       "unit/rounding.test.ts",
+       "e2e/quote.spec.ts"
+      ]
+     },
+     {
+      "id": "DEC-05",
+      "impl_path": "src/payment/gateway-adapter.ts",
+      "impl_line": 9,
+      "impl_symbol": "GatewayAdapter.charge",
+      "tests": [
+       "integration/payment-sim.test.ts",
+       "integration/payment.test.ts"
+      ]
+     },
+     {
+      "id": "DEC-06",
+      "impl_path": "src/payment/service.ts",
+      "impl_line": 18,
+      "impl_symbol": "PaymentService.charge",
+      "tests": [
+       "integration/payment.test.ts"
+      ]
+     },
+     {
+      "id": "DEC-07",
+      "impl_path": "src/notify/crm.ts",
+      "impl_line": 32,
+      "impl_symbol": "notifyCrm",
+      "tests": [
+       "component/notification.test.ts",
+       "integration/purchase.test.ts"
+      ]
+     },
+     {
+      "id": "DEC-08",
+      "impl_path": "",
+      "impl_line": 0,
+      "impl_symbol": "",
+      "tests": []
+     },
+     {
+      "id": "DEC-09",
+      "impl_path": "src/notify/notification.ts",
+      "impl_line": 11,
+      "impl_symbol": "NotificationService.afterPurchase",
+      "tests": [
+       "component/notification.test.ts",
+       "integration/purchase.test.ts",
+       "e2e/buy.spec.ts"
+      ]
+     },
+     {
+      "id": "DEC-10",
+      "impl_path": "",
+      "impl_line": 0,
+      "impl_symbol": "",
+      "tests": []
+     },
+     {
+      "id": "DEC-11",
+      "impl_path": "src/pricing/discount.ts",
+      "impl_line": 8,
+      "impl_symbol": "applyDiscount",
+      "tests": []
+     },
+     {
+      "id": "DEC-12",
+      "impl_path": "src/eligibility.ts",
+      "impl_line": 3,
+      "impl_symbol": "areas",
+      "tests": [
+       "integration/eligibility.test.ts"
+      ]
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "trace:2": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-13",
+      "impl_path": "src/refund/service.ts",
+      "impl_line": 28,
+      "impl_symbol": "RefundService.post",
+      "tests": []
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "asserts:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "cite_path": "e2e/quote.spec.ts",
+      "cite_line": 8,
+      "what": "Checks that the #premium text equals '$540.00' for the first age case, comparing the displayed premium to an expected value.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-02",
+      "cite_path": "unit/excess.test.ts",
+      "cite_line": 15,
+      "what": "Checks that validateExcess(10000) is false, so an amount above the range is compared to the expected rejection.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-03",
+      "cite_path": "integration/eligibility.test.ts",
+      "cite_line": 8,
+      "what": "Checks that isEligible('2000') is true, so an in-area postcode is compared to the expected eligibility. The out-of-area case on line 12 is also asserted.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-04",
+      "cite_path": "integration/quote-repo.test.ts",
+      "cite_line": 19,
+      "what": "Checks that a quote saved 31 days ago is not found (toBeNull), so the state after the 30-day retention is compared to the expected value.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-05",
+      "cite_path": "integration/payment.test.ts",
+      "cite_line": 14,
+      "what": "In the retry case, checks that r.ok equals true after the retry succeeds, comparing the outcome to the expected value. It does not count attempts.",
+      "asserts": true
+     },
+     {
+      "id": "REQ-06",
+      "cite_path": "component/notification.test.ts",
+      "cite_line": 27,
+      "what": "Checks that the emailed document is 'policy-p1.pdf'. Only the document email is asserted. Nothing checks the single CRM update or the single event-log entry.",
+      "asserts": false
+     },
+     {
+      "id": "REQ-07",
+      "cite_path": "e2e/quote.spec.ts",
+      "cite_line": 8,
+      "what": "Checks the displayed premium text equals '$540.00'. This is a price check, not a check of how easy the quote page is to use.",
+      "asserts": false
+     },
+     {
+      "id": "REQ-10",
+      "cite_path": "unit/session.test.ts",
+      "cite_line": 20,
+      "what": "Checks that isExpired returns true after the idle limit, but this assertion is in the case marked (skipped), so it never runs. The running session tests check only the role (line 7) and that session ids differ (line 13).",
+      "asserts": false
+     },
+     {
+      "id": "REQ-12",
+      "cite_path": "unit/refund.test.ts",
+      "cite_line": 10,
+      "what": "Checks that computeRefund(1200, 60, 360) equals 950, which is the pro rata refund of 1000 less the 50 fee, compared to the expected value.",
+      "asserts": true
+     },
+     {
+      "id": "DEC-01",
+      "cite_path": "e2e/quote.spec.ts",
+      "cite_line": 8,
+      "what": "Checks that the displayed premium equals '$540.00' for the first age case, comparing the premium result to the expected value. The test is end to end, so it does not inspect rates.json directly.",
+      "asserts": true
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "asserts:1": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-02",
+      "cite_path": "unit/excess.test.ts",
+      "cite_line": 9,
+      "what": "Compares validateExcess(1000) to true, so the range check result is compared to an expected value for an in-range excess. It does not test that the quote form or the API runs the check before pricing, and it has no out-of-range case.",
+      "asserts": true
+     },
+     {
+      "id": "DEC-03",
+      "cite_path": "e2e/retrieve.spec.ts",
+      "cite_line": 10,
+      "what": "Checks that the h1 text equals 'Quote not found' for a quote past its retention, so the state after expiry is compared to the expected value.",
+      "asserts": true
+     },
+     {
+      "id": "DEC-04",
+      "cite_path": "unit/rounding.test.ts",
+      "cite_line": 6,
+      "what": "Checks that roundPremium(10.005) equals 10.01, comparing the half-cent rounding result to the expected value.",
+      "asserts": true
+     },
+     {
+      "id": "DEC-05",
+      "cite_path": "integration/payment-sim.test.ts",
+      "cite_line": 13,
+      "what": "Checks that the simulated charge returns ok false after three gateway failures, comparing the retry-limit outcome to false. It does not check the PAYMENT_UNAVAILABLE error, and it runs against the simulator rather than the gateway adapter.",
+      "asserts": true
+     },
+     {
+      "id": "DEC-06",
+      "cite_path": "integration/payment.test.ts",
+      "cite_line": 9,
+      "what": "Checks that a single charge returns ok true. It does not send the same idempotency key twice or count gateway calls, so charging once per key is not tested.",
+      "asserts": false
+     },
+     {
+      "id": "DEC-07",
+      "cite_path": "component/notification.test.ts",
+      "cite_line": 26,
+      "what": "Checks the recipient of the policy email. Nothing tests a CRM timeout or CRM error handling.",
+      "asserts": false
+     },
+     {
+      "id": "DEC-09",
+      "cite_path": "component/notification.test.ts",
+      "cite_line": 27,
+      "what": "Checks that the emailed document is 'policy-p1.pdf', comparing the sent document name to the expected PDF name.",
+      "asserts": true
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "built:0": {
+   "output": {
+    "decisions": [
+     {
+      "id": "DEC-02",
+      "path": "src/pricing/excess.ts",
+      "line": 5,
+      "why": "validateExcess checks the value against MIN_EXCESS and MAX_EXCESS on line 5, but the code shown is only the validator. Nothing shown lets me tell whether the quote form or the API calls it before pricing, so this cannot be decided from the given code.",
+      "verdict": "unsure"
+     },
+     {
+      "id": "DEC-04",
+      "path": "src/pricing/round.ts",
+      "line": 3,
+      "why": "Line 3 rounds to whole cents with Math.round after adding Number.EPSILON, which rounds half up for positive amounts. premium.ts line 7 uses roundPremium for the premium.",
+      "verdict": "built"
+     },
+     {
+      "id": "DEC-05",
+      "path": "src/payment/gateway-adapter.ts",
+      "line": 10,
+      "why": "The retry loop on lines 9-12 uses settings.maxRetries and throws PAYMENT_UNAVAILABLE on line 13, but the gateway call on line 10 is a fetch with no timeout. The decision requires a timeout, so the timeout part is missing.",
+      "verdict": "not_built"
+     },
+     {
+      "id": "DEC-06",
+      "path": "src/payment/service.ts",
+      "line": 20,
+      "why": "Line 20 returns the stored result when the idempotency key was seen before, and line 23 stores the result per key, so a sequential repeat of a request does not call the gateway again. Two concurrent requests with the same key could both miss the map before line 23 runs, which the decision does not cover explicitly.",
+      "verdict": "built"
+     },
+     {
+      "id": "DEC-07",
+      "path": "src/notify/crm.ts",
+      "line": 22,
+      "why": "The CRM call on line 22 is a fetch with no timeout, which the decision requires. Also, notifyCrm on lines 36-40 discards the error (void e on line 39) and returns true, so the error is not logged and is not returned to the caller.",
+      "verdict": "not_built"
+     },
+     {
+      "id": "DEC-11",
+      "path": "src/pricing/discount.ts",
+      "line": 8,
+      "why": "Line 8 sums the concession and multi-policy discounts and caps the total at 0.25 with Math.min, so discounts stack up to 25% in total.",
+      "verdict": "built"
+     },
+     {
+      "id": "DEC-13",
+      "path": "src/refund/service.ts",
+      "line": 32,
+      "why": "RefundService.post computes the amount and calls this.gateway.refund on line 32, so the refund is sent to the payment gateway. The only used-at line (admin.ts line 12) is a rates route with no refund call, and it does not bear on this decision.",
+      "verdict": "built"
+     }
+    ]
+   },
+   "usage": {}
+  }
+ }
+}

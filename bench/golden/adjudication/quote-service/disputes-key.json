@@ -1,0 +1,142 @@
+[
+ {
+  "n": 1,
+  "finding": "S1 REQ-08 Testable",
+  "from": "A"
+ },
+ {
+  "n": 2,
+  "finding": "S3 REQ-10 Not skipped",
+  "from": "A"
+ },
+ {
+  "n": 3,
+  "finding": "S3 REQ-07 No test",
+  "from": "A"
+ },
+ {
+  "n": 4,
+  "finding": "S4 DEC-06 No test",
+  "from": "A"
+ },
+ {
+  "n": 5,
+  "finding": "S4 DEC-08 Suspected not built",
+  "from": "A"
+ },
+ {
+  "n": 6,
+  "finding": "S4 DEC-05 Calls the code",
+  "from": "A"
+ },
+ {
+  "n": 7,
+  "finding": "S1 REQ-05 Clear",
+  "from": "B"
+ },
+ {
+  "n": 8,
+  "finding": "S1 REQ-05 Complete",
+  "from": "B"
+ },
+ {
+  "n": 9,
+  "finding": "S1 REQ-06 Complete",
+  "from": "B"
+ },
+ {
+  "n": 10,
+  "finding": "S1 REQ-06 Consistent",
+  "from": "B"
+ },
+ {
+  "n": 11,
+  "finding": "S1 REQ-08 Complete",
+  "from": "B"
+ },
+ {
+  "n": 12,
+  "finding": "S1 REQ-12 Testable",
+  "from": "B"
+ },
+ {
+  "n": 13,
+  "finding": "S1 REQ-06 One behaviour",
+  "from": "B"
+ },
+ {
+  "n": 14,
+  "finding": "S2 DEC-06 Failure behaviour",
+  "from": "B"
+ },
+ {
+  "n": 15,
+  "finding": "S2 DEC-07 Trade-off",
+  "from": "B"
+ },
+ {
+  "n": 16,
+  "finding": "S2 DEC-03 Failure behaviour",
+  "from": "B"
+ },
+ {
+  "n": 17,
+  "finding": "S2 DEC-09 Failure behaviour",
+  "from": "B"
+ },
+ {
+  "n": 18,
+  "finding": "S3 REQ-10 Asserts the rule",
+  "from": "B"
+ },
+ {
+  "n": 19,
+  "finding": "S3 REQ-07 Asserts the rule",
+  "from": "B"
+ },
+ {
+  "n": 20,
+  "finding": "S3 REQ-07 Runs on PR",
+  "from": "B"
+ },
+ {
+  "n": 21,
+  "finding": "S4 DEC-05 Suspected not built",
+  "from": "B"
+ },
+ {
+  "n": 22,
+  "finding": "S4 DEC-11 No test",
+  "from": "B"
+ },
+ {
+  "n": 23,
+  "finding": "S4 DEC-04 Covers stated limits",
+  "from": "B"
+ },
+ {
+  "n": 24,
+  "finding": "S4 DEC-06 Asserts the rule",
+  "from": "B"
+ },
+ {
+  "n": 25,
+  "finding": "S4 DEC-06 Runs on PR",
+  "from": "B"
+ },
+ {
+  "n": 26,
+  "finding": "S4 DEC-03 Placement",
+  "from": "B"
+ },
+ {
+  "n": 27,
+  "finding": "S4 DEC-10 No test",
+  "from": "B"
+ },
+ {
+  "n": 28,
+  "finding": "S4 DEC-12 No test",
+  "from": "B"
+ }
+]

@@ -1,0 +1,142 @@
+[
+ {
+  "n": 1,
+  "verdict": "false",
+  "reason": "Rule requirements.md:19 'never exceed 20%' gives an observable bound a tester can assert (result <= 20%)."
+ },
+ {
+  "n": 2,
+  "verdict": "true",
+  "reason": "unit/session.test.ts:18 and :24 are the only expiry tests and both are it.skip."
+ },
+ {
+  "n": 3,
+  "verdict": "true",
+  "reason": "No test targets quote-page ease of use; e2e/quote.spec.ts only checks premiums."
+ },
+ {
+  "n": 4,
+  "verdict": "unclear",
+  "reason": "integration/payment.test.ts calls PaymentService.charge with keys but never repeats a key, so the idempotent behaviour is untouched though the code is exercised."
+ },
+ {
+  "n": 5,
+  "verdict": "true",
+  "reason": "src/routes/admin.ts:8,12 use requireLogin only, no admin role check or 403."
+ },
+ {
+  "n": 6,
+  "verdict": "true",
+  "reason": "integration/payment-sim.test.ts:3 tests PaymentSimulator, not GatewayAdapter.charge (src/payment/gateway-adapter.ts:8)."
+ },
+ {
+  "n": 7,
+  "verdict": "true",
+  "reason": "docs/requirements.md:13 'where possible' is open to retrying only transient failures or every decline."
+ },
+ {
+  "n": 8,
+  "verdict": "false",
+  "reason": "DEC-05 (docs/design.md:29) answers the exhausted-retries case (PAYMENT_UNAVAILABLE), so the documents do not leave it unanswered."
+ },
+ {
+  "n": 9,
+  "verdict": "false",
+  "reason": "DEC-07 (docs/design.md:39) states the CRM-failure outcome, so the case is answered in the documents."
+ },
+ {
+  "n": 10,
+  "verdict": "unclear",
+  "reason": "DEC-07 lets the purchase complete when the CRM update fails, which arguably departs from REQ-06's 'shall send', but it can be read as the failure path of the same rule."
+ },
+ {
+  "n": 11,
+  "verdict": "false",
+  "reason": "REQ-08 'never exceed 20%' already bounds combined discounts; the DEC-11 25% clash is a consistency matter, not a missing case."
+ },
+ {
+  "n": 12,
+  "verdict": "true",
+  "reason": "docs/requirements.md:27 gives no base, term or date for 'pro rata', so an expected refund cannot be computed from the text."
+ },
+ {
+  "n": 13,
+  "verdict": "true",
+  "reason": "docs/requirements.md:15 joins email, CRM update and event log in one rule."
+ },
+ {
+  "n": 14,
+  "verdict": "true",
+  "reason": "docs/design.md:33 says nothing about a failed write or read of the stored result."
+ },
+ {
+  "n": 15,
+  "verdict": "unclear",
+  "reason": "DEC-07 (docs/design.md:39) accepts a CRM failure while REQ-06 says the update shall be sent; it records the outcome but names no trade-off."
+ },
+ {
+  "n": 16,
+  "verdict": "true",
+  "reason": "docs/design.md:20 is silent on a failed write or failed nightly delete of the quotes table."
+ },
+ {
+  "n": 17,
+  "verdict": "true",
+  "reason": "docs/design.md:43 describes an outside email send with no timeout or failure behaviour."
+ },
+ {
+  "n": 18,
+  "verdict": "true",
+  "reason": "The only expiry assertions (unit/session.test.ts:20,26) are skipped; running tests assert role and id uniqueness only."
+ },
+ {
+  "n": 19,
+  "verdict": "true",
+  "reason": "e2e/quote.spec.ts asserts premium text only; nothing asserts usability."
+ },
+ {
+  "n": 20,
+  "verdict": "true",
+  "reason": "e2e specs run only in nightly.yml; pr.yml and vitest.config.ts include only unit and component."
+ },
+ {
+  "n": 21,
+  "verdict": "true",
+  "reason": "src/payment/gateway-adapter.ts:10 calls fetch with no timeout although config/payment.json has timeoutMs."
+ },
+ {
+  "n": 22,
+  "verdict": "true",
+  "reason": "No unit, component, integration or e2e test references discounts or applyDiscount (src/pricing/discount.ts)."
+ },
+ {
+  "n": 23,
+  "verdict": "false",
+  "reason": "The 100 in src/pricing/round.ts:3 is a cents scale factor, not a stated limit; unit/rounding.test.ts covers the half-up edge (10.005/10.004)."
+ },
+ {
+  "n": 24,
+  "verdict": "true",
+  "reason": "integration/payment.test.ts:9 asserts one charge returns ok; no test sends the same key twice or counts gateway calls."
+ },
+ {
+  "n": 25,
+  "verdict": "true",
+  "reason": "integration/payment.test.ts is excluded from PR runs (vitest.config.ts include) and runs only in nightly.yml:12."
+ },
+ {
+  "n": 26,
+  "verdict": "true",
+  "reason": "The 30-day date rule (src/quote/repo.ts isPastRetention) has no unit test; it is covered only by integration (nightly) and e2e."
+ },
+ {
+  "n": 27,
+  "verdict": "true",
+  "reason": "No test or implementation relates to CDN caching of quote pages."
+ },
+ {
+  "n": 28,
+  "verdict": "false",
+  "reason": "integration/eligibility.test.ts:9-16 tests the postcode check reading config/areas.csv (src/eligibility.ts:3,7); the unread index has no behaviour to test."
+ }
+]
