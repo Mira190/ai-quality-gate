@@ -96,7 +96,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "f5c7d93a95b1"
   },
   "judge:requirement:0#v1": {
    "output": {
@@ -195,7 +196,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "f5c7d93a95b1"
   },
   "judge:requirement:0#v2": {
    "output": {
@@ -287,7 +289,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "f5c7d93a95b1"
   },
   "judge:decision:0": {
    "output": {
@@ -375,7 +378,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "7577260e91ee"
   },
   "judge:decision:0#v1": {
    "output": {
@@ -463,7 +467,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "7577260e91ee"
   },
   "judge:decision:0#v2": {
    "output": {
@@ -554,7 +559,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "7577260e91ee"
   },
   "trace:0": {
    "output": {
@@ -636,7 +642,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "d6d306d21b5d"
   },
   "trace:0#v1": {
    "output": {
@@ -717,7 +724,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "d6d306d21b5d"
   },
   "trace:0#v2": {
    "output": {
@@ -799,7 +807,95 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "d6d306d21b5d"
+  },
+  "built:0": {
+   "output": {
+    "decisions": [
+     {
+      "id": "DEC-01",
+      "path": "src/gateway.js",
+      "line": 9,
+      "why": "Line 9 sets signal to AbortSignal.timeout(TIMEOUT_MS), with TIMEOUT_MS set to 5000 on line 1, so the fetch aborts after 5 s. The catch on lines 13-15 returns status PENDING for a TimeoutError or any other error, so a timeout is stored as PENDING. The nightly retry is not in this code. The behaviour is built.",
+      "verdict": "built"
+     },
+     {
+      "id": "DEC-02",
+      "path": "src/refund-service.js",
+      "line": 13,
+      "why": "Line 13 returns the stored result when the order is already in the store, so a repeat refund is not sent again. The store is read on line 13 and written on line 15, both before the gateway call on line 16, so a store that throws stops the refund before anything is sent. The behaviour is built.",
+      "verdict": "built"
+     },
+     {
+      "id": "DEC-04",
+      "path": "src/refund.js",
+      "line": 8,
+      "why": "Line 8 compares the day count with fees.windowDays, which is read from config/fees.json and is not shown. The window length cannot be read from this code, and the comment on line 5 says 30 days, which conflicts with the 45-day rule. The code shown cannot tell, so the verdict is unsure.",
+      "verdict": "unsure"
+     }
+    ]
+   },
+   "usage": {},
+   "hash": "a6eaa31266e6"
+  },
+  "built:0#v1": {
+   "output": {
+    "decisions": [
+     {
+      "id": "DEC-01",
+      "path": "src/gateway.js",
+      "line": 9,
+      "why": "Line 9 passes signal: AbortSignal.timeout(TIMEOUT_MS) with TIMEOUT_MS = 5000 (line 1), so each gateway call times out after 5 s. The catch on lines 13-15 returns PENDING for a timeout or error, and line 11 returns PENDING for a non-OK response.",
+      "verdict": "built"
+     },
+     {
+      "id": "DEC-02",
+      "path": "src/refund-service.js",
+      "line": 13,
+      "why": "Line 13 returns the stored result when the order ID is already in the store, so a repeated refund is not sent again. A store that throws on line 13 stops the call before postRefund on line 16.",
+      "verdict": "built"
+     },
+     {
+      "id": "DEC-04",
+      "path": "src/refund.js",
+      "line": 8,
+      "why": "canRefund compares the day count to fees.windowDays (line 8), a value read from config/fees.json, which is not shown. The 45-day window cannot be confirmed from this code. The comment on line 5 still describes a 30-day window, and no line checks for an annual plan.",
+      "verdict": "unsure"
+     }
+    ]
+   },
+   "usage": {},
+   "hash": "a6eaa31266e6"
+  },
+  "built:0#v2": {
+   "output": {
+    "decisions": [
+     {
+      "id": "DEC-01",
+      "path": "src/gateway.js",
+      "line": 9,
+      "why": "Line 9 sets signal: AbortSignal.timeout(TIMEOUT_MS), and TIMEOUT_MS is 5000 (line 1). The catch on lines 13-15 returns PENDING for a timeout or any other error. Both parts of the decision are implemented.",
+      "verdict": "built"
+     },
+     {
+      "id": "DEC-02",
+      "path": "src/refund-service.js",
+      "line": 13,
+      "why": "Line 13 returns the stored result when the order ID is already in the store, so a repeat refund is not paid twice. The store read on line 13 and the IN_PROGRESS write on line 15 run before postRefund on line 16, so a store failure throws before the gateway is called.",
+      "verdict": "built"
+     },
+     {
+      "id": "DEC-04",
+      "path": "src/refund.js",
+      "line": 8,
+      "why": "Line 8 accepts a refund when days is at most fees.windowDays. That value comes from config/fees.json, which is not shown, so the 45-day window cannot be read from the code. No annual-plan check appears in the lines shown. The comment on line 5 says 30 days, but a comment is not the configured value.",
+      "verdict": "unsure"
+     }
+    ]
+   },
+   "usage": {},
+   "hash": "a6eaa31266e6"
   }
  }
 }

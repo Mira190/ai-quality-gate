@@ -87,7 +87,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "092d2da14e62"
   },
   "judge:requirement:0#v1": {
    "output": {
@@ -177,7 +178,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "092d2da14e62"
   },
   "judge:requirement:0#v2": {
    "output": {
@@ -269,7 +271,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "092d2da14e62"
   },
   "judge:decision:0": {
    "output": {
@@ -329,7 +332,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "f64c6c331172"
   },
   "judge:decision:0#v1": {
    "output": {
@@ -389,7 +393,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "f64c6c331172"
   },
   "judge:decision:0#v2": {
    "output": {
@@ -451,7 +456,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "f64c6c331172"
   },
   "trace:0": {
    "output": {
@@ -524,7 +530,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "a4f986c67b0f"
   },
   "trace:0#v1": {
    "output": {
@@ -596,7 +603,8 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "a4f986c67b0f"
   },
   "trace:0#v2": {
    "output": {
@@ -668,7 +676,74 @@
      }
     ]
    },
-   "usage": {}
+   "usage": {},
+   "hash": "a4f986c67b0f"
+  },
+  "built:0": {
+   "output": {
+    "decisions": [
+     {
+      "id": "DEC-01",
+      "path": "src/gateway.js",
+      "line": 9,
+      "why": "Line 9 sets signal to AbortSignal.timeout(TIMEOUT_MS), with TIMEOUT_MS set to 5000 on line 1, so the fetch aborts after 5 s. The catch on lines 13-15 returns status PENDING for a TimeoutError or any other error. The behaviour is built.",
+      "verdict": "built"
+     },
+     {
+      "id": "DEC-02",
+      "path": "src/refund-service.js",
+      "line": 13,
+      "why": "Line 13 returns the stored result when the order is already in the store, so a repeat refund is not sent again. The store is read on line 13 and written on line 15, both before the gateway call on line 16, so a store that throws stops the refund before anything is sent. The behaviour is built.",
+      "verdict": "built"
+     }
+    ]
+   },
+   "usage": {},
+   "hash": "b7c8522c9847"
+  },
+  "built:0#v1": {
+   "output": {
+    "decisions": [
+     {
+      "id": "DEC-01",
+      "path": "src/gateway.js",
+      "line": 9,
+      "why": "Line 9 passes signal: AbortSignal.timeout(TIMEOUT_MS) with TIMEOUT_MS = 5000 (line 1), so each gateway call times out after 5 s. The catch on lines 13-15 returns PENDING for a timeout or error, and line 11 returns PENDING for a non-OK response.",
+      "verdict": "built"
+     },
+     {
+      "id": "DEC-02",
+      "path": "src/refund-service.js",
+      "line": 13,
+      "why": "Line 13 returns the stored result when the order ID is already in the store, so a repeated refund is not sent again. The store write on line 15 runs before postRefund on line 16, and a store that throws stops the call before the gateway is reached.",
+      "verdict": "built"
+     }
+    ]
+   },
+   "usage": {},
+   "hash": "b7c8522c9847"
+  },
+  "built:0#v2": {
+   "output": {
+    "decisions": [
+     {
+      "id": "DEC-01",
+      "path": "src/gateway.js",
+      "line": 9,
+      "why": "Line 9 sets signal: AbortSignal.timeout(TIMEOUT_MS), and TIMEOUT_MS is 5000 (line 1), so each gateway call has a 5 s timeout. The catch block on lines 13-15 returns status PENDING for a timeout or any other error, as the decision says. The caller in src/refund-service.js line 16 uses this function.",
+      "verdict": "built"
+     },
+     {
+      "id": "DEC-02",
+      "path": "src/refund-service.js",
+      "line": 13,
+      "why": "Line 13 returns the stored result when the order ID is already in the store, so a second refund of the same order does not reach the gateway again. The store read on line 13 and the IN_PROGRESS write on line 15 both run before postRefund on line 16, so a store failure throws before anything is sent to the gateway, as the decision says.",
+      "verdict": "built"
+     }
+    ]
+   },
+   "usage": {},
+   "hash": "b7c8522c9847"
   }
  }
 }
