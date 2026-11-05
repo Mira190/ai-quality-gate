@@ -1,0 +1,499 @@
+{
+ "model": "stand-in (agent)",
+ "calls": {
+  "judge:requirement:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [
+       {
+        "why": "'A reasonable time' gives no fixed window; a 30-day and a 365-day window give different expected results.",
+        "readings": [
+         "a refund request made within 30 days of purchase is accepted and later ones rejected",
+         "a refund request made within 365 days of purchase is accepted and later ones rejected"
+        ],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Clear"
+       },
+       {
+        "why": "A tester cannot write the expected result for a request made on day 45 from this text.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "date",
+      "limits": [],
+      "terms": [
+       "reasonable time after purchase",
+       "accept a refund request"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 15,
+        "unit": "$",
+        "source": "text"
+       },
+       {
+        "value": 0,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "$15 or less",
+       "minus a $15 fee"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [],
+      "logic_kind": "count",
+      "limits": [
+       {
+        "value": 50,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "at most 50 orders",
+       "per page"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "admin role",
+       "HTTP 403"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:requirement:0#v1": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [
+       {
+        "why": "'a reasonable time' gives no number of days, so a request made on day 10 is accepted or rejected depending on the reading",
+        "readings": [
+         "reasonable time is 7 days: a request made on day 10 is rejected",
+         "reasonable time is 30 days: a request made on day 10 is accepted"
+        ],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Clear"
+       },
+       {
+        "why": "no time limit is stated, so a tester cannot write the expected result for a late request from the text alone",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "date",
+      "limits": [],
+      "terms": [
+       "reasonable time",
+       "refund request made"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 15,
+        "unit": "$",
+        "source": "text"
+       },
+       {
+        "value": 0,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "$15 fee",
+       "refund amount",
+       "price paid"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [],
+      "logic_kind": "count",
+      "limits": [
+       {
+        "value": 50,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "at most 50 orders",
+       "per page",
+       "page size"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "admin role",
+       "HTTP 403"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:requirement:0#v2": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [
+       {
+        "why": "'a reasonable time' has no fixed limit, so a request made 60 days after purchase is accepted or rejected depending on the reading.",
+        "readings": [
+         "a request made 60 days after purchase is accepted",
+         "a request made 60 days after purchase is rejected"
+        ],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Clear"
+       },
+       {
+        "why": "A tester cannot write the expected result for a late refund request from the text alone, since no window is stated.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "date",
+      "limits": [],
+      "terms": [
+       "within a reasonable time after purchase",
+       "accept a refund request",
+       "reasonable time"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 15,
+        "unit": "$",
+        "source": "text"
+       },
+       {
+        "value": 0,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "$15 fee",
+       "$15 or less",
+       "refund amount shall be $0"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [],
+      "logic_kind": "count",
+      "limits": [
+       {
+        "value": 50,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "at most 50 orders per page",
+       "page size",
+       "order history API"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "HTTP 403",
+       "admin role",
+       "change the refund fee"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "text"
+       },
+       {
+        "value": 5000,
+        "unit": "ms",
+        "source": "src/gateway.js"
+       }
+      ],
+      "terms": [
+       "5 seconds",
+       "TIMEOUT_MS",
+       "PENDING"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "RefundService.refund",
+       "stored result",
+       "store cannot be read"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "newest orders first",
+       "purchase date",
+       "order history"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0#v1": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "text"
+       },
+       {
+        "value": 5000,
+        "unit": "ms",
+        "source": "src/gateway.js"
+       }
+      ],
+      "terms": [
+       "postRefund",
+       "TimeoutError",
+       "AbortSignal.timeout",
+       "PENDING"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "RefundService.refund",
+       "same order",
+       "store cannot be read or written"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "newest first",
+       "by purchase date"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0#v2": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "text"
+       },
+       {
+        "value": 5000,
+        "unit": "ms",
+        "source": "src/gateway.js"
+       }
+      ],
+      "terms": [
+       "TIMEOUT_MS",
+       "TimeoutError",
+       "PENDING",
+       "postRefund"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [],
+      "terms": [
+       "RefundService.refund",
+       "refunded again",
+       "store cannot be read or written",
+       "paid once"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [],
+      "terms": [
+       "newest orders first",
+       "orders newest first",
+       "by purchase date"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  }
+ }
+}

@@ -1,0 +1,498 @@
+{
+ "model": "stand-in (agent)",
+ "calls": {
+  "judge:requirement:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [
+       {
+        "value": 30,
+        "unit": "days",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "within 30 days of purchase",
+       "after day 30"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 15,
+        "unit": "$",
+        "source": "text"
+       },
+       {
+        "value": 0,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "$15 or less",
+       "minus a $15 fee"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [
+       {
+        "why": "'A reasonable number of orders' gives no fixed page size; 10 and 500 give different expected results.",
+        "readings": [
+         "at most 10 orders per page",
+         "at most 500 orders per page"
+        ],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Clear"
+       },
+       {
+        "why": "A tester cannot write the expected page size from this text.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "count",
+      "limits": [],
+      "terms": [
+       "reasonable number of orders",
+       "per page"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "admin role",
+       "HTTP 403"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:requirement:0#v1": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [
+       {
+        "value": 30,
+        "unit": "days",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "30 days of purchase",
+       "after day 30"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 15,
+        "unit": "$",
+        "source": "text"
+       },
+       {
+        "value": 0,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "$15 fee",
+       "refund amount",
+       "price paid"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [
+       {
+        "why": "'a reasonable number of orders' has no fixed count, so a page of 10 or of 100 orders each fit a different reading and a tester cannot write the expected page size",
+        "readings": [
+         "at most 10 orders per page: a request for 25 orders returns 10 on the first page",
+         "at most 100 orders per page: the same request returns all 25"
+        ],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Clear"
+       },
+       {
+        "why": "no page size is stated, so a tester cannot write the expected number of orders per page from the text alone",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "count",
+      "limits": [],
+      "terms": [
+       "reasonable number",
+       "orders per page"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "admin role",
+       "HTTP 403"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:requirement:0#v2": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [
+       {
+        "value": 30,
+        "unit": "days",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "within 30 days of purchase",
+       "after day 30",
+       "reject a request made"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 15,
+        "unit": "$",
+        "source": "text"
+       },
+       {
+        "value": 0,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "$15 fee",
+       "$15 or less",
+       "refund amount shall be $0"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [
+       {
+        "why": "'a reasonable number of orders per page' gives no fixed page size, so the same page can conform or not.",
+        "readings": [
+         "a page of 20 orders conforms and a page of 200 does not",
+         "a page of 200 orders conforms"
+        ],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Clear"
+       },
+       {
+        "why": "A tester cannot write the expected page size from the text alone, since no number is stated.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "count",
+      "limits": [],
+      "terms": [
+       "reasonable number of orders per page",
+       "should return",
+       "orders per page"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "HTTP 403",
+       "admin role",
+       "change the refund fee"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "text"
+       },
+       {
+        "value": 5000,
+        "unit": "ms",
+        "source": "src/gateway.js"
+       }
+      ],
+      "terms": [
+       "5 seconds",
+       "TIMEOUT_MS",
+       "PENDING"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "RefundService.refund",
+       "stored result",
+       "store cannot be read"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "newest orders first",
+       "purchase date",
+       "order history"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0#v1": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "text"
+       },
+       {
+        "value": 5000,
+        "unit": "ms",
+        "source": "src/gateway.js"
+       }
+      ],
+      "terms": [
+       "postRefund",
+       "TimeoutError",
+       "AbortSignal.timeout",
+       "PENDING"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "RefundService.refund",
+       "same order",
+       "store cannot be read or written"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "newest first",
+       "by purchase date"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0#v2": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "text"
+       },
+       {
+        "value": 5000,
+        "unit": "ms",
+        "source": "src/gateway.js"
+       }
+      ],
+      "terms": [
+       "TIMEOUT_MS",
+       "TimeoutError",
+       "PENDING",
+       "postRefund"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [],
+      "terms": [
+       "RefundService.refund",
+       "refunded again",
+       "store cannot be read or written",
+       "paid once"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [],
+      "terms": [
+       "newest orders first",
+       "orders newest first",
+       "by purchase date"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  }
+ }
+}

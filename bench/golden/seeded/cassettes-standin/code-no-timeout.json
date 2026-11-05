@@ -1,0 +1,447 @@
+{
+ "model": "stand-in (agent)",
+ "calls": {
+  "judge:requirement:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [
+       {
+        "value": 30,
+        "unit": "days",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "within 30 days of purchase",
+       "after day 30"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 15,
+        "unit": "$",
+        "source": "text"
+       },
+       {
+        "value": 0,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "$15 or less",
+       "minus a $15 fee"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [],
+      "logic_kind": "count",
+      "limits": [
+       {
+        "value": 50,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "at most 50 orders",
+       "per page"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "admin role",
+       "HTTP 403"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:requirement:0#v1": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [
+       {
+        "value": 30,
+        "unit": "days",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "30 days after purchase",
+       "no later than"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 15,
+        "unit": "$",
+        "source": "text"
+       },
+       {
+        "value": 0,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "$15 fee",
+       "refund amount",
+       "price paid"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [],
+      "logic_kind": "count",
+      "limits": [
+       {
+        "value": 50,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "at most 50 orders",
+       "per page",
+       "page size"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "admin role",
+       "HTTP 403"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:requirement:0#v2": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [
+       {
+        "value": 30,
+        "unit": "days",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "within 30 days of purchase",
+       "after day 30",
+       "reject a request made"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 15,
+        "unit": "$",
+        "source": "text"
+       },
+       {
+        "value": 0,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "$15 fee",
+       "$15 or less",
+       "refund amount shall be $0"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [],
+      "logic_kind": "count",
+      "limits": [
+       {
+        "value": 50,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "at most 50 orders per page",
+       "page size",
+       "order history API"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "HTTP 403",
+       "admin role",
+       "change the refund fee"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "text"
+       },
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "src/gateway.js"
+       }
+      ],
+      "terms": [
+       "5 seconds",
+       "PENDING",
+       "nightly job"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "RefundService.refund",
+       "stored result",
+       "store cannot be read"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "newest orders first",
+       "purchase date",
+       "order history"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0#v1": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "postRefund",
+       "TimeoutError",
+       "PENDING",
+       "nightly job"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "RefundService.refund",
+       "same order",
+       "store cannot be read or written"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "newest first",
+       "by purchase date"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0#v2": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "time out after 5 seconds",
+       "PENDING",
+       "nightly job",
+       "postRefund"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [],
+      "terms": [
+       "RefundService.refund",
+       "refunded again",
+       "store cannot be read or written",
+       "paid once"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [],
+      "terms": [
+       "newest orders first",
+       "orders newest first",
+       "by purchase date"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  }
+ }
+}

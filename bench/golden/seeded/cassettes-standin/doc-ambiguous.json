@@ -1,0 +1,503 @@
+{
+ "model": "stand-in (agent)",
+ "calls": {
+  "judge:requirement:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [
+       {
+        "value": 30,
+        "unit": "days",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "within 30 days of purchase",
+       "after day 30"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [
+       {
+        "why": "'Pro rata' does not say over what period, so the refund amount has two readings with different results.",
+        "readings": [
+         "price paid times unused days of a 365-day term, minus $15",
+         "price paid times unused days of a 30-day term, minus $15"
+        ],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Clear"
+       },
+       {
+        "why": "Without the period the pro rata share is taken over, a tester cannot write the expected refund amount.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 15,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "pro rata",
+       "price paid",
+       "$15 fee"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [],
+      "logic_kind": "count",
+      "limits": [
+       {
+        "value": 50,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "at most 50 orders",
+       "per page"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "admin role",
+       "HTTP 403"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:requirement:0#v1": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [
+       {
+        "value": 30,
+        "unit": "days",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "30 days of purchase",
+       "after day 30"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [
+       {
+        "why": "the rule does not say whether the $15 fee is taken before or after the pro rata share, so the refund amount is not fixed",
+        "readings": [
+         "price x unused share - $15: a $90 order with 2/3 unused refunds $45",
+         "(price - $15) x unused share: the same order refunds $50"
+        ],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Clear"
+       },
+       {
+        "why": "the rule does not say what 'pro rata' is measured over (days, months or a period), so a tester cannot compute the refund amount from the text alone",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 15,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "pro rata",
+       "$15 fee",
+       "refund amount"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [],
+      "logic_kind": "count",
+      "limits": [
+       {
+        "value": 50,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "at most 50 orders",
+       "per page",
+       "page size"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "admin role",
+       "HTTP 403"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:requirement:0#v2": {
+   "output": {
+    "rules": [
+     {
+      "id": "REQ-01",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [
+       {
+        "value": 30,
+        "unit": "days",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "within 30 days of purchase",
+       "after day 30",
+       "reject a request made"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-02",
+      "fails": [
+       {
+        "why": "'pro rata' does not say what the share is based on, so the refund differs by reading.",
+        "readings": [
+         "the refund is pro rated by the days left in the 30-day refund window",
+         "the refund is pro rated by the days left in the purchased term"
+        ],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Clear"
+       },
+       {
+        "why": "No basis for the pro rata share is stated, so a tester cannot write the expected refund from the text alone.",
+        "readings": [],
+        "raised_by": "",
+        "conflict_with": "",
+        "part": "",
+        "measure": "Testable"
+       }
+      ],
+      "logic_kind": "calculation",
+      "limits": [
+       {
+        "value": 15,
+        "unit": "$",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "price paid, pro rata",
+       "pro rata",
+       "$15 fee"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-03",
+      "fails": [],
+      "logic_kind": "count",
+      "limits": [
+       {
+        "value": 50,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "at most 50 orders per page",
+       "page size",
+       "order history API"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     },
+     {
+      "id": "REQ-04",
+      "fails": [],
+      "logic_kind": "access",
+      "limits": [
+       {
+        "value": 403,
+        "unit": "",
+        "source": "text"
+       }
+      ],
+      "terms": [
+       "HTTP 403",
+       "admin role",
+       "change the refund fee"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "text"
+       },
+       {
+        "value": 5000,
+        "unit": "ms",
+        "source": "src/gateway.js"
+       }
+      ],
+      "terms": [
+       "5 seconds",
+       "TIMEOUT_MS",
+       "PENDING"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "RefundService.refund",
+       "stored result",
+       "store cannot be read"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "newest orders first",
+       "purchase date",
+       "order history"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0#v1": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "text"
+       },
+       {
+        "value": 5000,
+        "unit": "ms",
+        "source": "src/gateway.js"
+       }
+      ],
+      "terms": [
+       "postRefund",
+       "TimeoutError",
+       "AbortSignal.timeout",
+       "PENDING"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "RefundService.refund",
+       "same order",
+       "store cannot be read or written"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [],
+      "logic_kind": "other",
+      "limits": [],
+      "terms": [
+       "newest first",
+       "by purchase date"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  },
+  "judge:decision:0#v2": {
+   "output": {
+    "rules": [
+     {
+      "id": "DEC-01",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [
+       {
+        "value": 5,
+        "unit": "s",
+        "source": "text"
+       },
+       {
+        "value": 5000,
+        "unit": "ms",
+        "source": "src/gateway.js"
+       }
+      ],
+      "terms": [
+       "TIMEOUT_MS",
+       "TimeoutError",
+       "PENDING",
+       "postRefund"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "outside_call"
+     },
+     {
+      "id": "DEC-02",
+      "fails": [],
+      "logic_kind": "io",
+      "limits": [],
+      "terms": [
+       "RefundService.refund",
+       "refunded again",
+       "store cannot be read or written",
+       "paid once"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "stored_data"
+     },
+     {
+      "id": "DEC-03",
+      "fails": [],
+      "logic_kind": "date",
+      "limits": [],
+      "terms": [
+       "newest orders first",
+       "orders newest first",
+       "by purchase date"
+      ],
+      "restates": "",
+      "adds_behaviour": true,
+      "boundary": "none"
+     }
+    ]
+   },
+   "usage": {}
+  }
+ }
+}
