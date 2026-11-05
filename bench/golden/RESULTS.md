@@ -4,11 +4,11 @@ Run 2026-11-05 · mode offline
 
 ## Seeded track (57 cases, mode offline)
 
-**Seeded defects found: 30 of 30 (recall 100%)** · **Issues reported that were seeded: 30 of 30 (precision 100%)** · Cases that should be clean but got a false alarm: 0 of 20 · Not evaluable without the model: 24 expected issues
+**Seeded defects found: 34 of 34 (recall 100%)** · **Issues reported that were seeded: 34 of 34 (precision 100%)** · Cases that should be clean but got a false alarm: 0 of 20 · Not evaluable without the model: 20 expected issues
 
 | Group | Cases | Recall | Precision | False alarms | Clean cases with a false alarm |
 | --- | :-: | :-: | :-: | :-: | :-: |
-| written knowing the tool | 39 | 100% (23/23) | 100% | 0 | 0 of 8 |
+| written knowing the tool | 39 | 100% (27/27) | 100% | 0 | 0 of 8 |
 | hard: written from real-world setups | 9 | 100% (5/5) | 100% | 0 | 0 of 5 |
 | regression: patterns the real repositories caught | 9 | 100% (2/2) | 100% | 0 | 0 of 7 |
 
@@ -18,6 +18,9 @@ False P0 issues (the report's most urgent rows, wrong): none.
 | --- | :-: | :-: | :-: | :-: | :-: | --- |
 | S1 Specific | 2 | 2 | 100% | 0 | 100% | – |
 | S2 Traceable | 1 | 1 | 100% | 0 | 100% | – |
+| S3 Covers stated limits | 1 | 1 | 100% | 0 | 100% | – |
+| S3 Not skipped | 1 | 1 | 100% | 0 | 100% | – |
+| S3 Runs on PR | 2 | 2 | 100% | 0 | 100% | – |
 | S5 Coverage coverage-exclusion | 1 | 1 | 100% | 0 | 100% | – |
 | S5 Coverage coverage-global | 1 | 1 | 100% | 0 | 100% | – |
 | S5 Coverage coverage-missing | 3 | 3 | 100% | 0 | 100% | – |
@@ -47,7 +50,7 @@ Critical tags on the clean base: 7 of 7 right.
 | ci-lint-missing | no lint step | 1 | 1 | – | – |
 | ci-lint-soft | lint step with continue-on-error | 1 | 1 | – | – |
 | ci-typecheck-missing | no type check | 1 | 1 | – | – |
-| ci-pr-trigger-missing | the checks workflow runs on push to main only, not on pull requests | 7 (+7 n/e) | 7 | – | – |
+| ci-pr-trigger-missing | the checks workflow runs on push to main only, not on pull requests | 8 (+6 n/e) | 8 | – | – |
 | neg-ci-trufflehog | trufflehog instead of gitleaks | 0 | 0 | – | – |
 | neg-ci-osv | osv-scanner instead of npm audit | 0 | 0 | – | – |
 | neg-ci-dependency-review | GitHub dependency-review-action instead of npm audit | 0 | 0 | – | – |
@@ -73,12 +76,12 @@ Critical tags on the clean base: 7 of 7 right.
 | reg-neg-v8-coverage | coverage collected with NODE_V8_COVERAGE on the test step and reported with `c8 report` (undici) | 0 | 0 | – | – |
 | reg-neg-compiled-typecheck | a Go service: the compiler checks types, so no separate type check is missing (cobra, gin) | 0 | 0 | – | – |
 | test-no-test | the refund fee (REQ-02) has no test | 0 (+1 n/e) | 0 | – | – |
-| test-skipped | the refund window cases (REQ-01) are all skipped | 0 (+1 n/e) | 0 | – | – |
-| test-limits-missed | the refund window test (REQ-01) uses days 10 and 45, never the edge at 30 | 0 (+1 n/e) | 0 | – | – |
+| test-skipped | the refund window cases (REQ-01) are all skipped | 1 | 1 | – | – |
+| test-limits-missed | the refund window test (REQ-01) uses days 10 and 45, never the edge at 30 | 1 | 1 | – | – |
 | test-weak-assert | the idempotency test (DEC-02) only checks the gateway was called, not that a second refund pays nothing | 0 (+1 n/e) | 0 | – | – |
 | test-simulator | the refund fee test (REQ-02) calls a simulator copy of the formula, not src/refund.js | 0 (+1 n/e) | 0 | – | – |
 | test-mocked-boundary | the gateway test (DEC-01) mocks fetch-level code instead of running the adapter against a fake server | 0 (+1 n/e) | 0 | – | – |
-| test-nightly-only | the refund window and fee tests (REQ-01, REQ-02) moved to a suite that only the nightly workflow runs | 0 (+2 n/e) | 0 | – | – |
+| test-nightly-only | the refund window and fee tests (REQ-01, REQ-02) moved to a suite that only the nightly workflow runs | 1 (+1 n/e) | 1 | – | – |
 | test-e2e-only | the refund fee (REQ-02) is tested only through the browser, in an e2e test run on PR | 0 (+1 n/e) | 0 | – | – |
 | code-no-timeout | the gateway adapter (DEC-01) has no timeout, and its test has no timeout case | 0 (+1 n/e) | 0 | – | – |
 | code-no-role-check | the admin fee route (REQ-04) checks only that someone is logged in; its test covers only the admin | 0 (+1 n/e) | 0 | – | – |

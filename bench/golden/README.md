@@ -34,6 +34,35 @@ check that cannot be trusted shows up on its own line instead of hiding inside a
 - Sections 1–4 (the model's part) are still not scored: this environment has no API key. 24 expected issues are
   waiting for `--mode record`.
 
+## Test evidence that code decides (sections 3–4, 2026-11-05)
+
+From first principles a row's value is the chance it is true times what it protects. The P0 rows "critical rule has no
+test" are the most valuable and were decided entirely by the model: with no model there were no section 3–4 rows, and
+with one, "No test" meant "the model did not link a test", which code never checked (design constraint 4 says it must).
+Code now decides what it can prove:
+
+- **Implementation**: a rule that names its code (`` `src/gateway.js` ``, `` `RefundService.refund` ``) gets that code, found by
+  code (a method in its class's file, TypeScript signatures included), over the model's pick. On the quote-service
+  fixture: right for all 3 rules that name their code.
+- **Limits**: the edges the rule text states ("within 30 days", "$15 or less", "from $500 to $5,000", "after 5 seconds")
+  are added to the model's limits, so "Covers stated limits" works without it. Plain amounts ("a $50 fee"), IDs and
+  status codes are not edges.
+- **Links without the model**: only what proves intent counts, which means tests that carry the rule's ID. A test that
+  imports or names the code exercises it but may not assert the rule (the fixture's `payment.test.ts` charges a card and
+  never sends the same key twice), so that rule stays "not traced" instead of looking covered.
+- **"No test" without the model** only when no test names the rule's ID or symbol and none imports its file.
+  With the model, links stay the model's call (the mock's accepted behaviour), plus ID tags.
+
+What this buys, measured: offline, 5 more seeded test-evidence defects are scored (all found, no false alarms on the
+clean cases). What it does not: on the fixture, code can trace only 1 of 25 rules on its own; on the 31 real repositories,
+offline extraction finds rules in only one (react-router's ADRs, 9 decisions), and code traces none of them, correctly.
+Real requirement documents rarely carry IDs or name their code, so **most of the report's value still sits on the model
+and is still unmeasured here**.
+
+A real-repository check caught a bug before it shipped: react-router's `useBlocker` decision was first reported "No
+test" by code, but `__tests__/dom/use-blocker-test.tsx` exists. A `\b` written in a template string meant a backspace,
+not a word boundary, so the safety search matched nothing. Fixed, and covered by a unit test.
+
 ## Run it
 
 ```bash

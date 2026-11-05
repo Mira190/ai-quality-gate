@@ -105,6 +105,28 @@ function numericConflict(a, b) {
   return vs.includes('conflict') ? 'conflict' : vs.length ? 'ok' : null;
 }
 
+// Edges a rule states in its own words: a number with a unit (or a count) after a word that makes it a boundary
+// ("within 30 days", "at most 50 orders", "$15 or less", "time out after 5 seconds", "from $500 to $5,000").
+// A plain amount ("a $15 fee") is a value, not an edge, unless the text also bounds it.
+const EDGE_BEFORE = /(within|after|before|up to|at most|at least|no more than|no less than|more than|less than|over|under|above|below|exceeds?|maximum(?: of)?|minimum(?: of)?|max\.?|min\.?|limit(?:ed)? (?:of|to)|capped at|cap of|from|between|to|and|than|time ?outs? (?:of|after)?|expires? (?:after|in)|older than|younger than|day|days)\s*$/i;
+const EDGE_AFTER = /^\s*(or (less|fewer|more|above|below|over|under)|at most|at least|maximum|minimum)/i;
+const UNIT_WORD = /^(%|percent|ms|milliseconds?|s|secs?|seconds?|mins?|minutes?|hours?|days?|weeks?|months?|years?|items?|orders?|requests?|attempts?|retries|times|characters?|chars?|bytes?|kb|mb|gb|users?|rows?|records?|entries|pages?)$/i;
+function statedLimits(text) {
+  const out = [];
+  for (const m of String(text).matchAll(new RegExp(`(?<![\\w.-])([$€£¥])?\\s?(\\d{1,3}(?:,\\d{3})+|\\d+)(\\.\\d+)?(?:\\s*(${UNIT_WORD.source.slice(2, -2)})(?![A-Za-z]))?`, 'gi'))) {
+    const value = Number(m[2].replace(/,/g, '') + (m[3] || ''));
+    const word = m[4] ? m[4].toLowerCase() : '';
+    const before = text.slice(Math.max(0, m.index - 30), m.index), after = text.slice(m.index + m[0].length, m.index + m[0].length + 16);
+    if (/(REQ|DEC|HTTP|[A-Z]{2,})[-\s]?$/.test(before)) continue; // an ID or a status code is not a limit
+    if (!m[1] && !word && !/\bday\s*$/i.test(before)) continue;   // a bare number: only "day 30"
+    const duration = /^(ms|milliseconds?|s|secs?|seconds?|mins?|minutes?|hours?|days?|weeks?|months?|years?)$/.test(word);
+    if (!EDGE_BEFORE.test(before) && !EDGE_AFTER.test(after) && !(duration && /\b(for|every|each|per)\s*$/i.test(before))) continue;
+    const unit = m[1] || (word === 'percent' ? '%' : /\bday\s*$/i.test(before) && !word ? 'days' : word);
+    if (!out.some((x) => x.value === value)) out.push({ value, unit, source: 'text' });
+  }
+  return out;
+}
+
 // Files a rule names (`path` in backticks) that exist: their content is where its limits may live.
 function namedArtifacts(root, rule, fileSet) {
   return [...`${rule.title} ${rule.text}`.matchAll(/`([^`\s]+\.[a-z0-9]+)`/gi)].map((m) => m[1].replace(/^\.\//, '')).filter((p) => fileSet.has(p)).map((p) => ({ path: p, text: (readText(root, p) || '').slice(0, 4000) }));
@@ -184,6 +206,8 @@ ${listing(rs)}`,
     const lim = new Map();
     for (const x of rs) for (const l of new Map((x.limits || []).map((l) => [l.value, l])).values()) { const e = lim.get(l.value) || { l, n: 0 }; e.n++; lim.set(l.value, e); }
     r.limits = [...lim.values()].filter((e) => e.n >= r._k && known.has(e.l.value)).map((e) => e.l);
+    // the edges the rule's own text states, read by code (the model adds the edges in files the rule names)
+    for (const l of statedLimits(`${r.title}. ${r.text}`)) if (!r.limits.some((x) => x.value === l.value)) r.limits.push(l);
     r.terms = [...new Map(rs.flatMap((x) => x.terms || []).filter((t) => t && t.length >= 3).map((t) => [t.toLowerCase(), t])).values()].slice(0, 8);
     const restates = mode(rs.map((x) => x.restates || ''));
     r.restates = r.kind === 'decision' && byId.get(restates)?.kind === 'requirement' ? restates : null;
@@ -257,4 +281,4 @@ const str = { type: 'string' };
 const arr = (items) => ({ type: 'array', items });
 const obj = (properties) => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
 
-module.exports = { classifyDocs, atomize, judgeRules, statusOf, traceable, quantities, numericConflict, vagueTerm, failureGaps, REQ_MEASURES, DEC_MEASURES, BLOCKING, STYLE, obj, arr, str };
+module.exports = { classifyDocs, atomize, judgeRules, statusOf, traceable, quantities, statedLimits, numericConflict, vagueTerm, failureGaps, REQ_MEASURES, DEC_MEASURES, BLOCKING, STYLE, obj, arr, str };

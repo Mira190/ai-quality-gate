@@ -9,8 +9,9 @@
 // Negative cases ("neg-*") change the repository in a way that must NOT produce an issue (a different but valid tool,
 // a script chain), so they measure false alarms on realistic variety, not only on the one base.
 //
-// `needs` says what the case can be judged with: 'code' (offline, no model), or 'model' (sections 1-4 need the model's
-// judgments and test links; an offline run marks those expectations "not evaluable" rather than missed).
+// `needs` says what the case can be judged with: 'code' (offline, no model), or 'model'. Offline, the scorer decides per
+// issue key what code could have decided (section 5, Specific, Traceable, and the test-evidence rows of requirements
+// code traced itself); the other expectations are marked "not evaluable" rather than missed.
 const { BASE } = require('./base');
 
 function edit(files, p, from, to) {
@@ -56,7 +57,6 @@ const CASES = [
   { id: 'ci-pr-trigger-missing', needs: 'model', what: 'the checks workflow runs on push to main only, not on pull requests',
     expect: ['Secret scan secret-missing', 'Coverage coverage-missing', 'Dependency scan dependency-missing', 'Format format-missing', 'Lint lint-missing', 'Type check typecheck-missing', 'Unit and component tests tests-missing'].map((k) => `S5 ${k}`)
       .concat(['REQ-01', 'REQ-02', 'REQ-03', 'REQ-04'].map((r) => `S3 ${r} Runs on PR`), ['DEC-01', 'DEC-02', 'DEC-03'].map((r) => `S4 ${r} Runs on PR`)),
-    codeExpect: ['Secret scan secret-missing', 'Coverage coverage-missing', 'Dependency scan dependency-missing', 'Format format-missing', 'Lint lint-missing', 'Type check typecheck-missing', 'Unit and component tests tests-missing'].map((k) => `S5 ${k}`),
     apply: (f) => edit(f, '.github/workflows/pr.yml', 'on:\n  pull_request:\n  push:', 'on:\n  push:') },
 
   // ---- section 5 negatives: valid variety that must not be flagged ------------------------------------------------
@@ -224,11 +224,9 @@ const CASES = [
 
   // ---- sections 1 and 2: document health (need the model, except Specific and Traceable) -------------------------
   { id: 'doc-vague-critical', needs: 'model', what: 'the refund window (REQ-01) says "within a reasonable time" instead of 30 days', expect: ['S1 REQ-01 Testable', 'S1 REQ-01 Specific'],
-    codeExpect: ['S1 REQ-01 Specific'],
     allow: ['S1 REQ-01 Clear', 'S1 REQ-01 Consistent', 'S3 REQ-01 Covers stated limits'],
     apply: (f) => edit(f, 'docs/requirements.md', 'made within 30 days of purchase and reject a request made after day 30.', 'made within a reasonable time after purchase.') },
   { id: 'doc-vague-noncritical', needs: 'model', what: 'the page size (REQ-03) says "a reasonable number" instead of 50', expect: ['S1 REQ-03 Testable', 'S1 REQ-03 Specific'],
-    codeExpect: ['S1 REQ-03 Specific'],
     allow: ['S1 REQ-03 Clear', 'S3 REQ-03 Covers stated limits'],
     apply: (f) => edit(f, 'docs/requirements.md', 'shall return at most 50 orders per page.', 'should return a reasonable number of orders per page.') },
   { id: 'doc-conflict', needs: 'model', what: 'a design decision allows refunds up to 45 days, against the 30 days of REQ-01', expect: ['S1 REQ-01 Consistent'],

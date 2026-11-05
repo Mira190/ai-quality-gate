@@ -30,6 +30,8 @@ const key = (i) => (i.section === 5 ? `S5 ${i.check} ${i.kind || ''}`.trim() : `
 // the check a key belongs to, without the rule: "S3 Covers stated limits", "S5 Secret scan secret-missing"
 const checkOf = (k) => (k.startsWith('S5 ') ? k : k.replace(/^(S\d) \S+ /, '$1 '));
 const CODE_DECIDED = /^S5 | (Specific|Traceable)$/;
+// checks that need the model's judgment even when code traced the rule
+const MODEL_ONLY = new Set(['Asserts the rule', 'Suspected not built', 'Crosses the real boundary']);
 const pct = (a, b) => (b ? `${Math.round((100 * a) / b)}%` : '–');
 
 function loadEnv() {
@@ -61,9 +63,17 @@ async function seeded({ mode = 'offline', only = new Set() } = {}) {
     if (mode === 'record') llm.save();
     const L = out.ledger;
     const modelUsed = mode !== 'offline';
-    const evaluable = (k) => modelUsed || CODE_DECIDED.test(k);
-    const expect = (modelUsed ? c.expect : c.codeExpect || c.expect).filter(evaluable);
-    const notEvaluable = c.expect.filter((k) => !evaluable(k) && !(c.codeExpect || []).includes(k));
+    // offline, a test-evidence row is code's call when code traced the rule (it names its code, or a test names its
+    // ID) and the check is not one only the model judges
+    // (section 4 rows exist only for decisions the model says add behaviour, so offline they are not code's call)
+    const codeTraced = new Set(L.rules.filter((r) => r.tracedBy === 'code' && r.kind === 'requirement').map((r) => r.id));
+    const evaluable = (k) => {
+      if (modelUsed || CODE_DECIDED.test(k)) return true;
+      const m = /^S[34] (\S+) (.+)$/.exec(k);
+      return !!m && codeTraced.has(m[1]) && !MODEL_ONLY.has(m[2]);
+    };
+    const expect = c.expect.filter(evaluable);
+    const notEvaluable = c.expect.filter((k) => !evaluable(k));
     const allow = new Set(c.allow || []);
     const reported = [...new Set(L.issues.map(key))].filter(evaluable);
     const hit = expect.filter((k) => reported.includes(k)), missed = expect.filter((k) => !reported.includes(k));

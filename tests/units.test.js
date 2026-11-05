@@ -278,3 +278,61 @@ test('discover: rst headings, genre titles, pip lists, and "must" alone goes to 
   assert.ok(NON_SPEC.test('requirements-dev.txt') && NON_SPEC.test('minimum-constraints-install.txt'), 'pip dependency lists');
   assert.ok(!NON_SPEC.test('docs/requirements.md'));
 });
+
+test('statedLimits: edges the rule text states, not plain amounts, IDs or status codes', () => {
+  const { statedLimits } = require('../src/judge');
+  const v = (t) => statedLimits(t).map((l) => `${l.value}${l.unit}`);
+  assert.deepStrictEqual(v('accept a request made within 30 days of purchase and reject one after day 30'), ['30days']);
+  assert.deepStrictEqual(v('the price paid minus a $15 fee; when the price paid is $15 or less, $0'), ['15$']);
+  assert.deepStrictEqual(v('choose an excess from $500 to $5,000'), ['500$', '5000$']);
+  assert.deepStrictEqual(v('Calls time out after 5 seconds.'), ['5seconds']);
+  assert.deepStrictEqual(v('A saved quote shall be kept for 30 days and then deleted.'), ['30days']);
+  assert.deepStrictEqual(v('Refund is pro rata minus a $50 fee. Answer HTTP 403. See REQ-12.'), []);
+});
+
+test('anchorsOf: a rule that names its code is traced by code (TS methods, the owner class wins)', () => {
+  const { anchorsOf } = require('../src/trace');
+  const texts = new Map([
+    ['src/payment/service.ts', 'export class PaymentService {\n  constructor() {}\n  async charge(request: ChargeRequest): Promise<ChargeResult> {\n    return x;\n  }\n}\n'],
+    ['src/payment/simulator.ts', 'export class PaymentSimulator {\n  async charge(amount: number) {\n  }\n}\n'],
+    ['src/gateway.js', 'const T = 5000;\nexport async function postRefund(url) {\n}\n'],
+  ]);
+  const src = [...texts.keys()];
+  const a = anchorsOf({ title: 'Idempotent', text: '`PaymentService.charge` stores the key. Status is `PENDING`.' }, src, texts);
+  assert.deepStrictEqual(a.impl, { path: 'src/payment/service.ts', line: 3, symbol: 'PaymentService.charge' });
+  assert.deepStrictEqual(a.symbols, ['PaymentService.charge']);
+  const b = anchorsOf({ title: 'Timeout', text: 'Calls in `src/gateway.js` time out after 5 seconds.' }, src, texts);
+  assert.deepStrictEqual(b.impl, { path: 'src/gateway.js', line: 2, symbol: 'postRefund' });
+  assert.strictEqual(anchorsOf({ title: 'Cap', text: 'Discounts never exceed 20%.' }, src, texts).impl, null);
+});
+
+test('code trace: "No test" only when no test names the rule ID or its symbol; an import alone leaves it unknown', async () => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+  const { traceRules } = require('../src/trace');
+  const { indexTests } = require('../src/tests-index');
+  const { LLM } = require('../src/llm');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-'));
+  const put = (p, t) => { fs.mkdirSync(path.dirname(path.join(dir, p)), { recursive: true }); fs.writeFileSync(path.join(dir, p), t); };
+  put('lib/hooks.ts', 'export function useBlocker(fn) {\n  return fn;\n}\nexport function useOther() {}\n');
+  put('lib/index.ts', "export * from './hooks';\n");
+  put('__tests__/use-blocker-test.ts', "import { useBlocker } from '../lib/index';\nit('blocks', () => { expect(useBlocker(1)).toBe(1); });\n");
+  put('lib/unused.ts', 'export function sweepExpired() {}\n');
+  put('__tests__/other-test.ts', "import { useOther } from '../lib/hooks';\nit('other', () => { expect(useOther()).toBe(undefined); });\n");
+  const files = ['lib/hooks.ts', 'lib/index.ts', 'lib/unused.ts', '__tests__/use-blocker-test.ts', '__tests__/other-test.ts'];
+  const rules = [
+    { id: 'DEC-01', kind: 'decision', title: 'useBlocker', text: 'A single low-level `useBlocker` hook.', terms: [] },
+    { id: 'DEC-02', kind: 'decision', title: 'Other', text: 'The `useOther` hook in `lib/hooks.ts`.', terms: [] },
+    { id: 'DEC-03', kind: 'decision', title: 'Missing', text: 'The `useMissing` hook.', terms: [] },
+    { id: 'DEC-04', kind: 'decision', title: 'Hooks', text: 'Hooks live in `lib/hooks.ts`.', terms: [] },
+    { id: 'DEC-05', kind: 'decision', title: 'Sweep', text: 'Expired rows are removed by `sweepExpired`.', terms: [] },
+  ];
+  await traceRules(new LLM({ mode: 'offline' }), rules, { root: dir, files, testIndex: indexTests(dir, files) });
+  const [blocker, other, missing, hooks, sweep] = rules;
+  assert.strictEqual(blocker.traced, false, 'a test names useBlocker: unknown without the model, never "No test"');
+  assert.strictEqual(other.traced, false, 'a test imports the file and names useOther: unknown without the model');
+  assert.strictEqual(missing.traced, false, 'useMissing is defined nowhere: nothing to anchor');
+  assert.strictEqual(hooks.traced, false, 'a file-only anchor with an importing test: unknown, not "No test"');
+  assert.strictEqual(sweep.tracedBy, 'code', 'no test names sweepExpired or imports its file: code proves the absence');
+  assert.deepStrictEqual(sweep.links, []);
+  assert.deepStrictEqual(sweep.impl, { path: 'lib/unused.ts', line: 1, symbol: 'sweepExpired' });
+});
