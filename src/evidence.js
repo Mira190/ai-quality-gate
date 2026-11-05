@@ -57,9 +57,14 @@ function belongsAt(r, root) {
   return null;
 }
 
-function relevantCases(t, rule) {
-  const rel = t.cases.filter((c) => rule.terms.some((term) => termRe(term).test(c.body)) || new RegExp(`\\b${rule.id}\\b`).test(c.body));
-  return rel.length ? rel : t.cases;
+// The cases of a test that concern the rule: they carry its ID, a search term, or a code-like part of a term (a number
+// or an identifier: "HTTP 403" is `toBe(403)` in a test, not the phrase), or one of its limit values.
+function relevantCases(t, rule, strict = false) {
+  const parts = [...new Set(rule.terms.flatMap((term) => String(term).split(/[^\w$]+/)).filter((w) => w.length >= 3 && (/\d/.test(w) || /[a-z][A-Z]|_/.test(w))))];
+  const nums = (rule.limits || []).map((l) => String(l.value)).filter((v) => v.length >= 2);
+  const rel = t.cases.filter((c) => rule.terms.some((term) => termRe(term).test(c.body)) || new RegExp(`\\b${rule.id}\\b`).test(c.body)
+    || parts.some((w) => new RegExp(`\\b${w.replace(/[$]/g, '\\$')}\\b`).test(c.body)) || nums.some((v) => new RegExp(`(?<![\\d.])${v}(?![\\d])`).test(c.body)));
+  return rel.length || strict ? rel : t.cases;
 }
 
 async function judgeAsserts(llm, rules, testIndex) {
@@ -154,8 +159,12 @@ function evaluate(rules, { testIndex, ci, srcImports, asserts, built, root }) {
       continue;
     }
     // Not skipped
-    const skips = tests.flatMap((t) => { const rel = relevantCases(t, r); return rel.every((c) => c.skipped) ? rel.map((c) => ({ path: t.path, line: c.line, name: c.name })) : []; });
-    if (skips.length && tests.every((t) => relevantCases(t, r).every((c) => c.skipped))) fails.push({ check: 'Not skipped', facts: { skipped: skips } });
+    // judged on the cases that are about this rule (its ID, terms or limits); a linked test with no such case (a general
+    // browser test) is not evidence that the rule's own cases run. With no case about the rule anywhere, all cases count.
+    const about = tests.map((t) => ({ t, rel: relevantCases(t, r, true) })).filter((x) => x.rel.length);
+    const judged = about.length ? about : tests.map((t) => ({ t, rel: t.cases }));
+    const skips = judged.flatMap(({ t, rel }) => (rel.every((c) => c.skipped) ? rel.map((c) => ({ path: t.path, line: c.line, name: c.name })) : []));
+    if (skips.length && judged.every(({ rel }) => rel.every((c) => c.skipped))) fails.push({ check: 'Not skipped', facts: { skipped: skips } });
     // Calls the code (end-to-end tests drive the real app, so they pass by construction)
     const nonE2e = tests.filter((t) => t.level !== 'e2e');
     const reaches = (t) => t.imports.some((i) => i.resolved && (i.resolved === r.impl.path || (srcImports.get(i.resolved) || []).includes(r.impl.path)));

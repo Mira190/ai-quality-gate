@@ -360,3 +360,14 @@ test('limits: a status code followed by ordinary words is not an edge', async ()
   await judgeRules(llm, [r], { root: '/nonexistent', fileSet: new Set() });
   assert.deepStrictEqual(r.limits, []);
 });
+
+test('Not skipped: a general browser test does not hide that every case about the rule is skipped', () => {
+  const { evaluate } = require('../src/evidence');
+  const unit = { path: 'tests/unit/refund.test.js', level: 'unit', text: '', imports: [], mocks: [], cases: [
+    { name: 'REQ-01 accepts day 30', line: 1, end: 2, body: "it.skip('REQ-01 accepts day 30')", skipped: true },
+    { name: 'takes the fee off', line: 3, end: 4, body: "it('takes the fee off')", skipped: false }] };
+  const e2e = { path: 'e2e/refund.spec.js', level: 'e2e', text: '', imports: [], mocks: [], cases: [{ name: 'sees the confirmation', line: 1, end: 2, body: "test('sees the confirmation')", skipped: false }] };
+  const r = { id: 'REQ-01', kind: 'requirement', title: 'Window', text: 'within 30 days', limits: [], terms: [], links: [{ path: unit.path }, { path: e2e.path }], impl: null, status: 'Ready' };
+  evaluate([r], { testIndex: { tests: [unit, e2e] }, ci: { runs: new Map([[unit.path, { pr: [{}], other: [] }], [e2e.path, { pr: [], other: [{}] }]]) }, srcImports: new Map(), asserts: new Map(), built: new Map(), root: null });
+  assert.ok(r.evidence.fails.some((f) => f.check === 'Not skipped'));
+});

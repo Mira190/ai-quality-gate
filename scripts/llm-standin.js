@@ -39,7 +39,7 @@ async function collect() {
   fs.mkdirSync(path.join(work, 'answers'), { recursive: true });
   fs.mkdirSync(tapes, { recursive: true });
   const index = readJson(path.join(work, 'index.json'), {});
-  let fresh = 0;
+  let fresh = 0, stale = 0;
   // --fixture: the quote-service fixture instead, whose real model replies are recorded, to calibrate the stand-in
   const cases = argv.includes('--fixture') ? [{ id: 'quote-service', fixture: true }] : CASES.filter((x) => !only.size || only.has(x.id));
   for (const c of cases) {
@@ -48,7 +48,21 @@ async function collect() {
     else for (const [p, text] of Object.entries(filesOf(c))) { fs.mkdirSync(path.dirname(path.join(dir, p)), { recursive: true }); fs.writeFileSync(path.join(dir, p), text); }
     const cassette = path.join(tapes, `${c.id}.json`);
     const llm = new LLM({ mode: 'fill', cassette, votes, fillVotes: votes > 1 });
+    // an answer recorded for a different prompt (the code that builds the prompt changed) is stale: ask again
+    const ask = llm.ask.bind(llm);
+    llm.ask = (key, req) => {
+      const hit = llm.tape.calls[key];
+      if (hit?.hash && hit.hash !== hash(req)) { delete llm.tape.calls[key]; staleKeys.push(key); stale++; }
+      return ask(key, req);
+    };
+    const staleKeys = [];
     try { await run({ root: dir, repo: c.fixture ? 'acme/quote-service' : `golden/${c.id}`, sha: c.fixture ? 'a1b2c3d' : 'seeded', date: c.fixture ? '2026-10-22' : '2026-11-04', llm }); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    // forget a stale answer for good: off the cassette, and off the old request's list of uses
+    if (staleKeys.length) {
+      const t = readJson(cassette, null);
+      if (t) { for (const k of staleKeys) delete t.calls[k]; fs.writeFileSync(cassette, JSON.stringify(t, null, 1) + '\n'); }
+      for (const e of Object.values(index)) e.uses = e.uses.filter((u) => !(u.case === c.id && staleKeys.includes(u.key)));
+    }
     const pending = Object.entries(llm.pending || {}).filter(([k]) => ASKED.test(k));
     const first = Math.min(...pending.map(([k]) => STAGE(k)));
     for (const [key, req] of pending) {
@@ -62,7 +76,7 @@ async function collect() {
   }
   fs.writeFileSync(path.join(work, 'index.json'), JSON.stringify(index, null, 1));
   const open = fs.readdirSync(path.join(work, 'requests')).filter((f) => !fs.existsSync(path.join(work, 'answers', f)));
-  console.log(`${fresh} new requests; ${open.length} waiting for an answer in ${path.join(work, 'requests')}`);
+  console.log(`${fresh} new requests (${stale} recorded answers were for an older prompt); ${open.length} waiting for an answer in ${path.join(work, 'requests')}`);
 }
 
 // Minimal JSON-schema check of an answer (types, required keys, enums), so a malformed answer is caught here.
@@ -94,7 +108,11 @@ function merge() {
     const out = readJson(a, undefined);
     const err = out === undefined ? 'not JSON' : req ? check(out, req.schema) : null;
     if (err) { bad++; console.error(`${h}: ${err}`); continue; }
-    for (const u of e.uses) { const t = tape(u.case); if (!t.calls[u.key]) { t.calls[u.key] = { output: out, usage: {} }; n++; } }
+    const ph = h.replace(/-v\d+$/, '');
+    for (const u of e.uses) {
+      const t = tape(u.case), cur = t.calls[u.key];
+      if (!cur) { t.calls[u.key] = { output: out, usage: {}, hash: ph }; n++; } else if (!cur.hash) cur.hash = ph; // backfill: which prompt it answers
+    }
   }
   for (const [id, t] of tapesBy) fs.writeFileSync(path.join(tapes, `${id}.json`), JSON.stringify(t, null, 1) + '\n');
   console.log(`merged ${n} calls into ${tapesBy.size} cassettes${bad ? `; ${bad} answers rejected (fix and merge again)` : ''}`);
