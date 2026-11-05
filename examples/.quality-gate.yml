@@ -23,10 +23,12 @@ execute:               # used with the action input execute: 'true'
   test_command: npx vitest run {files}
   timeout_s: 120
   max_mutants: 60
+  scope: diff          # with a pull-request diff: only rules whose implementation the change edits (or: all)
 
 model:
   name: claude-haiku-5-5
-  votes: 3
+  votes: { default: 3, built: 1 }   # model-only stages never block, so they can take one vote
+  adaptive: true       # two votes first, the third only when they disagree
   max_usd: 2
 
 suppress:

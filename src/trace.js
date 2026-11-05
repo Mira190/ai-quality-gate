@@ -109,7 +109,8 @@ async function traceRules(llm, rules, { root, files, testIndex }) {
     hashOf: (r) => JSON.stringify([r.title, r.text, r._cand.code, r._cand.tests.map((t) => [t.path, t.level, t.tag, t.hits, t.imports, caseList(t)])]),
     build: (b, i, k) => ({
       system: STYLE,
-      prompt: `For each rule, pick (1) where the code implements it: the file, the line of the function or statement that does it, and the symbol name, or null fields ("" and 0) if no candidate implements it; (2) which candidate test files exercise this rule's behaviour at all, even partly or poorly (a browser test that shows a premium on a page counts for a premium rule; a test that calls the implementing function counts). Later checks judge whether those tests assert the rule, cover its limits and run on PR, so do not leave a test out because it is weak; leave it out only when it tests a different behaviour. Pick only from the candidates shown; their order means nothing.\n\n${b.map((r) => ruleBlock(r, k)).join('\n')}`,
+      prefix: `For each rule, pick (1) where the code implements it: the file, the line of the function or statement that does it, and the symbol name, or null fields ("" and 0) if no candidate implements it; (2) which candidate test files exercise this rule's behaviour at all, even partly or poorly (a browser test that shows a premium on a page counts for a premium rule; a test that calls the implementing function counts). Later checks judge whether those tests assert the rule, cover its limits and run on PR, so do not leave a test out because it is weak; leave it out only when it tests a different behaviour. Pick only from the candidates shown; their order means nothing.`,
+      prompt: b.map((r) => ruleBlock(r, k)).join('\n'),
       schema: obj({ rules: arr(obj({ id: str, impl_path: str, impl_line: { type: 'integer' }, impl_symbol: str, tests: arr(str) })) }),
       maxTokens: 8000,
     }),
@@ -135,6 +136,8 @@ async function traceRules(llm, rules, { root, files, testIndex }) {
     }).map(([t]) => ({ path: t, source: c.tests.some((x) => x.path === t) ? 'name' : 'AI' }));
     r.traced = ps.length > 0; // no model reply for this rule: its test links are unknown, not absent
     r.links = [...tagged, ...linked];
+    // how many replies named each linked test (a unanimous, import-checked link can become a tag: construct.js)
+    r.linkVotes = Object.fromEntries(linked.map((l) => [l.path, { votes: votes.get(l.path), of: ps.length }]));
     r.searched = r.terms;
     // test files that name the rule ID, contain one of its terms, or import a code candidate: when there are none,
     // "No test" rests on the search alone (code), not on the model turning candidates down

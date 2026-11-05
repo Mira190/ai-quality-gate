@@ -10,6 +10,8 @@ const { classifyDocs, atomize, judgeRules, statusOf } = require('./judge');
 const { traceRules } = require('./trace');
 const { judgeAsserts, judgeBuilt, evaluate } = require('./evidence');
 const { probeRules } = require('./execute');
+const { analyzeImpact, implChanged, impactText } = require('./impact');
+const { construct, boundarySnippet, LANG } = require('./construct');
 const { buildIssues } = require('./issues');
 const { planTests, buildActions } = require('./actions');
 const { writeCells, writeActions } = require('./write');
@@ -19,7 +21,7 @@ const { readText, numbersIn, linesOf, base, compareRules } = require('./util');
 // Sources the pipeline never reads in this version; the run line names them so a reader knows what the answer cannot cover.
 const NEVER_READ = ['Jira', 'Confluence', 'PR history'];
 
-async function run({ root, repo, sha, date, llm, external = [], budgetKb = 60, maxDocs, include = [], exclude = [], branchProtection = 'not readable', critical = null, execute = null, progress = () => {} }) {
+async function run({ root, repo, sha, date, llm, external = [], budgetKb = 60, maxDocs, include = [], exclude = [], branchProtection = 'not readable', critical = null, execute = null, diff = null, progress = () => {} }) {
   const files = listFiles(root), fileSet = new Set(files);
   progress(`files: ${files.length}`);
   const docsIn = external.filter((e) => e.kindHint !== 'test' && e.text);
@@ -44,10 +46,16 @@ async function run({ root, repo, sha, date, llm, external = [], budgetKb = 60, m
   linkFromTestDocs(rules, testDocs, testIndex);
   const [asserts, built] = await Promise.all([judgeAsserts(llm, rules, testIndex), judgeBuilt(llm, rules, root, files)]);
   // execution evidence (opt-in, the repository's own workflow only): rule-targeted mutants against the linked tests
-  const probes = execute?.command ? probeRules(rules, { root, testIndex, command: execute.command, timeoutS: execute.timeoutS || 120, maxTotal: execute.maxMutants || 60, log: (m) => progress(`probe ${m}`) }) : new Map();
+  // with a diff, only the rules whose implementation the change edits are probed (Google surfaces mutants on changed
+  // lines only): seconds on a pull request instead of minutes
+  const probeSet = diff && execute?.scope !== 'all' ? rules.filter((r) => implChanged(r, diff, root)) : rules;
+  const probes = execute?.command ? probeRules(probeSet, { root, testIndex, command: execute.command, timeoutS: execute.timeoutS || 120, maxTotal: execute.maxMutants || 60, log: (m) => progress(`probe ${m}`) }) : new Map();
   evaluate(rules, { testIndex, ci, srcImports: testIndex.srcImports, asserts, built, root, probes });
   progress('sections 3-4 judged');
 
+  const impact = analyzeImpact(rules, diff, { root, testIndex });
+  const built_ = construct(rules, { root, testIndex, diff });
+  for (const f of impact.findings) f.text = impactText(f);
   const issues = buildIssues(rules, ci);
   const tests = await planTests(llm, issues);
   const actions = buildActions(issues, tests, rules);
@@ -89,8 +97,10 @@ async function run({ root, repo, sha, date, llm, external = [], budgetKb = 60, m
     },
     tests: { files: testIndex.tests.length, cases: testIndex.caseCount },
     ci: { workflowCount: ci.workflowCount, checks: ci.checks, workflows: ci.workflows.map((w) => ({ path: w.path, pr: w.pr, scheduled: w.scheduled })) },
-    branchProtection, rules, issues, testPlan: tests, actions, scores, cells: Object.fromEntries(ctx.cells), dropped: ctx.dropped,
+    branchProtection, rules, issues, impact, construct: built_, testPlan: tests, actions, scores, cells: Object.fromEntries(ctx.cells), dropped: ctx.dropped,
   };
+  // a suggested boundary table for every "Covers stated limits" finding, in the language of the rule's tests
+  for (const i of issues.filter((x) => x.check === 'Covers stated limits')) i.suggestion = boundarySnippet(i.rule, LANG(i.rule.links?.[0]?.path || i.rule.impl?.path || '') || 'js');
   checkInvariants(ledger);
   return { ledger, report: render(ledger), details: details(ledger) };
 }
@@ -125,6 +135,7 @@ function details(L) {
   return [`# Report details: ${L.meta.repo} @ \`${L.meta.sha}\``, '', 'Every rule and every issue, including the P2 and P3 rows the report leaves out. Generated with the report.', '',
     '## Rules', '', '| Rule | Kind | Source | Critical | Status | Decision | Test level | Linked tests |', '| --- | --- | --- | --- | --- | --- | --- | --- |', ...rules, '',
     '## Issues', '', '| Issue | Priority | Section | Rule or check | Fails on | In report |', '| --- | --- | --- | --- | --- | --- |', ...L.issues.map(row), '',
+    ...(L.impact?.findings?.length || L.impact?.affected?.length ? ['## Change impact', '', ...L.impact.findings.map((f) => `- ${f.priority} ${f.rule.id} ${f.check}: ${f.text}`), '', `Rules this change touches: ${L.impact.affected.map((a) => a.rule).join(', ') || 'none'}. Tests that guard them: ${L.impact.testsToRun.map((t) => `\`${t}\``).join(', ') || 'none'}.`, ''] : []),
     '## Dropped model output', '', ...(L.dropped.length ? L.dropped.map((d) => `- ${d.issue || d.id}: ${d.reason}`) : ['None.']), '',
     `## AI usage`, '', `${L.meta.usage.calls} calls, ${L.meta.usage.input_tokens} input and ${L.meta.usage.output_tokens} output tokens, US$${L.meta.usage.usd.toFixed(4)} (${L.meta.aiu.toFixed(2)} AIU).${L.meta.llmLog.length ? ` Failed calls: ${L.meta.llmLog.map((x) => `${x.key} (${x.error})`).join('; ')}.` : ''}`, ''].join('\n');
 }

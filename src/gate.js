@@ -32,6 +32,7 @@ const VERIFIED_TEST_CHECKS = new Set(['Calls the code', 'Covers stated limits', 
 
 function basisOf(i) {
   if (i.section === 5) return 'S';
+  if (i.section === 6) return i.basis || 'V';
   if (i.section <= 2) {
     const f = (i.rule.fails || []).find((x) => x.measure === i.measure && (x.part || '') === (i.part || ''));
     if (f?.code) return 'S';
@@ -47,6 +48,7 @@ function basisOf(i) {
 }
 
 function fingerprint(i) {
+  if (i.section === 6) return h('impact', i.check, norm(`${i.rule.title} ${i.rule.text}`), String(i.facts?.from ?? ''), String(i.facts?.to ?? ''), i.facts?.symbol || '');
   if (i.section === 5) return h('ci', i.checkKey || i.check, i.kind || '', norm(i.text).replace(/[\w./-]+:\d+/g, ''));
   const partner = i.conflictWith && i.partnerText ? norm(i.partnerText) : '';
   return h(String(i.section), i.measure || i.check, norm(`${i.rule.title} ${i.rule.text}`), norm(i.part), partner);
@@ -56,6 +58,7 @@ function fingerprint(i) {
 function filesOf(i) {
   if (i.section === 5) return ['.github/workflows/', 'package.json', ...(String(i.text || '').match(/[\w./-]+\.(ya?ml|json|toml|cfg|ini|[cm]?[jt]s)\b/g) || [])];
   const r = i.rule;
+  if (i.section === 6) return [...new Set([r.path, i.facts?.path].filter(Boolean))];
   return [r.path, r.impl?.path, ...(r.links || []).map((l) => l.path), ...((i.facts?.runs || r.evidence?.tests || []).flatMap((t) => [...(t.pr || []), ...(t.other || [])].map((x) => x.workflow)))].filter(Boolean);
 }
 const touches = (files, changed) => files.some((f) => changed.some((c) => c === f || (f.endsWith('/') && c.startsWith(f))));
@@ -91,7 +94,7 @@ function decide(ledger, { policy = {}, baseline = null, changed = null, suppress
   const base = baseline ? new Set(baseline.fingerprints || []) : null;
   const { valid, problems } = checkSuppressions(suppress, today || ledger.meta.date);
   const byId = new Map(ledger.rules.map((r) => [r.id, r]));
-  const findings = ledger.issues.map((i) => {
+  const findings = [...ledger.issues, ...(ledger.impact?.findings || [])].map((i) => {
     if (i.conflictWith) i.partnerText = (byId.get(i.conflictWith) || {}).text;
     const f = { ...i, basis: basisOf(i) };
     f.fingerprint = fingerprint(i);
@@ -132,6 +135,7 @@ function locationOf(f) {
     const m = String(f.text || '').match(/([\w./-]+\.ya?ml):(\d+)/);
     return m ? { path: m[1], line: Number(m[2]) } : { path: '.github/workflows', line: 1 };
   }
+  if (f.section === 6) return { path: f.facts.path, line: f.facts.line || 1 };
   const fact = (f.rule.evidence?.fails || []).find((x) => x.check === f.check)?.facts || {};
   if (fact.path && fact.line) return { path: fact.path, line: fact.line };
   if (f.check === 'Placement' && fact.seam) return { path: fact.seam.path, line: fact.seam.line };
@@ -167,6 +171,7 @@ function toSarif(gate, ledger, { cells = {}, version = '0.2.0' } = {}) {
 const MARKER = '<!-- ai-quality-gate -->';
 /** The pull-request comment: short, only what this change must answer for, and why everything else does not block. */
 function toComment(gate, ledger, { reportUrl = '', cells = {} } = {}) {
+  const construct = ledger.construct;
   const c = gate.counts, rows = gate.findings.filter((f) => f.blocking);
   const adv = gate.findings.filter((f) => !f.blocking && f.isNew && f.inScope && !f.suppressed && PRI(f.priority) <= 1).slice(0, 8);
   const row = (f) => `| ${f.priority} | ${label(f)} | ${what(f)} | ${BASIS_TEXT[f.basis]} | ${String(cells[f.n] || f.text || '').replace(/\|/g, '\\|').slice(0, 220)} | \`${f.fingerprint.slice(0, 10)}\` |`;
@@ -179,6 +184,11 @@ function toComment(gate, ledger, { reportUrl = '', cells = {} } = {}) {
     '',
     ...(rows.length ? ['| P | Rule or check | Fails on | Evidence | What fails, and the fix | Fingerprint |', '| :-: | --- | --- | --- | --- | --- |', ...rows.map(row), ''] : []),
     ...(adv.length ? ['<details><summary>New, not blocking (model judgment or outside the change)</summary>', '', '| P | Rule or check | Fails on | Evidence | Note | Fingerprint |', '| :-: | --- | --- | --- | --- | --- |', ...adv.map(row), '', '</details>', ''] : []),
+    ...(() => {
+      const sug = rows.concat(adv).filter((f) => f.suggestion).slice(0, 4);
+      return sug.length ? ['<details><summary>Suggested boundary tests (generated from the stated limits)</summary>', '', ...sug.flatMap((f) => [`${f.rule.id}:`, '', '```', f.suggestion, '```', '']), '</details>', ''] : [];
+    })(),
+    ...(construct?.tags?.length || construct?.pending ? [`Traceability: ${construct.tags.length} verified test link(s) can become rule-ID tags${construct.pending ? `, and ${construct.pending.rules.length} untested rule(s) get pending tests in \`${construct.pending.path}\`` : ''}. Apply \`construct.patch\` from the report artifact (\`git apply construct.patch\`); tagged links no longer need the model.`, ''] : []),
     ...(gate.problems.length ? [`> Suppression problems: ${gate.problems.join('; ')}`, ''] : []),
     `To accept a finding, add it to \`.quality-gate.yml\` under \`suppress:\` with \`fingerprint\`, \`reason\` and \`until\`.${reportUrl ? ` [Full report](${reportUrl})` : ''}`,
   ].join('\n');

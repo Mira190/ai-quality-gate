@@ -48,3 +48,12 @@ jobs:
             --replay --cassette tests/fixture/quote-service.cassette.json --out out
           node -e "const g=require('./out/gate.json'); if(!['pass','fail'].includes(g.verdict)||!g.findings.length) process.exit(1); console.log(g.verdict, g.counts)"
           test -s out/results.sarif && test -s out/comment.md
+      - name: Gate on a pull-request diff (impact, construct)
+        run: |
+          dir="$RUNNER_TEMP/quote-service"
+          sed -i 's/RETENTION_DAYS = 30/RETENTION_DAYS = 45/' "$dir/src/quote/repo.ts"
+          git -C "$dir" diff -U0 > "$RUNNER_TEMP/pr.diff"
+          node scripts/repo-report.js --repo "$dir" --name acme/quote-service --sha a1b2c3d --date 2026-10-22 \
+            --replay --cassette tests/fixture/quote-service.cassette.json --out out-pr --diff "$RUNNER_TEMP/pr.diff"
+          node -e "const g=require('./out-pr/gate.json'); if(!g.findings.some(f=>f.check==='Code drifts from spec')) process.exit(1)"
+          test -s out-pr/construct.patch && git -C "$dir" apply --check "$GITHUB_WORKSPACE/out-pr/construct.patch"

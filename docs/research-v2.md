@@ -125,3 +125,56 @@ Placement 的 seam 结论（fixture）：REQ-01/04/12、DEC-01/02/04 有纯函�
 | `src/config.js` | `.quality-gate.yml`：严格的结构校验，未知键报错 |
 | `action.yml` | composite action：改动文件、缓存（memo + baseline）、单条 PR 评论、SARIF、artifact、enforce 开关（先只报告、后阻断的灰度） |
 | `examples/` | 消费方 workflow 和配置示例 |
+
+---
+
+## 7. v0.3：投票成本，以及更往左的三步（2026-11-05）
+
+### 7.1 投票的 token 成本
+
+投票确实会加成本。v0.2 的实测：3 票让一次运行从约 2 AIU 涨到约 4 AIU，大约 2 倍；写报告文字的步骤只调一次，所以不到 3 倍。v0.3 加了四个手段把它压下来：
+
+| 手段 | 做法 | 效果（fixture 的调用结构；真实花费要等 live 运行验证） |
+| --- | --- | --- |
+| 自适应投票 | 先问 2 票。两票一致就结束（一致率 2/2）；不一致就把条目单独拿出来，不带邻居问满 n 票（沿用 v0.2.1 的翻票复判） | 需要投票的调用从 24 降到 16（−1/3），整次运行从约 31 次降到约 23 次。每个翻票条目多 3 次 |
+| Prompt caching | 每个阶段的 prompt 拆成两段：共享前缀（说明文字；judge 阶段还包括全部规则列表），加 `cache_control`；变化的条目放在后面。第一票先单独跑完写入缓存，其余票再并行，读缓存 | 缓存读按 0.1 倍计价。Haiku 5.5 的最小可缓存长度是 512 token，judge 阶段的规则列表通常超过它；trace、asserts 的前缀太短，不会被缓存（不报错，只是不生效） |
+| 按阶段设票数 | `model.votes: { default: 3, built: 1 }`。纯模型判断（M）本来就不能阻断，可以少投 | 按配置 |
+| Message Batches | `batch-api: 'true'`：只对默认分支的 baseline 运行生效，所有请求进 Message Batches，半价。PR 运行要低延迟，照常直接调用 | 那部分运行的花费减半，代价是要等几分钟到几小时 |
+
+判定缓存（v0.2）仍然是最大的一项：只改代码不改文档的 PR，第 1–2 节的判定全部命中缓存。
+
+### 7.2 diff 级的规则影响分析（`src/impact.js`，全部确定性）
+
+PR 的 diff 加上 ledger 里的规则 → 代码 → 测试映射，由代码直接判三件事：
+
+| 检查 | 条件 | 证据 |
+| --- | --- | --- |
+| Unguarded change | 改动落在某条规则的实现函数体里，而这条规则没有达标的测试守护（达标 = 有关联测试、断言了规则、在 PR 上运行） | V（实现位置由模型定，代码校验过）；关联测试全是标记时为 S |
+| Code drifts from spec | 实现文件或规则点名的文件里，某个改动行把规则写明的限值换成了别的数（30 → 45），而规则文档不在这次改动里 | 规则点名的文件为 S，否则 V |
+| Spec drifts from code | 改动把规则所在行的数字改了（45 → 60），实现函数体和它用到的常量里还是旧值、没有新值 | 同上 |
+
+另外输出 `affected.json` 和 action 的 `affected-tests`：这次改动碰到了哪些规则、守护它们的测试是哪些，可以先跑这些。
+
+开启执行证据时，mutant 只做在实现被改动的规则上，PR 上几十秒就能跑完，和 Google 只在评审时对改动行做 mutant 的思路一样。
+
+fixture 上的例子：一个 PR 把 `validateExcess` 里的 `>=` 改成 `>`，同时把 `RETENTION_DAYS` 从 30 改成 45。结果是两条 P1：REQ-02 Unguarded change（关联的单元测试不达标），REQ-04 Code drifts from spec（文档仍写 30 天）。
+
+### 7.3 让追溯链变成显式标记（`src/construct.js`）
+
+- **标记**：模型全票给出、并且代码校验过（import 可达）的链接，生成一个补丁，在测试用例上方插入一行 `// covers REQ-07`。合进去以后，这条链由代码按标记找到，以后不再需要模型。模型的工作量随每次采纳单调减少。三条限制：只对源文档里本来就写了 ID 的规则（按顺序编号的 ID 会随插入而移动）；"Calls the code" 失败的测试不生成标记（不把错的链接固定下来）；只用全票的链接。
+- **待实现测试**：没有测试的规则（有 diff 时只限这次改动新增的规则行），在仓库最常用的单元测试目录和语言下生成待实现测试：`it.todo`、pytest skip 或 Go `t.Skip`，测试名带规则 ID，并逐条写出边界值。合进去以后，"No test" 变成"Not skipped"，等实现规则的 PR 把它变绿。这就是由 gate 强制的测试先行。
+- **边界值表**：从规则的限值和文字里的上限、下限、区间用词，直接用代码生成"正好在边界上、刚越过边界"的用例。"from $500 to $5,000" 生成 499.99 拒绝、500 接受、5000 接受、5000.01 拒绝；文字没说哪边允许时，期望结果留空，不替文档拿主意。PR 评论里附上对应语言的 `it.each` 或 pytest `parametrize` 片段。
+
+输出：`construct.patch`（可以直接 `git apply`）和 `construct.json`。
+
+### 7.4 前移到写代码的时候（`agent/`）
+
+- `agent/mcp-server.js`：手写的 MCP stdio 服务（JSON-RPC 2.0，协议版本 2025-06-18），提供三个工具：`rules_for_file`、`rule`、`impact`。
+- `agent/after-edit-hook.js`：Claude Code 的 PostToolUse hook。agent 每编辑一个文件，就把这个文件承载的规则、限值、守护测试、未解决的问题作为 `additionalContext` 告诉它；没有测试的规则会写 "NO TEST: add one that names the rule ID"。hook 永远不会阻断编辑。
+- 两者都读 gate 产出的 `ledger.json`。配置方法见 `agent/README.md`。
+
+### 7.5 还没验证的
+
+- 自适应投票和 prompt caching 的实际省钱幅度：要看 live 运行的 `usage.cache_read_input_tokens` 和 `gate.json` 里的 `votes`。
+- Batch API 的端到端运行：只用桩测试过请求分组、按 `custom_id` 对应结果、半价计费。
+- 在真实仓库上，标记的采纳率，以及待实现测试会不会被团队接受：这是这个方向成败的关键，要看团队愿不愿意在测试里加规则 ID。

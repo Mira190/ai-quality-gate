@@ -147,7 +147,7 @@ async function judgeRules(llm, rules, { root, fileSet }) {
   })) });
   const build = (rs) => ({
     system: STYLE,
-    prompt: `${MEASURE_TEXT}
+    prefix: `${MEASURE_TEXT}
 
 For each rule below return:
 - fails: the measures it fails (empty when it passes all), with a one-line why.
@@ -159,10 +159,8 @@ For each rule below return:
 - boundary: for a design decision about a call to another system, "outside_call"; about stored data, "stored_data"; else "none".
 
 All rules in the repository, for consistency checks:
-${all}
-
-Rules to judge:
-${listing(rs)}`,
+${all}`,
+    prompt: `Rules to judge:\n${listing(rs)}`,
     schema,
     maxTokens: 16000,
   });
