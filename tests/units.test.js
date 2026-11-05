@@ -263,6 +263,22 @@ test('Placement: code decides the lowest level a rule belongs at (shift left)', 
   assert.equal(belongsAt(r({ impl: { path: 'src/session.ts', line: 1, symbol: 'isExpired' } }), root).by, '`isExpired` does no I/O');
   assert.equal(belongsAt(r({ logicKind: 'io', impl: { path: 'src/pay.ts', line: 2, symbol: 'Pay.charge' } }), root).level, 'component');
   assert.equal(belongsAt(r({ logicKind: 'ui' }), root), null);
+  // "retried by the nightly job" next to a 5 s timeout is not counting to a limit
+  assert.equal(belongsAt(r({ logicKind: 'io', text: 'Calls time out after 5 seconds; a failed refund is retried by the nightly job.', limits: [{ value: 5, unit: 's' }] }), root).level, 'component');
+  assert.equal(belongsAt(r({ logicKind: 'io', text: 'A failed refund is retried up to 3 times.', limits: [{ value: 3, unit: '' }] }), root).level, 'unit');
+});
+
+test('Covers stated limits: values just either side of an edge cover it (4999 and 5001 ms for a 5 s timeout)', () => {
+  const { evaluate } = require('../src/evidence');
+  const mk = (nums) => {
+    const t = { path: 'tests/gw.test.js', level: 'component', text: `it('x', () => { wait(${nums.join('); wait(')}); });`, cases: [{ name: 'x', line: 1, end: 1, body: '', skipped: false }], imports: [], mocks: [] };
+    const r = { id: 'DEC-01', kind: 'decision', title: 'Timeout', text: 'time out after 5 seconds', limits: [{ value: 5, unit: 's' }], terms: [], links: [{ path: t.path }], impl: null, status: 'Ready' };
+    evaluate([r], { testIndex: { tests: [t] }, ci: { runs: new Map([[t.path, { pr: [{}], other: [] }]]) }, srcImports: new Map(), asserts: new Map(), built: new Map(), root: null });
+    return r.evidence.fails.map((f) => f.check);
+  };
+  assert.ok(!mk([4999, 5001]).includes('Covers stated limits'));
+  assert.ok(!mk([5000, 5001]).includes('Covers stated limits'));
+  assert.ok(mk([1000, 9000]).includes('Covers stated limits'));
 });
 
 test('discover: rst headings, genre titles, pip lists, and "must" alone goes to the model', () => {

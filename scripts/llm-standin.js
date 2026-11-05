@@ -8,8 +8,8 @@
 //   (the stand-in writes <work>/answers/<id>.json for each <work>/requests/<id>.json)
 //   node scripts/llm-standin.js merge --dir <work>                       answers → cassettes
 //   ...repeat until collect finds nothing new, then score:
-//   node scripts/eval-golden.js --track seeded --mode fill --cassettes bench/golden/seeded/cassettes-standin
-// Identical requests from different cases are asked once. One vote per call (a stand-in is not sampled). Report text
+//   node scripts/eval-golden.js --track seeded --mode fill --votes <n> --cassettes bench/golden/seeded/cassettes-standin
+// Identical requests from different cases are asked once (per vote). Report text
 // (write:*, plan-tests) is not asked: it does not change which issues are found, and the scorer counts issues only.
 const fs = require('node:fs');
 const os = require('node:os');
@@ -24,10 +24,13 @@ const argv = process.argv.slice(2), cmd = argv[0];
 const opt = (k, d = null) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : d; };
 const only = new Set(argv.flatMap((a, i) => (a === '--case' ? [argv[i + 1]] : [])));
 const work = path.resolve(opt('dir') || 'out/standin');
+// --votes 3: each call asked 3 times as separate requests (<hash>-v0, -v1, -v2), so 3 stand-ins can answer one vote
+// each and the pipeline's majority rule works as with the API
+const votes = Number(opt('votes', 1));
 const tapes = path.resolve(opt('cassettes') || path.join(__dirname, '../bench/golden/seeded/cassettes-standin'));
 const ASKED = /^(judge|trace|asserts|built|classify-docs|atomize)\b/;
 // a later stage's prompt is built from the earlier stages' answers, so only the earliest unanswered stage is asked
-const STAGE = (k) => (/^(classify-docs|atomize)/.test(k) ? 0 : /^judge/.test(k) ? 1 : /^trace/.test(k) ? 2 : 3);
+const STAGE = (key) => { const k = key.replace(/#v\d+$/, ''); return /^(classify-docs|atomize)/.test(k) ? 0 : /^judge/.test(k) ? 1 : /^trace/.test(k) ? 2 : 3; };
 const hash = (r) => crypto.createHash('sha1').update(JSON.stringify([r.system, r.prompt, r.schema])).digest('hex').slice(0, 12);
 const readJson = (p, d) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return d; } };
 
@@ -44,13 +47,13 @@ async function collect() {
     if (c.fixture) buildFixture(dir);
     else for (const [p, text] of Object.entries(filesOf(c))) { fs.mkdirSync(path.dirname(path.join(dir, p)), { recursive: true }); fs.writeFileSync(path.join(dir, p), text); }
     const cassette = path.join(tapes, `${c.id}.json`);
-    const llm = new LLM({ mode: 'fill', cassette, votes: 1 });
+    const llm = new LLM({ mode: 'fill', cassette, votes, fillVotes: votes > 1 });
     try { await run({ root: dir, repo: c.fixture ? 'acme/quote-service' : `golden/${c.id}`, sha: c.fixture ? 'a1b2c3d' : 'seeded', date: c.fixture ? '2026-10-22' : '2026-11-04', llm }); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
     const pending = Object.entries(llm.pending || {}).filter(([k]) => ASKED.test(k));
     const first = Math.min(...pending.map(([k]) => STAGE(k)));
     for (const [key, req] of pending) {
       if (STAGE(key) !== first) continue;
-      const h = hash(req);
+      const h = `${hash(req)}${votes > 1 ? `-v${(/#v(\d+)$/.exec(key) || [0, 0])[1]}` : ''}`;
       const e = (index[h] ||= { uses: [] });
       if (!e.uses.some((u) => u.case === c.id && u.key === key)) e.uses.push({ case: c.id, key });
       const f = path.join(work, 'requests', `${h}.json`);

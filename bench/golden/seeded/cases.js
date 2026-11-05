@@ -163,7 +163,7 @@ const CASES = [
     apply: (f) => {
       f['go.mod'] = 'module example.com/refund\n\ngo 1.23\n';
       for (const n of ['main', 'refund', 'fee', 'window', 'gateway', 'orders', 'admin', 'store', 'http', 'config']) f[`cmd/${n}.go`] = `package main\n\nfunc ${n}() {}\n`;
-      for (const p of Object.keys(f)) if (/^(src|tests|e2e)\//.test(p) || /\.config\.js$|jsconfig/.test(p)) delete f[p];
+      for (const p of Object.keys(f)) if (/^(src|tests|e2e|docs)\//.test(p) || /\.config\.js$|jsconfig/.test(p)) delete f[p]; // no rules: section 5 only
       f['refund_test.go'] = 'package main\n\nimport "testing"\n\nfunc TestFee(t *testing.T) {}\n';
       f['.github/workflows/pr.yml'] = "name: PR\non: [pull_request]\njobs:\n  go:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: gitleaks/gitleaks-action@v2\n      - run: go test -race -coverprofile=cover.out ./...\n      - uses: golangci/golangci-lint-action@v6\n      - run: test -z \"$(gofmt -l .)\"\n      - run: govulncheck ./...\n";
       delete f['package.json'];

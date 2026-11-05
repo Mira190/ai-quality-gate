@@ -19,6 +19,7 @@ const LEVELS = ['unit', 'component', 'integration', 'e2e'];
 // the rest. Pure logic belongs in a unit test; an access check or an outside call in a component test (a route with
 // its middleware, the real adapter against a fake server), so only an e2e-only rule of those kinds is flagged.
 const MONEY_OR_DATE = /^(%|\$|€|£|¥|usd|eur|gbp|aud|cents?|percent|days?|weeks?|months?|years?|hours?)$/i;
+const DURATION = /^(ms|milliseconds?|s|secs?|seconds?|mins?|minutes?)$/i;
 const COUNTING = /\b(retr(y|ies|ied)|attempts?|times|at most|up to|maximum|max|limits?|no more than)\b/i;
 const IO = /\bawait\b|\bfetch\(|\baxios\b|\bhttps?\.|\.query\(|\.execute\(|\bfs\.|readFile|writeFile|\.save\(|\.send\(|\brequests\.|\bopen\(|subprocess|\bsocket\b|\bdb\.|\bthis\.(db|client|http|repo)\b|\bctx\.|\breq\.|\bres\./;
 
@@ -44,7 +45,12 @@ function implBody(root, impl) {
 function belongsAt(r, root) {
   if (PURE.has(r.logicKind)) return { level: 'unit', by: `${r.logicKind} rule` };
   if (r.limits.some((l) => MONEY_OR_DATE.test(l.unit || ''))) return { level: 'unit', by: 'its limits are amounts or dates' };
-  if (r.limits.length && COUNTING.test(`${r.title} ${r.text}`)) return { level: 'unit', by: 'it counts to a stated limit' };
+  // a count: a limit with a count unit (not a duration or an amount) that a counting word stands next to ("up to 3
+  // retries", "at most 50 orders"); "retried by the nightly job" next to a 5 s timeout is not counting to a limit
+  const text = `${r.title} ${r.text}`;
+  const near = (l) => (new RegExp(`\\b${l.value}\\b`).test(text) ? new RegExp(`${COUNTING.source}[^.;]{0,30}\\b${l.value}\\b|\\b${l.value}\\b[^.;]{0,30}${COUNTING.source}`, 'i').test(text) : COUNTING.test(text)); // a value from a named file: the counting word is enough
+  const counted = r.limits.filter((l) => !DURATION.test(l.unit || '') && !MONEY_OR_DATE.test(l.unit || '') && near(l));
+  if (counted.length) return { level: 'unit', by: 'it counts to a stated limit' };
   const body = r.impl && root ? implBody(root, r.impl) : null;
   if (body && !IO.test(body) && /\b(function|def|func|=>)\b|=>/.test(body) && !/\b(class|router|app)\b/.test(body.split('\n')[0])) return { level: 'unit', by: `\`${r.impl.symbol}\` does no I/O` };
   if (r.logicKind === 'access' || r.logicKind === 'io') return { level: 'component', by: `${r.logicKind === 'io' ? 'outside call' : 'access check'}` };
@@ -164,7 +170,9 @@ function evaluate(rules, { testIndex, ci, srcImports, asserts, built, root }) {
     // Covers stated limits (boundary values, ISO/IEC/IEEE 29119-4)
     if (r.limits.length) {
       const nums = new Set(tests.flatMap((t) => [...numbersIn(t.text)]));
-      const missing = r.limits.filter((l) => !variants(l).some((x) => nums.has(x.on) && x.past.some((p) => nums.has(p))));
+      // covered: the edge and a value past it, or values just either side of it (4999 and 5001 ms for a 5 s timeout,
+      // where a test at exactly the edge would be flaky)
+      const missing = r.limits.filter((l) => !variants(l).some((x) => (nums.has(x.on) && x.past.some((p) => nums.has(p))) || (nums.has(x.past[0]) && nums.has(x.past[1])) || (nums.has(x.past[2]) && nums.has(x.past[3]))));
       if (missing.length) {
         const inputs = tests.map((t) => ({ path: t.path, cases: t.cases.length, level: t.level, numbers: relevantCases(t, r).flatMap((c) => linesOf(c.body).map((l, i) => ({ line: c.line + i, l })).filter((x) => /\d/.test(x.l) && !/^\s*(it|test)\b/.test(x.l))).slice(0, 6).map((x) => ({ line: x.line, text: x.l.trim().slice(0, 120) })) }));
         fails.push({ check: 'Covers stated limits', facts: { missing, limits: r.limits, tests: inputs } });
