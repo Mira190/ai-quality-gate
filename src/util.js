@@ -36,8 +36,8 @@ function globToRegExp(glob) {
   while (i < g.length) {
     const c = g[i];
     if ('?@+*!'.includes(c) && g[i + 1] === '(') { // extglob: ?(a|b) @(a|b) +(a|b) *(a|b)
-      const j = g.indexOf(')', i), alt = g.slice(i + 2, j).split('|').map((s) => s.replace(/[.+^$|\\]/g, '\\$&')).join('|');
-      re += `(?:${alt})${{ '?': '?', '@': '', '+': '+', '*': '*', '!': '' }[c]}`; i = j + 1; continue;
+      const j = g.indexOf(')', i), alt = g.slice(i + 2, j).split('|').map((s) => s.replace(/[.+^$|\\]/g, '\\$&').replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]')).join('|');
+      re += c === '!' ? `(?!(?:${alt})(?:/|$))[^/]*` : `(?:${alt})${{ '?': '?', '@': '', '+': '+', '*': '*' }[c]}`; i = j + 1; continue;
     }
     if (c === '*' && g[i + 1] === '*') { i += 2; if (g[i] === '/') { i++; re += '(?:.*/)?'; } else re += '.*'; continue; }
     if (c === '*') re += '[^/]*';

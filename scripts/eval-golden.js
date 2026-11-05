@@ -22,7 +22,7 @@ const { execFileSync } = require('node:child_process');
 const argv = process.argv.slice(2);
 const opt = (k, d = null) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : d; };
 const opts = (k) => argv.flatMap((a, i) => (a === `--${k}` ? [argv[i + 1]] : []));
-const track = opt('track', 'all'), mode = opt('mode', 'offline'), only = new Set(opts('case'));
+const split = opt('split'), track = opt('track', 'all'), mode = opt('mode', 'offline'), only = new Set(opts('case'));
 const cache = opt('dir') || path.join(os.tmpdir(), 'aqg-golden');
 const ROOT = path.join(__dirname, '..');
 
@@ -88,7 +88,7 @@ function seededReport(results) {
   lines.push(`**Seeded defects found: ${tp} of ${tp + fn} (recall ${pct(tp, tp + fn)})** · **Issues reported that were seeded: ${tp} of ${tp + fp} (precision ${pct(tp, tp + fp)})** · Cases that should be clean but got a false alarm: ${cleanFp} of ${cleanCases.length}${ne ? ` · Not evaluable without the model: ${ne} expected issues` : ''}`, '');
   // "hard" cases were written from real-world CI setups without looking at the tool's word lists; the rest were
   // written knowing them, so their score is an upper bound
-  const groups = [['written knowing the tool', ok.filter((r) => r.c.group !== 'hard')], ['hard: written from real-world setups', ok.filter((r) => r.c.group === 'hard')]];
+  const groups = [['written knowing the tool', ok.filter((r) => !r.c.group)], ['hard: written from real-world setups', ok.filter((r) => r.c.group === 'hard')], ['regression: patterns the real repositories caught', ok.filter((r) => r.c.group === 'regression')]];
   lines.push('| Group | Cases | Recall | Precision | False alarms | Clean cases with a false alarm |', '| --- | :-: | :-: | :-: | :-: | :-: |');
   for (const [name, rs] of groups) {
     if (!rs.length) continue;
@@ -141,7 +141,7 @@ function realCi() {
   const { analyzeCI } = require('../src/ci');
   const labels = JSON.parse(fs.readFileSync(path.join(ROOT, 'bench/golden/real-ci/labels.json'), 'utf8'));
   const rows = [];
-  for (const l of labels.filter((x) => !only.size || only.has(x.repo))) {
+  for (const l of labels.filter((x) => (!only.size || only.has(x.repo)) && (!split || x.split === split))) {
     let ci;
     try {
       const root = fetchAt(l.repo, l.sha), files = listFiles(root);
@@ -160,7 +160,7 @@ function realCi() {
 
 function realCiReport(rows) {
   const ok = rows.filter((r) => !r.error);
-  const lines = [`## Real-repository CI track (${ok.length} repositories, labelled by hand at pinned commits)`, ''];
+  const lines = [`## Real-repository CI track${split ? `, ${split} split` : ''} (${ok.length} repositories, labelled by hand at pinned commits)`, ''];
   // positive = the check is missing (an issue). label false → truly missing.
   const per = Object.fromEntries(CHECK_KEYS.map((k) => [k, { tp: 0, fp: 0, fn: 0, tn: 0, na: 0, naFlagged: 0, errs: [] }]));
   for (const r of ok) for (const k of CHECK_KEYS) {

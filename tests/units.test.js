@@ -30,6 +30,9 @@ test('globMatch handles **, extglob and classes', () => {
   assert.ok(!globMatch('**/*.?(c|m)[jt]s?(x)', 'a/b.py'));
   assert.ok(globMatch('src/pricing/**', 'src/pricing/rates/x.ts'));
   assert.ok(!globMatch('src/pricing/**', 'src/payment/x.ts'));
+  // jest's default testMatch: a wildcard inside an extglob (this threw "Nothing to repeat")
+  assert.ok(globMatch('**/?(*.)+(spec|test).[jt]s?(x)', 'src/a.test.ts'));
+  assert.ok(!globMatch('**/?(*.)+(spec|test).[jt]s?(x)', 'src/a.ts'));
 });
 
 test('wrap keeps lines within the width', () => {

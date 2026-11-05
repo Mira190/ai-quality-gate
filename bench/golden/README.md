@@ -8,29 +8,37 @@ check that cannot be trusted shows up on its own line instead of hiding inside a
 | Track | What it is | Ground truth | Covers | Needs the model |
 | --- | --- | --- | --- | --- |
 | **seeded** | `seeded/`: a clean repository (`refund-service`) plus one case per seeded defect, and negative cases that must stay clean | By construction: each case changes one thing and lists the issue it must produce | Sections 1–5: document measures, test evidence (no test, skipped, simulator, weak assertion, limits, mocked boundary, nightly only, placement, suspected not built), CI gate, critical tags | Sections 1–4 yes (`--mode live`); section 5, Specific, Traceable and critical tags no |
-| **real-ci** | `real-ci/labels.json`: 17 open-source repositories (JS/TS, Python, Go) at pinned commits | Each CI check labelled by hand from the workflow files, with the `path:line` evidence, independently of the tool's code | Section 5 on real-world CI | No |
+| **real-ci** | `real-ci/labels.json`: 31 open-source repositories (JS/TS, Python, Go) at pinned commits: a `tuned` split (17, used while fixing the code) and a `held-out` split (14, labelled separately and run once with the code frozen) | Each CI check labelled by hand from the workflow files, with the `path:line` evidence, independently of the tool's code | Section 5 on real-world CI | No |
 | fixture (existing) | `tests/fixture/quote-service`: the mock report's repository | The mock report | Whole report, cassette replay | Replay only |
 | discovery (existing) | `bench/discovery`: 16 repositories, 2,197 labelled documents | Hand / independent reviewer labels | Stage 2, finding requirement and design documents | Optional |
 
-## First results (2026-11-04, code only, see RESULTS.md)
+## Results so far (section 5, code only; full tables in RESULTS.md)
 
-- **Real gaps are found:** on 17 real repositories, every check the hand labels call missing was reported (recall
-  100%, 49 of 49). Missing secret scans (16 of 17 repositories) and dependency scans are reported with 93–94% precision.
-- **Too many false "missing" claims:** only 49 of 99 "missing" issues are real (precision 49%). The worst is the
-  **P0 "No PR job runs the unit or component tests", which is wrong on 14 of 16 repositories that do run them**,
-  this repository included (`node --test`). Its cause is that the parser only knows vitest, jest, playwright, pytest
-  and `go test` called directly; mocha, `node --test`, `make` targets, tox/nox, reusable workflows and pre-commit are
-  not followed. Format, lint and type check have 20–35% precision for the same reason.
-- **The seeded hard group agrees:** 0 of 5 hard defects found and 21 false alarms, 5 of them P0, while the cases written
-  against the tool's vocabulary score 100%. The checks are correct on what they recognise; the recognised set is too
-  narrow for real repositories.
-- Sections 1–4 (the model's part, which is most of the report's value) are not scored yet: this environment has no
-  API key. 24 expected issues are waiting; `--mode record` scores them.
+| Version | Tuned split, 17 repositories: agreement / precision / recall | Held-out split, 14 repositories: agreement / precision / recall | Seeded hard cases |
+| --- | --- | --- | --- |
+| v1 (before) | 57% / 49% / 100% | 61% / 52% / 100%, with 2 repositories crashing | 0 of 5 found, 21 false alarms (5 P0) |
+| v2, frozen before the held-out run | 93% / 86% / 100% | **84% / 75% / 94%** | 5 of 5, 0 false alarms |
+| v2, after fixing the held-out failures | 93% / 86% / 100% | 95% / 89% / 100% | 5 of 5, 0 false alarms |
 
+- **The honest estimate is the frozen held-out row (84% / 75% / 94%).** The last row was fixed by looking at those
+  failures, so it is optimistic. To get the next honest number, label a new held-out batch before changing the code again.
+- v1's worst issue was the P0 "No PR job runs the unit or component tests", which was wrong on 14 of 16 repositories,
+  this one included. v2 follows package.json scripts, Makefile targets, repository shell scripts, tox (ini and
+  pyproject, envlist), nox, pre-commit hooks (including local `entry:` hooks), local reusable workflows and composite
+  actions, workspace fan-out (`pnpm -r`, turbo, lerna) and `working-directory`. It knows mocha, `node --test`, ava, borp,
+  unittest and `$(GO) test`. It treats `|| true`, `if: false` and a `pull_request` limited to other branches as unable to gate.
+- v2 also fixed a crash in v1's glob matcher: jest's default `?(*.)+(spec|test)` pattern threw an error.
+- Remaining errors are known gaps: reusable workflows from another repository (fastify, bubbletea), task runners it
+  does not read (mise in date-fns, Vite+ `vp` in hono, `go run scripts/build.go` in urfave/cli), and type checks done
+  only inside sub-package test fixtures (axios).
+- Sections 1–4 (the model's part) are still not scored: this environment has no API key. 24 expected issues are
+  waiting for `--mode record`.
 
+## Run it
 
 ```bash
 node scripts/eval-golden.js                                   # both tracks, code only (no key needed)
+node scripts/eval-golden.js --track real-ci --split held-out  # one split of the real repositories
 node scripts/eval-golden.js --track seeded --mode record      # sections 1-4 with the model; saves cassettes
 node scripts/eval-golden.js --track seeded --mode replay      # re-score from the cassettes, free
 node scripts/eval-golden.js --out bench/golden/RESULTS.md     # write the scorecard
@@ -41,7 +49,7 @@ node scripts/eval-golden.js --out bench/golden/RESULTS.md     # write the scorec
 Run it 3 times (`--mode live`) to see how stable the model-judged checks are.
 
 `npm test` runs the seeded cases offline and fails if a code-decided check misses a seeded defect or raises a false
-alarm (except the "hard" group, which records known gaps).
+alarm.
 
 ## How to read the seeded track
 
@@ -50,10 +58,11 @@ alarm (except the "hard" group, which records known gaps).
   count neither way.
 - Anything else reported is a **false alarm**. The clean base and the `neg-*` cases expect nothing, so every issue
   on them is a false alarm.
-- Two groups. The first was written knowing which tools and phrases the code recognises, so its score is an **upper
-  bound**: it proves the checks work on their own vocabulary and guards against regressions. The **hard** group was
-  written from how real repositories set up CI (pre-commit, a Makefile, a reusable workflow, `xo`, `c8`,
-  `node --test`, `|| true`, `if: false`), without tailoring. That group and the real-ci track are the honest estimate.
+- Three groups. The first was written knowing which tools and phrases the code recognises, so its score is an **upper
+  bound**: it proves the checks work on their own vocabulary. The **hard** group was written from how real repositories
+  set up CI (pre-commit, a Makefile, a reusable workflow, `xo`, `c8`, `node --test`, `|| true`, `if: false`) before the
+  parser handled them. The **regression** group repeats, in miniature, each pattern a real repository broke. `npm test`
+  asserts all three, so a fixed gap stays fixed. The real-ci held-out split is the honest estimate.
 
 ## Adding cases
 
@@ -69,6 +78,8 @@ by `pull_request`, `pull_request_target` or `merge_group` count.
 
 - Seeded repositories are small and clean. They measure whether each check can see its defect, not how a report
   reads on a 400-file repository; the real-ci and discovery tracks and the fixture cover scale.
+- Keep the held-out split honest: when you fix code using its failures, label a fresh batch (other repositories, by
+  someone who has not read `src/ci.js`) as the next held-out split, and report its first frozen run.
 - The real-ci labels are one careful reading per repository. Rows marked medium or low confidence in `labels.json`
   are the ones to recheck first when a disagreement looks surprising.
 - Sections 1–4 on real repositories have no golden labels yet. The next track to build: repositories whose tests carry

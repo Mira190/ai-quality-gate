@@ -1,7 +1,7 @@
 'use strict';
 // The seeded golden set, offline (no model): every case builds, and every check code decides finds exactly what was
-// seeded in the cases written against its vocabulary. The "hard" cases (real-world CI setups) are known gaps,
-// reported by scripts/eval-golden.js, not asserted here; when a fix closes one, move it out of the hard group.
+// seeded, in all groups: the cases written against the tool's vocabulary, the "hard" real-world CI setups, and the
+// regressions the real-repository tracks caught. A case that is a known, accepted gap goes in group 'gap' (skipped).
 const test = require('node:test');
 const assert = require('node:assert');
 const { CASES, filesOf } = require('../bench/golden/seeded/cases');
@@ -14,7 +14,7 @@ test('every seeded case applies to the base', () => {
 
 test('offline: code-decided checks find every seeded defect and nothing else', async () => {
   const results = await seeded({ mode: 'offline' });
-  for (const r of results.filter((x) => x.c.group !== 'hard')) {
+  for (const r of results.filter((x) => x.c.group !== 'gap')) {
     assert.ok(!r.error, `${r.c.id}: ${r.error}`);
     assert.deepStrictEqual(r.missed, [], `${r.c.id}: missed`);
     assert.deepStrictEqual(r.falseAlarms, [], `${r.c.id}: false alarms`);

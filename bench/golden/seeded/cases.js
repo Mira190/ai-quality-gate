@@ -122,6 +122,53 @@ const CASES = [
       f['.github/workflows/release-scan.yml'] = "name: Release scan\non:\n  pull_request:\n    branches: [release]\njobs:\n  scan:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: gitleaks/gitleaks-action@v2\n";
     } },
 
+  // ---- section 5, regression: patterns the real-repository tracks caught (each case is one repository's pattern) ---
+  { id: 'reg-neg-tox-envlist', needs: 'code', group: 'regression', what: 'tests run through `tox run` (no -e): tox runs its envlist, whose pytest has --cov (pluggy, black)', expect: [],
+    apply: (f) => {
+      f['tests/test_refund.py'] = 'from refund import refund_amount\n\n\ndef test_fee():\n    assert refund_amount(100) == 85\n';
+      f['tox.ini'] = '[tox]\nenvlist = py{311,312}\n\n[testenv]\ncommands =\n    pytest tests \\\n        --cov\n\n[testenv:docs]\n# the standard sphinx command, not a linter\ncommands = sphinx-build docs build\n';
+      edit(f, '.github/workflows/pr.yml', '      - run: npm test\n', '      - run: npm test\n      - run: python -m pip install --group dev tox\n      - run: tox run\n');
+    } },
+  { id: 'reg-pip-install-tox', needs: 'code', group: 'regression', what: '`pip install tox` installs tox but runs nothing; the lint tox env must not count', expect: [S5('Lint', 'lint-missing')],
+    apply: (f) => {
+      f['tox.ini'] = '[tox]\nenvlist = py312\n\n[testenv:lint]\ncommands = ruff check .\n';
+      edit(f, '.github/workflows/pr.yml', '      - run: npm run lint\n', '      - run: python -m pip install --group lint tox\n');
+    } },
+  { id: 'reg-comment-word-standard', needs: 'code', group: 'regression', what: 'the word "standard" in a script comment is not the `standard` linter', expect: [S5('Lint', 'lint-missing')],
+    apply: (f) => {
+      f['scripts/docs.sh'] = '#!/bin/sh\n# build with the standard sphinx command\necho build the standard docs\n';
+      edit(f, '.github/workflows/pr.yml', '      - run: npm run lint\n', '      - run: bash scripts/docs.sh\n');
+    } },
+  { id: 'reg-neg-runner-binary-path', needs: 'code', group: 'regression', what: 'jest called by its binary path (`node ./node_modules/jest/bin/jest.js`) still runs every test (react-router)', expect: [],
+    allow: [S5('Coverage', 'coverage-missing')],
+    apply: (f) => edit(f, 'package.json', '"vitest run --coverage"', '"node --experimental-vm-modules ./node_modules/vitest/vitest.mjs run --coverage"') },
+  { id: 'reg-neg-workspace-fanout', needs: 'code', group: 'regression', what: '`pnpm -r run lint` runs each workspace package\'s lint script (typeorm)', expect: [],
+    apply: (f) => {
+      f['packages/core/package.json'] = JSON.stringify({ name: 'core', scripts: { lint: 'eslint src' } }, null, 2) + '\n';
+      edit(f, 'package.json', '"eslint ."', '"pnpm -r run lint"');
+    } },
+  { id: 'reg-neg-working-directory', needs: 'code', group: 'regression', what: 'the type check runs in a sub-package via `working-directory` (axios)', expect: [],
+    apply: (f) => {
+      f['types/package.json'] = JSON.stringify({ name: 'types-test', scripts: { check: 'tsc --noEmit' } }, null, 2) + '\n';
+      edit(f, '.github/workflows/pr.yml', '      - run: npm run typecheck\n', '      - run: npm run check\n        working-directory: types\n');
+    } },
+  { id: 'reg-neg-extglob-negation', needs: 'code', group: 'regression', what: 'node --test given `tests/!(fixtures)/**/*.test.js` runs the unit tests (execa)', expect: [],
+    apply: (f) => edit(f, 'package.json', '"vitest run --coverage"', '"c8 --per-file --check-coverage node --test \\"tests/!(fixtures)/**/*.test.js\\""') },
+  { id: 'reg-neg-v8-coverage', needs: 'code', group: 'regression', what: 'coverage collected with NODE_V8_COVERAGE on the test step and reported with `c8 report` (undici)', expect: [],
+    apply: (f) => {
+      edit(f, 'package.json', '"vitest run --coverage"', '"node --test tests/"');
+      edit(f, '.github/workflows/pr.yml', '      - run: npm test\n', '      - run: npm test\n        env:\n          NODE_V8_COVERAGE: ./coverage/tmp\n      - run: npx c8 report --check-coverage --per-file\n');
+    } },
+  { id: 'reg-neg-compiled-typecheck', needs: 'code', group: 'regression', what: 'a Go service: the compiler checks types, so no separate type check is missing (cobra, gin)', expect: [],
+    apply: (f) => {
+      f['go.mod'] = 'module example.com/refund\n\ngo 1.23\n';
+      for (const n of ['main', 'refund', 'fee', 'window', 'gateway', 'orders', 'admin', 'store', 'http', 'config']) f[`cmd/${n}.go`] = `package main\n\nfunc ${n}() {}\n`;
+      for (const p of Object.keys(f)) if (/^(src|tests|e2e)\//.test(p) || /\.config\.js$|jsconfig/.test(p)) delete f[p];
+      f['refund_test.go'] = 'package main\n\nimport "testing"\n\nfunc TestFee(t *testing.T) {}\n';
+      f['.github/workflows/pr.yml'] = "name: PR\non: [pull_request]\njobs:\n  go:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: gitleaks/gitleaks-action@v2\n      - run: go test -race -coverprofile=cover.out ./...\n      - uses: golangci/golangci-lint-action@v6\n      - run: test -z \"$(gofmt -l .)\"\n      - run: govulncheck ./...\n";
+      delete f['package.json'];
+    } },
+
   // ---- sections 3 and 4: test evidence (need the model's links) ---------------------------------------------------
   { id: 'test-no-test', needs: 'model', what: 'the refund fee (REQ-02) has no test', expect: ['S3 REQ-02 No test'],
     apply: (f) => { const t = f['tests/unit/refund.test.js']; f['tests/unit/refund.test.js'] = t.slice(0, t.indexOf("describe('refund fee'")).replace(', refundAmount', '').trimEnd() + '\n'; } },

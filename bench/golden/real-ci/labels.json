@@ -31,7 +31,8 @@
    "typecheck": "medium",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "expressjs/express",
@@ -65,7 +66,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "sindresorhus/got",
@@ -99,7 +101,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "colinhacks/zod",
@@ -133,7 +136,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "date-fns/date-fns",
@@ -167,7 +171,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "pinojs/pino",
@@ -201,7 +206,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "fastify/fastify",
@@ -235,7 +241,8 @@
    "typecheck": "medium",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "honojs/hono",
@@ -269,7 +276,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "vitest-dev/vitest",
@@ -303,7 +311,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "psf/requests",
@@ -337,7 +346,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "pallets/flask",
@@ -371,7 +381,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "encode/httpx",
@@ -405,7 +416,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "fastapi/typer",
@@ -439,7 +451,8 @@
    "typecheck": "medium",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "spf13/cobra",
@@ -473,7 +486,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "gin-gonic/gin",
@@ -507,7 +521,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "gitleaks/gitleaks",
@@ -541,7 +556,8 @@
    "typecheck": "high",
    "tests": "high"
   },
-  "labelledBy": "hand, independent reader (did not see the tool code)"
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "tuned"
  },
  {
   "repo": "mira190/ai-quality-gate",
@@ -575,6 +591,497 @@
    "lint": "high",
    "typecheck": "high",
    "tests": "high"
-  }
+  },
+  "split": "tuned"
+ },
+ {
+  "repo": "tj/commander.js",
+  "sha": "ba6d13ddb4243e5913367734f8c159089ffe7834",
+  "language": "js",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "no secret scanner in tests.yml or codeql-analysis.yml",
+   "coverage": "tests.yml:29 `npm test` -> package.json test `node --test && npm run check:type:ts`; no --experimental-test-coverage, c8, or nyc",
+   "dependency": "no audit or dependency-review step",
+   "format": "tests.yml:31 `npm run check` -> check:format `prettier --check .`",
+   "lint": "tests.yml:31 `npm run check` -> check:lint `eslint .`",
+   "typecheck": "tests.yml:29 npm test -> check:type:ts `tsd && tsc -p tsconfig.ts.json`; tests.yml:31 check -> check:type:js `tsc -p tsconfig.js.json` (the tsd part is type tests)",
+   "tests": "tests.yml:29 npm test -> `node --test`"
+  },
+  "notes": "tests.yml runs on [push, pull_request, workflow_dispatch] with no branch filter. CodeQL does not count.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "chalk/chalk",
+  "sha": "72110019e147683f60e13fa0ff5c14a0c27cd9fe",
+  "language": "js",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": false,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none",
+   "coverage": "main.yml:21 `npm test` -> package.json test `xo && c8 node --test ... && tsc ...`; c8 config in package.json",
+   "dependency": "none",
+   "format": "no prettier or other formatter. xo (v5) is run and has @stylistic rules, but there is no prettier integration",
+   "lint": "main.yml:21 npm test -> `xo`",
+   "typecheck": "main.yml:21 npm test -> `tsc --noEmit --types node source/index.d.ts`",
+   "tests": "main.yml:21 npm test -> `c8 node --test 'test/[!_]*.js'`"
+  },
+  "notes": "format=false because xo runs without prettier. xo's built-in stylistic rules do enforce some layout (tabs, semicolons, quotes), so this could arguably be true. The typecheck only covers the hand-written .d.ts file.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "medium",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "sindresorhus/execa",
+  "sha": "247faa0ff0641020e8790475989cee72df85d62b",
+  "language": "js",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": false,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none (lychee is a link checker)",
+   "coverage": "main.yml:39 `npm run unit` -> `c8 --merge-async node --test ...`; codecov upload at main.yml:40 has fail_ci_if_error:false, but coverage is still measured",
+   "dependency": "none",
+   "format": "no formatter; only xo without prettier",
+   "lint": "main.yml:36 `npm run lint` -> `xo` (only on ubuntu/node 26, which still runs on every PR)",
+   "typecheck": "main.yml:38 `npm run type` -> `nz && tsc --exactOptionalPropertyTypes` (tsconfig.json files: index.d.ts, strict)",
+   "tests": "main.yml:39 `npm run unit` -> node --test"
+  },
+  "notes": "Same xo-without-prettier format question as chalk. tsc has no --noEmit, but its only input is the .d.ts files, so it acts as a type check.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "medium",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "lukeed/kleur",
+  "sha": "fa3454483899ddab550d08c18c028e6db1aab0e5",
+  "language": "js",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": false,
+   "lint": false,
+   "typecheck": false,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none",
+   "coverage": "ci.yml:24 `c8 npm test` (c8 installed globally at ci.yml:21)",
+   "dependency": "none",
+   "format": "none",
+   "lint": "none; package.json has no lint script or linter dependency",
+   "typecheck": "index.d.ts/colors.d.ts are shipped, but nothing type-checks them in CI; plain JS",
+   "tests": "ci.yml:24 c8 npm test -> `uvu -r esm -i utils -i xyz`; ci.yml:27 build + test/env.sh"
+  },
+  "notes": "Very old workflow (actions v1/v2, Node 10-14). The Codecov report step only runs on node>=14 and uses curl|bash.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "nodejs/undici",
+  "sha": "779ee3e12cb8c1f365f6e69ee34b088159402d2f",
+  "language": "js",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": true,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none (step-security/harden-runner and scorecard are not secret scanners; scorecard is push/schedule only)",
+   "coverage": "ci.yml:64 test job -> local reusable nodejs.yml with codecov=true for node 24/25/26 on ubuntu (ci.yml:66): nodejs.yml:86 etc. set NODE_V8_COVERAGE=./coverage/tmp, nodejs.yml:204 `npm run coverage:report:ci` -> `c8 report` (.c8rc.json)",
+   "dependency": "ci.yml:31 actions/dependency-review-action (job if: event_name == 'pull_request')",
+   "format": "ci.yml:54 `npm run lint` -> `eslint --cache`; eslint.config.js uses neostandard (stylistic rules plus @stylistic/comma-dangle)",
+   "lint": "ci.yml:54 `npm run lint` -> eslint with neostandard",
+   "typecheck": "ci.yml:308 `npm run test:typescript` -> `tsd && tsc test/imports/undici-import.ts --noEmit && tsc ./types/*.d.ts --noEmit`",
+   "tests": "nodejs.yml:82 `npm run test:unit` (borp) plus fetch, cache, websocket, jest, wpt suites (nodejs.yml:89-200)"
+  },
+  "notes": "format=true only through neostandard, which the guidelines count; there is no prettier. Typecheck uses tsd type tests plus tsc --noEmit on the .d.ts types. The `npm ls` step at nodejs.yml:54 has continue-on-error and is irrelevant.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "medium",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "typeorm/typeorm",
+  "sha": "5bdc67882dee5a02d975d5ed140c9c3f91661116",
+  "language": "ts",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none",
+   "coverage": "tests.yml:139 -> local reusable tests-linux.yml:27 `pnpm exec c8 pnpm run test:ci` (packages/typeorm/.c8rc.json); also tests.yml:159/180 `pnpm exec c8 pnpm test` for codemod and legacy-naming-strategies",
+   "dependency": "none (SonarQube scan is not a dependency scanner)",
+   "format": "tests.yml:116 `pnpm run format:ci` -> root package.json `prettier --check .` (unconditional job)",
+   "lint": "tests.yml:129 `pnpm run lint` -> `pnpm -r run lint` -> `eslint` in each package",
+   "typecheck": "tests.yml:102 build job `pnpm run compile` -> packages/typeorm `gulp clean:compiled && tsc` (full tsc compile using tsconfig.json; type errors fail it)",
+   "tests": "tests-linux.yml:27 and others: mocha against many DBs (test/ includes unit/ and functional/); tests-windows.yml; codemod/legacy mocha at tests.yml:159/180"
+  },
+  "notes": "tests.yml triggers on pull_request and merge_group. Lint, build/typecheck, and tests jobs are gated by dorny/paths-filter (they run when src/tests/packages change). Typecheck comes from the tsc compile in the build step, not the dedicated `typecheck` script (tsc --noEmit), which CI never calls. pull-request.yml (pull_request_target) is only a semantic PR-title check.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "medium",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "remix-run/react-router",
+  "sha": "db80dda076ec9cdcefff480079252fe0c977710e",
+  "language": "ts",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": false,
+   "format": false,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none",
+   "coverage": "test-unit.yml:72 `pnpm test` -> jest; jest/jest.config.shared.js and per-package configs have no collectCoverage, and there is no --coverage flag",
+   "dependency": "none",
+   "format": "format.yml runs `pnpm format` (prettier --write, then auto-commits) only on push to main; the `format:check` script is never called on PR; eslint config has no prettier plugin",
+   "lint": "test-unit.yml:69 `pnpm lint` -> `eslint --cache .`",
+   "typecheck": "test-unit.yml:66 `pnpm typecheck` -> `pnpm run --recursive --parallel typecheck` -> `tsc` in each package",
+   "tests": "test-unit.yml:72 `pnpm test` -> jest unit tests (test-integration.yml on PR adds Playwright integration tests)"
+  },
+  "notes": "test-unit.yml pull_request uses paths-ignore for docs/** and **/*.md. Formatting is fixed after merge by a bot, not checked on PR. The aw-*.lock.yml agentic workflows fire on labeled/comment events and are not checks.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "mswjs/msw",
+  "sha": "28c74aad78b343a77e62978349c8317df398d408",
+  "language": "ts",
+  "labels": {
+   "secret": false,
+   "coverage": false,
+   "dependency": false,
+   "format": false,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none",
+   "coverage": "vitest.config.ts has no coverage block and no --coverage flag in scripts or workflows",
+   "dependency": "none",
+   "format": ".prettierrc exists but prettier is never run in CI (only lint=oxlint)",
+   "lint": "ci.yml:41 `pnpm lint` -> `oxlint ./cli ./src ./test`",
+   "typecheck": "compat.yml:86 `pnpm test:ts` -> `vitest --project=types` with typecheck.enabled, checker 'tsc' on *.test-d.ts (vitest.config.ts:177-192); the same project also runs under ci.yml:47 `pnpm test` (plain `vitest`)",
+   "tests": "ci.yml:47 `pnpm test` -> vitest (unit/node/browser projects); compat.yml:43 test:modules:node"
+  },
+  "notes": "Typecheck is type tests only (vitest typecheck on test/typings/*.test-d.ts against several TS versions), not a tsc --noEmit of the source. The compat.yml typescript job has `if: github.ref != 'refs/heads/main'`, so it does run on PRs. publint is a package lint, not a code lint.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "medium",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "pydantic/pydantic",
+  "sha": "a1752092ad4dc6123814e22cd58786f9e7ec6cda",
+  "language": "python",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none (zizmor is a workflow security linter, not a secret scanner)",
+   "coverage": "ci.yml:903 `make test` -> Makefile:81 `uv run coverage run -m pytest ...`; ci.yml:963 `coverage run -m pytest tests/mypy`; ci.yml:1029-1030 coverage combine/report",
+   "dependency": "none",
+   "format": "ci.yml:42 pre-commit/action --all-files -> .pre-commit-config.yaml:37-39 local hook `make lint-python` -> Makefile:42 `ruff format --check`; also lint-rust -> pydantic-core/Makefile:84 `cargo fmt --all -- --check`",
+   "lint": "ci.yml:42 pre-commit -> `make lint-python` -> Makefile:41 `ruff check`; pydantic-core/Makefile:86 `cargo clippy -D warnings`",
+   "typecheck": "ci.yml:42 pre-commit -> .pre-commit-config.yaml:49-51 `uv run pyright pydantic`; also ci.yml:992/998/1001 typechecking integration tests (pyright/mypy/pyrefly on tests/typechecking)",
+   "tests": "ci.yml:903 make test (pytest); ci.yml:561 pytest tests/pydantic_core + cargo test"
+  },
+  "notes": "ci.yml triggers on pull_request: {}. coverage.yml is a workflow_run follow-up and does not count by itself.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "Textualize/rich",
+  "sha": "9d8f9a372cc5916fd4781fec207ced7ddac2f08f",
+  "language": "python",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": true,
+   "lint": false,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none",
+   "coverage": "pythonpackage.yml:45 `pytest tests -v --cov=./rich --cov-report=xml...`",
+   "dependency": "none",
+   "format": "pythonpackage.yml:37 `make format-check` -> Makefile:6 `black --check .`",
+   "lint": "no code linter. codespell.yml:9 runs codespell, a spell checker, which is not counted. The .pre-commit-config.yaml is not run in CI",
+   "typecheck": "pythonpackage.yml:41 `make typecheck` -> Makefile:10 `mypy -p rich --no-incremental`",
+   "tests": "pythonpackage.yml:45 pytest"
+  },
+  "notes": "pythonpackage.yml is on: [pull_request] only. lint=false hinges on not counting codespell as a linter. codeql.yml targets 'master' while the default branch is main, and does not count anyway.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "medium",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "psf/black",
+  "sha": "b4f1fcae48826790b6f93ca9226d20003bce0eaa",
+  "language": "python",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": true,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none (zizmor.yml is a workflow security linter)",
+   "coverage": "test.yml:62 `tox -e ci-py3XX` -> tox.ini:5-26 testenv `pytest ... --cov` + `coverage report` (pypy env has no coverage)",
+   "dependency": "none",
+   "format": "lint.yml:46 `tox -e run_self` -> tox.ini:58 `black --check {toxinidir}`; test.yml:122 uvloop job `python -m black --check .`; lint.yml:43 pre-commit also runs isort and prettier hooks (fail on modification)",
+   "lint": "lint.yml:43 pre-commit/action -> .pre-commit-config.yaml:10-13 flake8 (+bugbear etc.)",
+   "typecheck": "lint.yml:43 pre-commit -> .pre-commit-config.yaml:20-23 mirrors-mypy",
+   "tests": "test.yml:62 tox ci-py* -> pytest tests"
+  },
+  "notes": "In lint.yml (and the uvloop job in test.yml) the job condition is `github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository`, so on pull_request it runs only for fork PRs; same-repo PRs rely on the push event. That is why format/lint/typecheck are medium. test.yml pull_request has a paths filter (src/**, tests/**, tox.ini, pyproject.toml...).",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "medium",
+   "lint": "medium",
+   "typecheck": "medium",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "pytest-dev/pluggy",
+  "sha": "30b8ae208f5955125f2a2edcb038c03893774b49",
+  "language": "python",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": false,
+   "lint": false,
+   "typecheck": false,
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none",
+   "coverage": "test.yml:136 `tox run` with TOX_ENV=<env>-coverage (test.yml:138, ubuntu matrix entries use_coverage:true) -> tox.ini:12 `coverage run -m pytest` + coverage combine/report/xml",
+   "dependency": "none",
+   "format": "ruff-format exists only in .pre-commit-config.yaml, and no GitHub Actions workflow runs pre-commit (probably pre-commit.ci, which is not GHA)",
+   "lint": "ruff-check exists only in .pre-commit-config.yaml; not run by any workflow",
+   "typecheck": "mypy exists only in .pre-commit-config.yaml; not run by any workflow",
+   "tests": "test.yml:129/136 tox -> pytest"
+  },
+  "notes": "test.yml pull_request is limited to branches: [main] (the default). The tox env comes from the TOX_ENV env var, which tox 4 maps to `-e`; with tox 3 (which reads TOXENV), the coverage factor would not be selected. The Codecov upload has continue-on-error. Lint, format and typecheck most likely run via pre-commit.ci, outside GitHub Actions, so they are false under the GHA-only rule.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "medium",
+   "dependency": "high",
+   "format": "medium",
+   "lint": "medium",
+   "typecheck": "medium",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "urfave/cli",
+  "sha": "7dad5b6e43fe89c5659832f59b6eea6a98dd9711",
+  "language": "go",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": false,
+   "format": true,
+   "lint": true,
+   "typecheck": "na",
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none",
+   "coverage": "test.yml:44-45 `make test` -> Makefile catch-all `go run scripts/build.go test` -> scripts/build.go:259-261 `go test --coverprofile ... --covermode atomic --cover`",
+   "dependency": "none (no govulncheck)",
+   "format": "test.yml:41 `make lint` (ubuntu/stable) -> scripts/build.go:629-638 `goimports -l .`, returns an error if the output is non-empty; also lint.yml:30 golangci-lint with .golangci.yaml formatters: gofumpt",
+   "lint": "lint.yml:30 golangci/golangci-lint-action; test.yml:43 `make vet` -> build.go:68 `go vet ./...`",
+   "typecheck": "na (Go)",
+   "tests": "test.yml:44-45 make test -> go test"
+  },
+  "notes": "Both workflows filter pull_request to branches: [main] (the default). The make targets resolve through the Makefile `%:` rule to scripts/build.go subcommands (read only, not run).",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "high",
+   "format": "high",
+   "lint": "high",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
+ },
+ {
+  "repo": "charmbracelet/bubbletea",
+  "sha": "67b4c7a8a2b34a0b1ce15261b0c705bc7e1a04b7",
+  "language": "go",
+  "labels": {
+   "secret": false,
+   "coverage": true,
+   "dependency": true,
+   "format": true,
+   "lint": true,
+   "typecheck": "na",
+   "tests": true
+  },
+  "evidence": {
+   "secret": "none",
+   "coverage": "coverage.yml:24 `go test -race -covermode=atomic -coverprofile=coverage.txt ./...`",
+   "dependency": "build.yml:6 -> EXTERNAL reusable charmbracelet/meta/.github/workflows/build.yml@main (read at 2031836b) govulncheck job line 41 `govulncheck ./...`",
+   "format": "lint.yml:8 -> EXTERNAL charmbracelet/meta lint.yml:159 golangci-lint-action with --config=.golangci.yml; bubbletea .golangci.yml enables formatters gofumpt and goimports (golangci-lint v2 reports formatter diffs as issues)",
+   "lint": "lint.yml:8 -> EXTERNAL charmbracelet/meta lint.yml:159 golangci-lint (revive, gosec, etc. per .golangci.yml)",
+   "typecheck": "na (Go)",
+   "tests": "coverage.yml:24 go test; also EXTERNAL meta build.yml:74 `go test ./...`"
+  },
+  "notes": "dependency, lint, format, and part of tests come from reusable workflows in ANOTHER repository (charmbracelet/meta@main), which is mutable. A tool that does not follow cross-repo reusable workflows would see only coverage and tests. coverage.yml and the meta workflows run on push+pull_request without filters.",
+  "confidence": {
+   "secret": "high",
+   "coverage": "high",
+   "dependency": "medium",
+   "format": "medium",
+   "lint": "medium",
+   "typecheck": "high",
+   "tests": "high"
+  },
+  "labelledBy": "hand, independent reader (did not see the tool code)",
+  "split": "held-out"
  }
 ]
