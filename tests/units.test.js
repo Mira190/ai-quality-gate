@@ -352,3 +352,11 @@ test('code trace: "No test" only when no test names the rule ID or its symbol; a
   assert.deepStrictEqual(sweep.links, []);
   assert.deepStrictEqual(sweep.impl, { path: 'lib/unused.ts', line: 1, symbol: 'sweepExpired' });
 });
+
+test('limits: a status code followed by ordinary words is not an edge', async () => {
+  const { judgeRules } = require('../src/judge');
+  const llm = { votes: async () => [{ rules: [{ id: 'REQ-04', fails: [], logic_kind: 'access', limits: [{ value: 403, unit: '', source: 'text' }], terms: [], restates: '', adds_behaviour: true, boundary: 'none' }] }] };
+  const r = { id: 'REQ-04', kind: 'requirement', title: 'Admins only', text: 'Only an admin shall change the fee; the system shall answer HTTP 403 to any other user.', servesIds: [] };
+  await judgeRules(llm, [r], { root: '/nonexistent', fileSet: new Set() });
+  assert.deepStrictEqual(r.limits, []);
+});

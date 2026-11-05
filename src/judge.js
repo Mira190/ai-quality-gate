@@ -206,7 +206,7 @@ ${listing(rs)}`,
     const lim = new Map();
     for (const x of rs) for (const l of new Map((x.limits || []).map((l) => [l.value, l])).values()) { const e = lim.get(l.value) || { l, n: 0 }; e.n++; lim.set(l.value, e); }
     // a status code, version or identifier is not an edge (HTTP 403, v2, REQ-12)
-    const notEdge = (v) => new RegExp(`(HTTP|status|code|version|v|REQ|DEC|[A-Z]{2,})[\\s-]?${v}\\b`).test(`${r.title} ${r.text}`) && !new RegExp(`[$€£%]\\s?${v}\\b|\\b${v}\\s*(%|[a-z])`).test(`${r.title} ${r.text}`);
+    const notEdge = (v) => new RegExp(`(HTTP|status|code|version|v|REQ|DEC|[A-Z]{2,})[\\s-]?${v}\\b`).test(`${r.title} ${r.text}`) && !new RegExp(`[$€£]\\s?${v}\\b|\\b${v}\\s*(${UNIT_WORD.source.slice(2, -2)})(?![A-Za-z])`, 'i').test(`${r.title} ${r.text}`);
     r.limits = [...lim.values()].filter((e) => e.n >= r._k && known.has(e.l.value) && !notEdge(e.l.value)).map((e) => e.l);
     // the edges the rule's own text states, read by code (the model adds the edges in files the rule names)
     for (const l of statedLimits(`${r.title}. ${r.text}`)) if (!r.limits.some((x) => x.value === l.value)) r.limits.push(l);
