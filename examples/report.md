@@ -98,8 +98,8 @@ Not counted: 1 rule superseded, rejected or still a draft; 1 sentence the model 
 
 - Files: 35 listed, 0 vendored or generated and skipped; read: 4 rule documents, 11 test files (11 cases), 2 CI files. Source files are not read, except the ones a change touches.
 - Rules: 13 (11 with an ID in the source, 2 inferred from normative sentences) from `docs/requirements.md` (9), `docs/adr/0003-idempotent-webhooks.md` (1), `docs/adr/0004-soap-gateway.md` (1), `docs/design.md` (2).
-- Model: handoff (stand-in (recorded answers)). 7 rules needed a judgment: 0 from the verdict cache, 7 asked, 2 read a second time, in 3 calls (8k characters, about 2k tokens sent).
-- Shown to the model: 6 candidate tests, 22 of their 22 lines (the opening, every assertion, the lines that share the rule's words). Every assertion of every candidate was shown.
+- Model: handoff (stand-in (recorded answers)). 7 rules needed a judgment: 0 from the verdict cache, 7 asked, 2 read a second time, in 3 calls (9k characters, about 2k tokens sent).
+- Shown to the model: 8 candidate tests, 28 of their 28 lines (the opening, every assertion, the lines that share the rule's words). Every assertion of every candidate was shown.
 - Read by code, in full: 4 rule documents, 11 test files, 2 CI files. The model reads no file.
 - Tests are read, not run. Evidence levels: _code_ is decided by parsing; _model, verified_ is a model answer whose citation code checked; _advice_ never blocks.
-- Time: scan 5 ms · extract 33 ms · formal 0 ms · ci-scripts 30 ms · index 15 ms · ci 4 ms · model 0 ms · link 4 ms · judge 9 ms · assess 2 ms · execute 0 ms · placement 1 ms.
+- Time: scan 2 ms · extract 20 ms · formal 0 ms · ci-scripts 18 ms · index 16 ms · ci 2 ms · model 0 ms · link 7 ms · judge 12 ms · assess 1 ms · execute 0 ms · placement 1 ms.

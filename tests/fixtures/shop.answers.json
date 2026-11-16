@@ -1,7 +1,7 @@
 {
   "_model": "stand-in (recorded answers)",
   "_note": "Answers to the prompts the gate writes for tests/fixtures/shop.js, keyed by prompt hash. Written by tests/fixtures/record.js from the judgments in that file.",
-  "80570ef8dc0f": {
+  "76dcdad210d7": {
     "verdicts": [
       {
         "rule": "R1",
@@ -80,7 +80,7 @@
       }
     ]
   },
-  "5888d907c6d4": {
+  "95243530f8a7": {
     "finds": [
       {
         "rule": "R1",
@@ -92,7 +92,7 @@
       }
     ]
   },
-  "973d0cf923aa": {
+  "da3b9b5cd639": {
     "verdicts": [
       {
         "rule": "R1",
@@ -138,18 +138,18 @@
       },
       {
         "rule": "R5",
-        "testable": false,
-        "proof": "none",
-        "cites": [],
-        "missing": "readability is not behaviour of the software",
-        "level": "unit"
-      },
-      {
-        "rule": "R6",
         "testable": true,
         "proof": "none",
         "cites": [],
         "missing": "no test rejects a gift card payment above $500",
+        "level": "unit"
+      },
+      {
+        "rule": "R6",
+        "testable": false,
+        "proof": "none",
+        "cites": [],
+        "missing": "readability is not behaviour of the software",
         "level": "unit"
       }
     ]
@@ -179,7 +179,7 @@
       }
     ]
   },
-  "841e35a75bea": {
+  "5af9c471b02e": {
     "finds": [
       {
         "rule": "R1",
@@ -195,7 +195,7 @@
       }
     ]
   },
-  "4909b464983a": {
+  "3b7b83091b43": {
     "verdicts": [
       {
         "rule": "R1",
@@ -249,7 +249,7 @@
       }
     ]
   },
-  "28667f0fc0aa": {
+  "d4ee64765f07": {
     "finds": [
       {
         "rule": "R1",

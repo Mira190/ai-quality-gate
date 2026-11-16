@@ -12,19 +12,15 @@ test('globs: ** crosses directories, * does not, a bare name matches at any dept
   assert.deepEqual(['legacy/a/b.js', 'x/y/z.snap', 'src/a.js'].map(m), [true, true, false]);
 });
 
-test('words: identifiers are split, plurals and tenses meet, numbers stay, Chinese becomes bigrams', () => {
-  assert.deepEqual(tokenize('applyDiscount caps discounts at 20%'), ['apply', 'discount', 'cap', '=limit', 'discount', '20']);
-  // the same idea said from two sides shares a token: "never twice" and "once", "nothing is lost" and "keeps"
-  const idea = (text) => tokenize(text).filter((t) => t.startsWith('='));
-  assert.deepEqual([idea('Never the same message twice.'), idea('sends a message once per send ID')], [['=once'], ['=send', '=once', '=send']]);
-  assert.ok(idea('Nothing acknowledged is lost').includes('=lost') && idea('keeps an event when the gateway is killed').includes('=lost'));
-  assert.ok(idea('however often the process dies').includes('=crash') && idea('after a restart').includes('=crash'));
-  assert.deepEqual(tokenize('retried retries retry_count'), ['retry', 'retry', 'retry', 'count']);
-  // short forms meet what prose spells out
-  for (const [short, long] of [['acks', 'acknowledging'], ['config', 'configuration'], ['init', 'initialise'], ['auth', 'authentication'], ['msgs', 'messages'], ['dedupe', 'duplicates']]) assert.deepEqual(tokenize(short), tokenize(long), short);
-  // one stem per word family, whichever form the rule or the test uses
-  for (const family of [['walk', 'walks', 'walked', 'walking', 'walker', 'walkers'], ['drive', 'driver', 'driving', 'drives'], ['stop', 'stopped', 'stopping'], ['cache', 'caches', 'cached', 'caching']]) assert.equal(new Set(family.flatMap((w) => tokenize(w))).size, 1, family.join());
+test('words: identifiers are split, stop words go, numbers stay, ideas ride along, Chinese becomes bigrams', () => {
+  // families, short forms and ideas are the lexicon's (tests/unit/lexicon.test.js); here, what the tokenizer itself does
+  assert.deepEqual(tokenize('applyDiscount caps discounts at 20%').filter((t) => !t.startsWith('=')), ['apply', 'discount', 'cap', 'discount', '20']);
+  assert.deepEqual(tokenize('the retry_count of HTTPServer v2'), ['retry', '=retry', 'count', 'http', 'serv', 'v', '2'].filter((t) => t !== 'v'));
   assert.deepEqual(tokenize('折扣上限'), ['折扣', '扣上', '上限']);
+  // a stop word that names an idea is kept, with the idea; "each other" is one word; a verb and its particle are the compound
+  assert.deepEqual(tokenize('the first of these'), ['first', '=order']);
+  assert.deepEqual(tokenize('they pass through each other'), ['pass', 'through', 'mutual']);
+  assert.deepEqual(tokenize('it times out'), ['timeout', '=wait']);
 });
 
 test('pool keeps the input order and bounds concurrency', async () => {

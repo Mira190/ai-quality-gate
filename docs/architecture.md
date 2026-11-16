@@ -85,10 +85,13 @@ scan → extract → index → ci → trace(link → judge → assess) → place
 
 规则说"永不重复发送同一条消息"，测试叫"每个 send ID 只发一次"；规则说 acknowledging，测试写 acks。词面检索在这里会漏，漏了就会把有测试的规则说成没有。四层办法，前三层不依赖仓库、不花 token：
 
-1. **词族归一。** walk / walked / walking / walker / walkers 是同一个词干；drive / driver / driving 也是。
-2. **缩写归一。** 固定的一张表：ack ↔ acknowledge、config ↔ configuration、auth ↔ authentication、msg ↔ message、dedupe ↔ duplicate……
-3. **同一件事的两种说法。** 固定的一张"概念"表：once / twice / duplicate / repeat / again 都带一个 `=once` 标记；lost / keep / survive / persist 带 `=lost`；crash / die / kill / restart 带 `=crash`；refuse / reject / deny、limit / cap / exceed、store / save / persist 等同理。规则和测试说的是同一件事的正反两面时，至少共有这个标记。"each other"作为一个词保留。
-4. **排序看广度。** 候选按"说到了规则里几样不同的东西"排，其次才是词的稀有程度；测试名字里说到的算一份，只在正文里出现的算半份。所以"sends a message once per send ID"排在"can be stopped twice"前面。
+1. **词族归一。** 屈折变化和常见派生都归到同一个词干：walk / walked / walker；configure / configuration / configurable；valid / validate / validation / validator；sent → send、paid → pay 这类不规则形式查表。
+2. **缩写归一。** 一张固定表（约 130 项）：msg ↔ message、cfg ↔ configuration、ack ↔ acknowledge、db ↔ database……只收在软件里含义唯一的缩写；res（response / result / resource）、req（request / requirement）这类有歧义的故意不收。缩写只按书写形式匹配，不按词干："state"不会被当成"stat"。
+3. **同一件事的两种说法。** 一张固定的概念表（34 个概念、约 370 个词）：次数（once / twice / duplicate / repeat）、不丢（lost / keep / survive）、崩溃恢复、拒绝与允许、限值、先后顺序、等待与超时、重试、增删改、撤销、启停、显示与隐藏、存储、收发、鉴权、并发、金额、速度等。一个词只属于一个概念。动词加小品词分开写等于合起来写："times out"就是"timeout"，"rolls back"就是"rollback"。"each other"作为一个词保留。
+
+这三张表都在 `src/lexicon.js`，文件头写明了修改它的规矩：只能因为一个词在软件里普遍是这个意思而加，不能因为某个仓库的某个测试没匹配上而加。守这条规矩的是 `tests/fixtures/paraphrases.js`：32 对来自互不相关领域（电商、账号、消息、文件、排期、并发、界面）的"规则 / 测试名"，都不取自 gate 跑过的任何仓库，另有 6 条在测试池里没有对应测试的规则。当前成绩：28 对能被找到（20 对排第一），6 条无关规则没有一条被错配候选。剩下 4 对是纯改写（"提前一刻钟提醒"对"会议开始前 15 分钟"），词表不该去凑，留给模型。
+
+4. **排序看广度。** 候选按"说到了规则里几样不同的东西"排，其次才是词的稀有程度；测试名字里说到的算一份，只在正文里出现的算半份；只共有概念而没有共有词的，再减半——概念是线索，不是证据。所以"sends a message once per send ID"排在"can be stopped twice"前面。
 5. **第二次阅读看得更宽（GATE-30）。** 第一次阅读没找到证明时，第二次阅读除了原来的候选，还会看到后面二十行以内的"次近"测试，这个圈按"在本仓库里常一起出现的词"排序（规则说 walkers，仓库里 walkers 常和 crowd 一起出现）。它在这个圈里引用的断言通过核对后，就是一条正常的链接。
 
 约束：没有模型时一条规则算不算"有候选"，只由前四层决定，与测试集里别的内容无关；仓库自己的词汇关联只影响第二次阅读看什么。这样加一个无关的测试不会让别的规则在"没有测试"和"未核实"之间翻转（评分卡守着这一条）。

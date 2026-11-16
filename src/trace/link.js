@@ -13,7 +13,8 @@ function breadthOf(shared, inName = new Set(shared)) {
   const said = new Set(words.map(ideaOf).filter(Boolean));
   // what a test's name says counts in full; a word that only turns up somewhere in its body counts half
   const worth = (w) => (inName.has(w) ? 1 : 0.5);
-  return words.reduce((n, w) => n + worth(w), 0) + shared.filter((w) => w.startsWith('=') && !said.has(w)).reduce((n, w) => n + worth(w), 0);
+  // an idea shared without a word shared is a hint, and counts as half of what a word would
+  return words.reduce((n, w) => n + worth(w), 0) + shared.filter((w) => w.startsWith('=') && !said.has(w)).reduce((n, w) => n + worth(w) / 2, 0);
 }
 
 function buildIndex(cases) {
