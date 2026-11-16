@@ -38,6 +38,9 @@ function proofFindings(proofs, config, collapsed = new Set()) {
     // A sentence without an ID that nobody has judged to be a rule is not yet something to act on: it is counted in
     // the report and listed nowhere. Reporting it would be the gate guessing.
     if (r.inferred && p.basis === 'A' && !p.links.length) continue;
+    // "No test" for a sentence without an ID rests on the few nearest tests being the right ones to look at. That
+    // is enough to say so in the table, and enough for a finding only where a miss would be costly.
+    if (r.inferred && !r.critical && p.status === 'unproven' && !p.links.length) continue;
     const base = { section: 'proof', subject: r.id, critical: r.critical, loc: { path: r.path, line: r.line } };
     const tagHint = `name \`${r.id}\` in the test (its title or a \`// covers: ${r.id}\` comment) so the link is a fact from then on`;
     const level = p.modelLevel || r.lowest;
@@ -146,8 +149,8 @@ function placementFindings(issues, proofs = []) {
 const CI_TEXT = {
   missing: (c) => `No CI step runs ${c.title.toLowerCase()}.`,
   configured: (c) => `${c.title} is set up (${c.configured}) and no CI step runs it: nothing stops a change that breaks it.`,
-  not_on_pr: (c) => `${c.title} runs (\`${c.command}\`, \`${c.where[0]?.file}\`), but not on pull requests: a failure is found after the merge.`,
-  non_blocking: (c) => `${c.title} runs on pull requests (\`${c.command}\`, \`${c.where[0]?.file}:${c.where[0]?.line}\`), and its failure is ignored (continue-on-error or \`|| true\`).`,
+  not_on_pr: (c) => `${c.title} ${c.id === 'tests' ? 'run' : 'runs'} (\`${c.command}\`, \`${c.where[0]?.file}\`), but not on pull requests: a failure is found after the merge.`,
+  non_blocking: (c) => `${c.title} ${c.id === 'tests' ? 'run' : 'runs'} on pull requests (\`${c.command}\`, \`${c.where[0]?.file}:${c.where[0]?.line}\`), and its failure is ignored (continue-on-error or \`|| true\`).`,
 };
 const CI_FIX = {
   missing: (c) => `Add a pull-request step that runs ${c.title.toLowerCase()} and fails the build.`,

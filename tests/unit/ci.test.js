@@ -26,3 +26,14 @@ test('GATE-14 a package script or a make target is replaced by what it runs', ()
   const loop = { npm: new Map([['a', [{ dir: '', body: 'npm run a' }]]]), make: new Map() };
   assert.equal(expandCommand('npm run a', loop), 'npm run a\nnpm run a');
 });
+
+test('GATE-14 GATE-29 a shell script a step runs is followed, and the check programs it runs are found', () => {
+  const { scriptTests } = require('../../src/ci/workflows');
+  const scripts = { npm: new Map(), make: new Map(), sh: new Map([['tools/check.sh', 'node tools/game_check.js "$c"\npython3 tools/sign_check.py\nnode tools/page_eval.js\ntools/lint.sh'], ['tools/lint.sh', 'eslint web']]) };
+  const full = expandCommand('CHECK_JOBS=1 tools/check.sh "$TARGET"', scripts);
+  assert.match(full, /node tools\/game_check\.js[\s\S]*eslint web/);
+  assert.equal(expandCommand('./tools/missing.sh', scripts), './tools/missing.sh');
+  const inventory = { byPath: new Map(['tools/game_check.js', 'tools/sign_check.py', 'tools/page_eval.js'].map((p) => [p, { path: p, kind: 'source' }])) };
+  // named as a check and run by CI: a test. page_eval.js is run too, and is a tool, not a check
+  assert.deepEqual([...scriptTests([{ full }], inventory)].sort(), ['tools/game_check.js', 'tools/sign_check.py']);
+});

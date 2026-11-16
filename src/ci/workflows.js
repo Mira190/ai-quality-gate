@@ -138,11 +138,18 @@ function loadScripts({ root, inventory }) {
       else if (l.trim() && !l.startsWith('#')) cur = null;
     }
   }
-  return { npm, make, deps };
+  // Shell scripts of the repository: a workflow that runs `tools/check.sh` runs what that script runs.
+  const sh = new Map();
+  for (const f of (inventory.files || []).filter((x) => /\.(sh|bash)$/.test(x.path)).slice(0, 80)) {
+    const text = readText(path.join(root, f.path), 1 << 18);
+    if (text) sh.set(f.path, text.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n'));
+  }
+  return { npm, make, deps, sh };
 }
 
 const NPM_CALL = /\b(?:npm|pnpm|yarn|bun)\s+(?:--?[\w-]+(?:[= ]\S+)?\s+)*(?:run(?:-script)?\s+|run-many\s+|exec\s+)?([\w:.-]+)/g;
 const TASK_RUNNER = /\b(?:turbo|nx|lerna|wireit)\s+(?:run(?:-many)?\s+)?(?:(?:-t|--targets?)[= ])?([\w:.,-]+(?:\s+[\w:.-]+)*)/g;
+const SH_CALL = /(?:^|[\s;&|(=])(?:\.\/)?((?:[\w.-]+\/)*[\w.-]+\.(?:sh|bash))\b/gm;
 const MAKE_CALL = /\b(?:make|just)\s+((?:[A-Za-z0-9_.-]+\s*)+)/g;
 
 /** A command with every script it calls spliced in (three levels deep): what the step really runs. */
@@ -165,7 +172,30 @@ function expandCommand(run, scripts, cwd = '', depth = 0, seen = new Set()) {
     seen.add('make:' + t);
     out += '\n' + expandCommand(scripts.make.get(t), scripts, cwd, depth + 1, seen);
   }
+  for (const m of run.matchAll(SH_CALL)) {
+    const dir = cwd.replace(/^\.\//, '').replace(/\/$/, '');
+    const file = [dir ? `${dir}/${m[1]}` : null, m[1]].find((p) => p && scripts.sh?.has(p));
+    if (!file || seen.has('sh:' + file)) continue;
+    seen.add('sh:' + file);
+    out += '\n' + expandCommand(scripts.sh.get(file), scripts, cwd, depth + 1, seen);
+  }
   return out;
 }
 
-module.exports = { parseCI, loadScripts, expandCommand, triggersOf };
+/**
+ * Script-style tests: programs CI runs to check the product that use no test framework (`node tools/game_check.js`).
+ * A file is one when a CI step runs it and its name says check, test, verify, smoke, probe or e2e.
+ */
+function scriptTests(steps, inventory) {
+  const out = new Set();
+  for (const s of steps) for (const m of (s.full || '').matchAll(/(?:^|[\s"'=(])((?:[\w.-]+\/)*[\w.-]+\.(?:js|mjs|cjs|ts|py|rb))\b/gm)) {
+    const p = m[1].replace(/^\.\//, '');
+    const base = p.slice(p.lastIndexOf('/') + 1);
+    if (!/(^|[_.-])(checks?|tests?|verify|smoke|probe|e2e)([_.-]|$)/i.test(base)) continue;
+    const rec = inventory.byPath.get(p);
+    if (rec && (rec.kind === 'source' || rec.kind === 'support')) out.add(p);
+  }
+  return out;
+}
+
+module.exports = { parseCI, loadScripts, expandCommand, scriptTests, triggersOf };

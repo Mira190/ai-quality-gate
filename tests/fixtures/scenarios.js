@@ -31,11 +31,12 @@ module.exports = [
   { name: 'a boundary rule gets an integration test', apply: (d) => fs.writeFileSync(path.join(d, 'tests/integration/payment.int.test.ts'), "import request from 'supertest';\nimport { app } from '../../src/webhook';\n\nit('REQ-3 retries a timed-out payment at most 3 times', async () => {\n  const res = await request(app).post('/pay').send({ amount: 10 });\n  expect(res.body.attempts).toBe(3);\n});\n"), removed: ['placement.boundary-mocked:REQ-3:P1'] },
   { name: 'a parameter table grows in a browser test', apply: (d) => edit(d, 'tests/e2e/totals.e2e.test.ts', (s) => `${s}\nit.each([\n  [1, 1],\n  [2, 2],\n  [3, 3],\n  [4, 4],\n])('adds %s', (a, b) => {\n  expect(total([a])).toBe(b);\n});\n`), added: ['placement.table-at-top:tests/e2e/totals.e2e.test.ts:P2'] },
 
-  // ---- CI
-  { name: 'the test step may fail without failing the build', apply: swap(CI, '        run: npm test\n', '        run: npm test\n        continue-on-error: true\n'), added: ['ci.tests:tests:P0'] },
-  { name: 'the test command swallows its exit code', apply: swap(CI, 'run: npm test', 'run: npm test || true'), added: ['ci.tests:tests:P0'] },
-  { name: 'the workflow stops running on pull requests', apply: swap(CI, '  pull_request:\n', ''), added: ['ci.tests:tests:P0'] },
-  { name: 'the test step is deleted', apply: swap(CI, '      - name: Test\n        run: npm test\n', ''), added: ['ci.tests:tests:P0'] },
+  // ---- CI. When no test step gates pull requests at all, that is the one finding: the e2e level's own finding,
+  // a consequence of the same cause, goes.
+  { name: 'the test step may fail without failing the build', apply: swap(CI, '        run: npm test\n', '        run: npm test\n        continue-on-error: true\n'), added: ['ci.tests:tests:P0'], removed: ['ci.level-not-run:e2e:P1'] },
+  { name: 'the test command swallows its exit code', apply: swap(CI, 'run: npm test', 'run: npm test || true'), added: ['ci.tests:tests:P0'], removed: ['ci.level-not-run:e2e:P1'] },
+  { name: 'the workflow stops running on pull requests', apply: swap(CI, '  pull_request:\n', ''), added: ['ci.tests:tests:P0'], removed: ['ci.level-not-run:e2e:P1'] },
+  { name: 'the test step is deleted', apply: swap(CI, '      - name: Test\n        run: npm test\n', ''), added: ['ci.tests:tests:P0'], removed: ['ci.level-not-run:e2e:P1'] },
   // one integration-level file lives under tests/unit and still runs, so the level as a whole is not dark: the rule is named
   { name: 'the test script stops running the integration tests', apply: swap('package.json', 'jest tests/unit tests/integration', 'jest tests/unit'), added: ['proof.not-in-pr:ADR-3:P1'] },
   { name: 'lint is made blocking', apply: swap(CI, '        continue-on-error: true\n', ''), removed: ['ci.lint:lint:P1'] },

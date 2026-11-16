@@ -24,7 +24,7 @@ function ledger() {
   const levels = { unit: { files: 1, cases: 4, pr: 1 }, component: { files: 0, cases: 0, pr: 0 }, integration: { files: 0, cases: 0, pr: 0 }, e2e: { files: 0, cases: 0, pr: 0 } };
   const l = {
     config, gate, findings, proofs, placement: { issues: [], levels }, change: null,
-    ci: { hasCI: true, systems: ['github'], errors: [], checks: [{ id: 'tests', title: 'Tests', state: 'enforced', where: [{ file: '.github/workflows/ci.yml', line: 9, job: 'check' }], command: 'npm test' }, { id: 'lint', title: 'Lint', state: 'missing', where: [] }] },
+    ci: { hasCI: true, systems: ['github'], errors: [], checks: [{ id: 'tests', title: 'Tests', state: 'enforced', where: [{ file: '.github/workflows/ci.yml', line: 9, job: 'check' }], command: 'npm test' }, { id: 'lint', title: 'Lint', state: 'missing', need: 'required', where: [] }] },
     ai: { provider: 'none', note: 'switched off', stats: { needed: 0, cached: 0, locked: 0, confirmed: 0, asked: 0, requests: 0, pending: 0, failed: 0, overBudget: 0, chars: 0, errors: [] } },
     run: { name: 'acme/shop', sha: 'abc1234', changedFiles: 0, files: { listed: 10, ignored: 1 }, docs: [{ path: 'docs/req.md', rules: 3 }], notRead: [], testFiles: 1, testCases: 4, ciFiles: 1, rules: { total: 3, withId: 3, inferred: 0 }, degraded: ['Stage "ci" failed and was skipped: boom'], configErrors: [], timings: { scan: 1 } },
   };

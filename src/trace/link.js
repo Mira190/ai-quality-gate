@@ -91,6 +91,9 @@ function linkRules(rules, tests, config, { preferPkg = true } = {}) {
           if (have.has(c)) continue;
           have.add(c);
           const lexical = scored.find((s) => s.case === c);
+          // importing the file is a reason to look at a test, not a reason to look at all of its cases: in a file
+          // of many, only the ones that also share words with the rule
+          if ((casesBySource.get(src).length > 5 || c.script) && !(lexical && lexical.shared.length >= 2)) continue;
           byImport.push({ case: c, score: lexical ? lexical.score : 0, shared: lexical ? lexical.shared : [w], via: src });
         }
       }
@@ -98,9 +101,22 @@ function linkRules(rules, tests, config, { preferPkg = true } = {}) {
       // found by structure, not by wording: these replace "weak" candidates, and join real ones
       if (byImport.length) candidates = [...candidates.filter((c) => !c.weak), ...byImport.slice(0, 2)];
     }
-    // at most two candidates per file: five near-identical cases of one table tell the model nothing new
+    // How many candidates to show is a budget of lines, not a count: a test of thirty lines is one candidate, and a
+    // one-line check that says what it checks costs a thirtieth of that, so a dozen of them fit where one test
+    // did. More candidates at the same price is how the right one gets seen, and a wrong "no test" avoided.
+    // Of ordinary tests, at most two per file: five near-identical cases of one table tell the model nothing new.
     const perFile = new Map();
-    candidates = candidates.filter((c) => { const n = (perFile.get(c.case.file.path) || 0) + 1; perFile.set(c.case.file.path, n); return n <= 2; }).slice(0, k);
+    let lines = 0;
+    const budget = config.trace.excerpt_lines || 30;
+    candidates = candidates.filter((c) => {
+      const size = Math.min(budget, Math.max(1, (c.case.end || c.case.line || 1) - (c.case.line || 1) + 1));
+      const small = size <= 3;
+      const n = (perFile.get(c.case.file.path) || 0) + 1;
+      if (!small && n > 2) return false;
+      if (lines && lines + size > budget * k / 2) return false;
+      perFile.set(c.case.file.path, n); lines += size;
+      return true;
+    }).slice(0, k * 3);
     out.set(rule.id, { explicit, candidates, terms: q.map((x) => x.w) });
   }
   return out;

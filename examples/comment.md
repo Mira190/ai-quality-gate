@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | 1. Is every requirement and design decision proven by a test? | **5 of 11** rules proven · 2 with a hole · 3 with no test · 0 unverified · 1 not testable as written. Critical rules: **4 of 9** proven. | 2 | 3 |
 | 2. Is each thing tested at the right level? | 5 placement findings. Cases: unit 7 · component 0 · integration 2 · e2e 2. | 0 | 2 |
-| 3. Does CI enforce the checks on pull requests? | **2 of 8** checks enforced: Tests ✅ · Lint ❌ · Type check ❌ · Format ❌ · Coverage ❌ · Dependency scan ✅ · Secret scan ❌ · Static security analysis ❌. | 0 | 3 |
+| 3. Does CI enforce the checks on pull requests? | **2 of 5** checks enforced: Tests ✅ · Lint ❌ · Type check ❌ · Format ❌ · Dependency scan ✅. | 0 | 3 |
 
 #### Blocks the gate
 

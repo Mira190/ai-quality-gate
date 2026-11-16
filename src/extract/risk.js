@@ -14,7 +14,7 @@ const AREAS = {
 // Words that mean risk only in company: "token" is an auth word and a parser word, "role" an access word and an ARIA
 // attribute, "retry" a payment word and a test-runner word. One of them alone does not make a rule critical; two do,
 // and so does any other word of the lists above. A wrongly critical rule is a wrong P0, the costliest mistake here.
-const WEAK = /^(tokens?|roles?|credits?|balances?|pay(?:s|ing)?|paid|charg(?:e|es|ed|ing)|delet\w*|retain\w*|retr\w*|time ?outs?|queues?|tenants?|migrations?|admins?)$/i;
+const WEAK = /^(tokens?|roles?|credits?|balances?|pay(?:s|ing)?|paid|charg(?:e|es|ed|ing)|delet\w*|retain\w*|retr\w*|time ?outs?|queues?|tenants?|migrations?|admins?|sessions?)$/i;
 const MARKED = /\[(?:critical|p0)\]|\(critical\)|\bcriticality:\s*(?:high|critical)\b|【关键】/i;
 
 /** @type {[string, RegExp][]} */

@@ -79,6 +79,19 @@ async function runPipeline(o) {
   });
   if (extracted.truncated) degraded.push(`${extracted.truncated} rules over the rules.max limit (${config.rules.max}) were left out, non-critical first.`);
 
+  // Tests that are programs CI runs (`node tools/x_check.js`) are found through CI, so CI is read once before the
+  // index and once after it (the second pass knows the tests).
+  await stage('ci-scripts', null, () => {
+    const pre = analyzeCI({ root, inventory, config });
+    for (const p of pre.scriptTests) {
+      const rec = inventory.byPath.get(p);
+      inventory.byKind[rec.kind] = inventory.byKind[rec.kind].filter((x) => x !== rec);
+      rec.kind = 'test'; rec.script = true;
+      (inventory.byKind.test ||= []).push(rec);
+    }
+    if (pre.scriptTests.size) inventory.byKind.test.sort((a, b) => (a.path < b.path ? -1 : 1));
+  });
+
   // index
   const tests = await stage('index', { files: [], cases: [], skippedFiles: [] }, () => indexTests({ root, inventory, cache, config, idp }));
 

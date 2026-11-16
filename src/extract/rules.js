@@ -14,7 +14,7 @@ const path = require('node:path');
 const { sha, clip, matcher, readText } = require('../util');
 const { tagRule } = require('./risk');
 
-const PARSER_VERSION = 3; // bump when parseDoc changes: cached parses of unchanged documents are then redone
+const PARSER_VERSION = 4; // bump when parseDoc changes: cached parses of unchanged documents are then redone
 const REQ_PREFIXES = ['REQ', 'FR', 'NFR', 'AC', 'US', 'UC', 'BR', 'SR', 'RULE', 'INV', 'SEC'];
 const DEC_PREFIXES = ['DEC', 'ADR', 'DR', 'AD', 'DD'];
 
@@ -35,12 +35,16 @@ const TYPE_BY_PATH = [
   ['requirement', /(^|\/)(requirements?|reqs?|specs?|specifications?|prd|srs|acceptance|user[-_]?stories|stories|openspec)(\/|[-_.])|(^|\/)[^/]*(requirements?|[-_.]spec|prd|srs|acceptance|需求)[^/]*\.\w+$|(^|\/)\.kiro\/specs\//i],
   ['design', /(^|\/)(design|designs|architecture|arch|rfcs?|tech[-_]?specs?|proposals?)(\/|[-_.])|(^|\/)[^/]*(design|architecture|rfc|设计|架构)[^/]*\.\w+$/i],
 ];
-const docType = (p) => TYPE_BY_PATH.find(([, re]) => re.test(p))?.[0] || 'general';
+// A document under a top-level docs/ folder that no pattern above names is read as a design document: that is where
+// a project that writes prose instead of numbered requirements keeps how it is meant to work.
+const docType = (p) => TYPE_BY_PATH.find(([, re]) => re.test(p))?.[0] || (/^docs?\/(?!images\/|assets\/)/i.test(p) ? 'design' : 'general');
 
 const INACTIVE = /\b(superseded|deprecated|rejected|withdrawn|obsolete|dropped|proposed|draft)\b|已废弃|已取代|已拒绝|草案/i;
 // A numbered rule is retired only by an explicit marker: "Status: superseded", "[deprecated]", "(rejected)" or a strike-through.
 const RETIRED = /\b(?:status|state)\s*[:=]\s*(?:superseded|deprecated|rejected|withdrawn|obsolete|dropped)|[[(（【](?:superseded|deprecated|rejected|withdrawn|obsolete|dropped|已废弃|已取代)\b/i;
-const MODAL = /\b(must|shall|should|may not|is required to|are required to|never|always|is not allowed|are not allowed|cannot|can only)\b|必须|不得|禁止|应当|应该|不能|不允许|只能/i;
+// Words that state an obligation or an invariant. "cannot" and "can only" are left out: in prose they describe a
+// limitation of the world ("the photographs cannot tell the two apart") far more often than a rule of the software.
+const MODAL = /\b(must|shall|should|may not|is required to|are required to|never|always|is not allowed|are not allowed)\b|必须|不得|禁止|应当|应该|不能|不允许|只能/i;
 const DECIDED = /\b(we (?:chose|choose|decided|will use|adopt(?:ed)?|use)\b|decision:)/i;
 const PROCESS = /\b(you|developers?|contributors?|reviewers?|maintainers?|prs?|pull requests?|commits?|the team|engineers?)\s+(must|should|shall|need)|\b(install|run `|npm |pip |checkout)\b/i;
 const CRITERIA_HEADING = /acceptance criteria|requirements?$|business rules?|functional requirements?|non-functional|验收标准|需求|业务规则/i;
@@ -75,7 +79,6 @@ function parseDoc(p, text, type, idp, config = {}) {
   const def = DEF(idp.src);
   /** @type {any[]} */
   const rules = [];
-  const headings = [];
   let fence = false;
   // the headings above each line: a rule read without its section ("The cap applies after tax") is half a rule
   const chain = [], above = [];
@@ -143,29 +146,36 @@ function parseDoc(p, text, type, idp, config = {}) {
   // pass 3: sentences that state a rule without an ID. Only in a document with no IDs at all: a document that
   // numbers its rules has told us which sentences are rules.
   if (!rules.length && !looksAdr && type !== 'general' && config.rules?.infer !== false) {
+    // Prose is wrapped at a column, so a line is not a sentence: paragraphs and list items are put back together
+    // first, and only then cut at sentence ends. A fragment is worse than nothing: nobody can test half a sentence.
+    const blocks = [];
     fence = false;
-    const seen = new Set();
+    let cur = null;
+    const flush = () => { if (cur) blocks.push(cur); cur = null; };
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
-      if (/^\s*(```|~~~)/.test(l)) { fence = !fence; continue; }
+      if (/^\s*(```|~~~)/.test(l)) { fence = !fence; flush(); continue; }
       if (fence) continue;
-      const h = /^(#{1,6})\s+(.*)$/.exec(l);
-      if (h) { headings.length = h[1].length - 1; headings[h[1].length - 1] = unmark(h[2]); continue; }
-      if (/^\s*(\||>|<!--|!\[)/.test(l) || !l.trim()) continue;
+      if (!l.trim() || /^\s*(#{1,6}\s|\||>|<!--|!\[|---+\s*$)/.test(l)) { flush(); continue; }
       const item = /^\s*([-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?(.*)$/.exec(l);
-      const underCriteria = item && headings.filter(Boolean).some((t) => CRITERIA_HEADING.test(t));
-      let textOf = item ? item[2] : l;
-      if (item) for (let j = i + 1; j < lines.length && !isBreak(lines[j]); j++) textOf += ' ' + lines[j];
-      for (const s of unmark(textOf).split(/(?<=[.。！!；;])\s+|(?<=[。；])/)) {
+      if (item) { flush(); cur = { line: i + 1, text: item[2], item: true }; } else if (cur) cur.text += ' ' + l.trim(); else cur = { line: i + 1, text: l.trim(), item: false };
+    }
+    flush();
+    const seen = new Set();
+    for (const b of blocks) {
+      const underCriteria = b.item && CRITERIA_HEADING.test(above[b.line - 1] || '');
+      for (const s of unmark(b.text).split(/(?<=[.。！!])\s+(?=[\p{Lu}\p{Lo}`"'(\d])|(?<=[。；])/u)) {
         const sentence = s.trim();
-        if (sentence.length < 12 || sentence.endsWith('?') || sentence.endsWith('？')) continue;
+        if (sentence.length < 25 || sentence.length > 400 || /[?？:：]$/.test(sentence)) continue;
+        if (!/^[\p{Lu}\p{Lo}`"'\d]/u.test(sentence)) continue;                                         // starts mid-sentence
+        if ((sentence.match(/\(/g) || []).length !== (sentence.match(/\)/g) || []).length) continue;     // cut inside brackets
         const decided = type === 'design' && DECIDED.test(sentence);
         if (!(MODAL.test(sentence) || decided || underCriteria) || PROCESS.test(sentence)) continue;
         const key = sentence.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
         if (seen.has(key)) continue;
         seen.add(key);
         const kind = type === 'design' ? 'decision' : 'requirement';
-        rules.push({ id: `${kind === 'decision' ? 'D' : 'R'}-${sha(key, 6).toUpperCase()}`, kind, title: clip(sentence.replace(/[.。]$/, ''), 80), text: clip(sentence, 600), path: p, line: i + 1, inferred: true, active: true, section: headings.filter(Boolean).pop() });
+        rules.push({ id: `${kind === 'decision' ? 'D' : 'R'}-${sha(key, 6).toUpperCase()}`, kind, title: clip(sentence.replace(/[.。]$/, ''), 80), text: clip(sentence, 600), path: p, line: b.line, inferred: true, active: true });
       }
     }
   }

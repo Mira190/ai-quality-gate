@@ -39,13 +39,18 @@ function grouped(list) {
 
 function summarize(ledger) {
   const { proofs, findings, ci, placement } = ledger;
-  const active = proofs.filter((p) => p.status !== 'inactive' && p.status !== 'not_a_rule');
+  // a sentence nobody has judged to be a rule is not in the count of rules: it is counted beside it
+  const isUnjudged = (p) => p.rule.inferred && p.basis === 'A' && !p.links.length;
+  const live = proofs.filter((p) => p.status !== 'inactive' && p.status !== 'not_a_rule');
+  const active = live.filter((p) => !isUnjudged(p));
   const crit = active.filter((p) => p.rule.critical);
   const st = (list, s) => count(list, (p) => p.status === s);
   const open = findings.filter((f) => !f.suppressed);
   const sec = (name, pri) => count(open, (f) => f.section === name && f.priority === pri);
-  const applicable = ci.checks.filter((c) => c.state !== 'na');
+  // counted: the checks this repository has to have or has chosen to have. A tool it never set up is not a gap.
+  const applicable = ci.checks.filter((c) => c.state !== 'na' && !(c.state === 'missing' && c.need !== 'required'));
   return {
+    unjudged: live.length - active.length,
     rules: active.length, proven: st(active, 'proven'), weak: st(active, 'weak'), unproven: st(active, 'unproven'), unverified: st(active, 'unverified'), untestable: st(active, 'untestable'),
     critical: crit.length, criticalProven: st(crit, 'proven'),
     placementFindings: count(open, (f) => f.section === 'placement'),
@@ -65,9 +70,9 @@ function header(ledger) {
     : `**✅ Pass**: nothing blocks the gate${gate.counts.P0 + gate.counts.P1 ? ` (${gate.counts.P0} P0 and ${gate.counts.P1} P1 are reported and do not block: advice, suppressed${gate.ratchet ? ', or already in the baseline' : ''})` : ''}.`;
   const mode = `Full review of the repository${gate.ratchet ? (gate.baseline ? '; only findings missing from the default-branch baseline block' : gate.mode === 'change' ? '; no baseline yet, so only what the change touches blocks' : '') : ''}.${gate.mode === 'change' ? ` Change under review: ${plural(run.changedFiles, 'file')}${run.base ? ` since \`${run.base.slice(0, 10)}\`` : ''}.` : ''}`;
   const q = table(['Question', 'Answer', 'P0', 'P1'], [
-    ['1. Is every requirement and design decision proven by a test?', s.rules ? `**${s.proven} of ${s.rules}** rules proven · ${s.weak} with a hole · ${s.unproven} with no test · ${s.unverified} unverified${s.untestable ? ` · ${s.untestable} not testable as written` : ''}. Critical rules: **${s.criticalProven} of ${s.critical}** proven.` : 'No rules were found in the documents read (see Run).', s.p.proof[0], s.p.proof[1]],
+    ['1. Is every requirement and design decision proven by a test?', s.rules ? `**${s.proven} of ${s.rules}** rules proven · ${s.weak} with a hole · ${s.unproven} with no test · ${s.unverified} unverified${s.untestable ? ` · ${s.untestable} not testable as written` : ''}. Critical rules: **${s.criticalProven} of ${s.critical}** proven.${s.unjudged ? ` Beside these, ${plural(s.unjudged, 'sentence')} without an ID that may be rules, not judged.` : ''}` : s.unjudged ? `No rule with an ID was found. ${plural(s.unjudged, 'sentence')} in the documents read like rules (must, should, never, always) and ${s.unjudged === 1 ? 'has' : 'have'} not been judged: give the ones that matter an ID, or run with a model and \`ai.scope: all\`.` : 'No rules were found in the documents read (see Run).', s.p.proof[0], s.p.proof[1]],
     ['2. Is each thing tested at the right level?', `${plural(s.placementFindings, 'placement finding')}. Cases: ${LEVELS.map((l) => `${l} ${s.levels[l]}`).join(' · ')}.`, s.p.placement[0], s.p.placement[1]],
-    ['3. Does CI enforce the checks on pull requests?', ledger.ci.hasCI ? `**${s.ciEnforced} of ${s.ciApplicable}** checks enforced: ${ledger.ci.checks.filter((c) => c.state !== 'na').map((c) => `${c.title} ${['enforced', 'path_filtered'].includes(c.state) ? '✅' : c.state === 'unverified' ? '🟡' : '❌'}`).join(' · ')}.` : 'No CI configuration found.', s.p.ci[0], s.p.ci[1]],
+    ['3. Does CI enforce the checks on pull requests?', ledger.ci.hasCI ? `**${s.ciEnforced} of ${s.ciApplicable}** checks enforced: ${ledger.ci.checks.filter((c) => c.state !== 'na' && !(c.state === 'missing' && c.need !== 'required')).map((c) => `${c.title} ${['enforced', 'path_filtered'].includes(c.state) ? '✅' : c.state === 'unverified' ? '🟡' : '❌'}`).join(' · ')}.` : 'No CI configuration found.', s.p.ci[0], s.p.ci[1]],
   ]);
   return [`${verdict} ${mode}`, q];
 }
@@ -118,7 +123,7 @@ function ciSection(ledger) {
   const out = ['## 3. CI: are the checks enforced on pull requests?'];
   const { ci } = ledger;
   if (!ci.hasCI) { out.push('No CI configuration was found.'); return out; }
-  out.push(table(['Check', 'State', 'Where', 'Note'], ci.checks.map((c) => [c.title, STATE[c.state], c.where.length ? c.where.map((w) => `\`${w.file}:${w.line}\` (${w.job})`).join(', ') : c.configured ? `set up: ${c.configured}` : '', [c.command && `\`${clip(c.command, 60)}\``, c.detail].filter(Boolean).join(' · ')])));
+  out.push(table(['Check', 'State', 'Where', 'Note'], ci.checks.map((c) => [c.title, c.state === 'missing' && c.need !== 'required' ? '➖ not set up' : STATE[c.state], c.where.length ? c.where.map((w) => `\`${w.file}:${w.line}\` (${w.job})`).join(', ') : c.configured ? `set up: ${c.configured}` : '', [c.command && `\`${clip(c.command, 60)}\``, c.detail].filter(Boolean).join(' · ')])));
   const notes = [];
   if (ci.systems.some((s) => s !== 'github')) notes.push(`${ci.systems.filter((s) => s !== 'github').join(', ')} files are read for their commands only: whether they run on pull requests is not checked.`);
   notes.push('Branch protection (which checks are required to merge) is a repository setting this run does not read.');

@@ -11,12 +11,12 @@ const path = require('node:path');
 const { tokenize, uniq, sha, readText, pool } = require('../util');
 const { idsIn } = require('../extract/rules');
 
-const PARSER_VERSION = 7;
+const PARSER_VERSION = 11;
 const LEVELS = ['unit', 'component', 'integration', 'e2e'];
 const rank = (l) => LEVELS.indexOf(l);
 
 const NEEDS = {
-  e2e: /@playwright\/test|\bcy\.(visit|get|request|contains)\(|from ['"]cypress['"]|\bpuppeteer\b|selenium|webdriver|\bpage\.goto\(|\bbrowser\.(newPage|url|get)\(|\bdetox\b|\bappium\b|sync_playwright|async_playwright|chromedp|Capybara|testWidgets\(.*IntegrationTestWidgetsFlutterBinding|XCUIApplication/,
+  e2e: /@playwright\/test|require\(['"]playwright(?:-core)?['"]\)|from ['"]playwright(?:-core)?['"]|\bcy\.(visit|get|request|contains)\(|from ['"]cypress['"]|\bpuppeteer\b|selenium|webdriver|\bpage\.goto\(|\bbrowser\.(newPage|url|get)\(|\bdetox\b|\bappium\b|sync_playwright|async_playwright|chromedp|Capybara|testWidgets\(.*IntegrationTestWidgetsFlutterBinding|XCUIApplication/,
   integration: /\bsupertest\b|\brequest\(\s*app\s*\)|testcontainers|new PrismaClient|createConnection\(|mongoose\.connect|MongoMemoryServer|new (?:pg\.)?(?:Pool|Client)\(|\bknex\(|new Sequelize\(|new DataSource\(|create_engine\(|psycopg|TestClient\(|httptest\.NewServer|sql\.Open\(|@SpringBootTest|WebApplicationFactory|@Testcontainers|\blocalhost:\d+|127\.0\.0\.1|redis\.createClient|new Redis\(|amqplib|kafkajs|django\.test|APIClient\(|rails_helper|type:\s*:request|child_process|subprocess\.(run|Popen|check_)|exec\.Command\(|\bspawnSync\(|\bexecFileSync\(|\bexecSync\(|docker[- ]compose|@QuarkusTest|@MicronautTest|HttpClient\(|axios\.create\(\{\s*baseURL/,
   component: /@testing-library\/|\brender\(\s*<|\bmount\(|shallowMount\(|@vue\/test-utils|\benzyme\b|@WebMvcTest|@DataJpaTest|@JsonTest|TestBed\.|ComponentFixture|react-test-renderer|composeTestRule|pumpWidget\(/,
 };
@@ -146,7 +146,7 @@ const STARTS = {
 STARTS.dart = STARTS.js;
 
 /** Parse one test file. Pure: the result depends only on the arguments, so it is cached by content hash. */
-function parseTestFile(p, text, lang, idp) {
+function parseTestFile(p, text, lang, idp, script = false) {
   const lines = text.split(/\r?\n/);
   const start = STARTS[lang];
   const cases = [], stack = [];
@@ -212,6 +212,55 @@ function parseTestFile(p, text, lang, idp) {
     });
   }
 
+  if (script && !cases.length) {
+    // A check that is a program, not a suite. Its test cases are its assertions that say what they check:
+    // `check(lights === before, 'the number of lights never changes')` is a case named by that sentence. The sentence
+    // is what a rule in a document can be matched with, and the case is one statement, not a file of two thousand lines.
+    const header = lines.slice(0, 30).filter((l) => /^\s*(\/\/|#(?!!)|\*|\/\*)/.test(l)).map((l) => l.replace(/^\s*(\/\/|#|\*\/?|\/\*+)\s?/, '')).join(' ').replace(/\s+/g, ' ').trim();
+    const base = path.posix.basename(p);
+    // what this script calls its assertion: the usual names, and any function it calls three times or more with a
+    // condition first and a sentence last (`line(n <= max, 'cars inside each other: ...')`)
+    const own = new Map();
+    for (const l of lines) { const m = l.length < 4000 && /(?<![.\w])([A-Za-z_]\w*)\(\s*[^'"`,]*?(?:[<>]=?|[!=]==?|&&|\|\||!\w)[^'"`]*?,\s*['"`]/.exec(l); if (m) own.set(m[1], (own.get(m[1]) || 0) + 1); }
+    const mine = [...own].filter(([n, c]) => c >= 3 && !/^(if|for|while|switch|return|console|print|log|push|test|it|describe)$/.test(n)).map(([n]) => n);
+    const CALL = new RegExp(`(?<![.\\w])(?:check|assert|ok|expect|verify|must|should|ensure|t\\.ok|assert\\.ok|assert\\.equal|assert\\.strictEqual|assert\\.deepEqual|self\\.assert\\w+${mine.map((n) => `|${n}`).join('')})\\s*\\(|^\\s*assert\\s+\\S`);
+    for (let i = 0; i < lines.length && cases.length < 3000; i++) {
+      if (lines[i].length > 4000 || !CALL.test(lines[i]) || /^\s*(\/\/|#|\*|function\b|const\s+\w+\s*=\s*(?:async\s*)?\(|def\b)/.test(lines[i])) continue;
+      // the statement: this line and up to three more, until it closes
+      let stmt = lines[i], end = i;
+      while (end < i + 3 && end + 1 < lines.length && !/[;)]\s*$/.test(stmt.trimEnd()) && lines[end + 1].length < 4000) stmt += '\n' + lines[++end];
+      // its message: the last string of the statement, without the values spliced into it
+      const strings = [...stmt.matchAll(/(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)].map((m) => m[2]);
+      let msg = strings.length ? strings[strings.length - 1] : '';
+      for (let k = 0; k < 4 && /\$\{[^{}]*\}/.test(msg); k++) msg = msg.replace(/\$\{[^{}]*\}/g, ' ');
+      msg = msg.replace(/\$\{.*$/, ' ').replace(/\\(['"`n])/g, ' ').replace(/\(\s*[^a-zA-Z]*\)/g, ' ').replace(/[%{}]\w?/g, ' ').replace(/\s+/g, ' ').trim();
+      const words = uniq(tokenize(msg));
+      if (words.length < 3) continue;
+      const nameSet = new Set(words);
+      cases.push({
+        name: `${base} › ${msg.slice(0, 140)}`, line: i + 1, end: end + 1, skipped: false, params: 0, script: true, asserts: 1,
+        ids: uniq(idsIn(stmt, idp)), nt: words, bt: uniq(tokenize(stmt.slice(0, 600))).filter((t) => !nameSet.has(t)).slice(0, 60),
+      });
+      i = end;
+    }
+    if (cases.length < 3) {
+      // no assertions that explain themselves: the file as a whole is the case, named by its header comment
+      cases.length = 0;
+      const name = `${base}${header ? `: ${header.slice(0, 160)}` : ''}`;
+      const fails = /process\.exit\(\s*[1-9]|process\.exitCode\s*=\s*[1-9]|sys\.exit\(\s*(?:[1-9]|['"f])|\bthrow new \w*Error|\braise \w+|\bfail(?:ed|ures?)?\s*(?:\+\+|\+=|\.push)|\bexit\s+[1-9]/;
+      const end = Math.min(lines.length, 1500);
+      const nameTokens = uniq(tokenize(`${name} ${header}`));
+      const nameSet = new Set(nameTokens);
+      cases.push({
+        name, line: 1, end, skipped: false, params: 0, script: true,
+        asserts: lines.slice(0, end).reduce((n, l) => n + (ASSERT.test(l) || fails.test(l) ? 1 : 0), 0),
+        // matched by what its header says it checks, not by every word of a long program: a bag of four hundred
+        // words shares something with any sentence
+        ids: uniq(idsIn(lines.slice(0, end).join('\n'), idp)), nt: nameTokens, bt: [],
+      });
+      void nameSet;
+    }
+  }
   const needs = {};
   for (const [level, re] of Object.entries(NEEDS)) { const m = re.exec(text); if (m) needs[level] = m[0].slice(0, 40); }
   const observed = needs.e2e ? 'e2e' : needs.integration ? 'integration' : needs.component ? 'component' : lang === 'gherkin' ? 'e2e' : 'unit';
@@ -286,13 +335,13 @@ async function indexTests({ root, inventory, cache, config, idp }) {
   const cfgKey = sha(idp.src + PARSER_VERSION, 8);
   const skippedFiles = [];
   const records = await pool(tests, 16, async (f) => {
-    const key = f.sha && `${f.sha}:${f.lang}:${cfgKey}`;
+    const key = f.sha && `${f.sha}:${f.lang}:${f.script ? 's' : ''}:${cfgKey}`;
     let rec = key ? cache.get('tests', key) : undefined;
     if (!rec) {
       const text = readText(path.join(root, f.path), config.tests.max_kb * 1024 + 1);
       if (text === null) return null;
       if (Buffer.byteLength(text) > config.tests.max_kb * 1024) { skippedFiles.push({ path: f.path, why: `over ${config.tests.max_kb} KB` }); return null; }
-      rec = parseTestFile(f.path, text, f.lang, idp);
+      rec = parseTestFile(f.path, text, f.lang, idp, Boolean(f.script));
       if (key) cache.set('tests', key, rec);
     }
     return rec;
@@ -305,7 +354,7 @@ async function indexTests({ root, inventory, cache, config, idp }) {
     // The level a test counts at is what it needs when that is known to be higher than its folder says, otherwise
     // what its folder says: a browser test filed under unit/ is still a browser test.
     const level = declared && rank(declared) >= rank(rec.observed) ? declared : rec.observed;
-    const tf = { path: f.path, pkg: f.pkg, lang: rec.lang, declared, observed: rec.observed, level, why: rec.why, fs: rec.fs, mock: rec.mock, headerIds: rec.headerIds, imports: resolveImports(f, rec, inventory), support: resolveSupport(f, rec, inventory), cases: [] };
+    const tf = { path: f.path, pkg: f.pkg, script: Boolean(f.script), lang: rec.lang, declared, observed: rec.observed, level, why: rec.why, fs: rec.fs, mock: rec.mock, headerIds: rec.headerIds, imports: resolveImports(f, rec, inventory), support: resolveSupport(f, rec, inventory), cases: [] };
     for (const c of rec.cases) {
       const tc = { ...c, file: tf, key: `${f.path} › ${c.name}`, ids: uniq([...c.ids, ...rec.headerIds]) };
       tf.cases.push(tc); cases.push(tc);

@@ -106,3 +106,26 @@ test('a rule carries the headings above it, and a preposition with a bare number
   assert.deepEqual(rules.map((r) => r.section), ['Pricing › Discounts', 'Shop › Orders']);
   assert.deepEqual(limitsOf(rules[1].text).map((l) => l.raw), ['over 40 items', 'within 30 days', 'at most 5']);
 });
+
+test('GATE-3 a sentence is read whole across wrapped lines; half a sentence, or a description of the world, is not a rule', () => {
+  const text = [
+    '# Traffic', '',
+    'Within a second that car must slow by at least 2 m/s,',
+    'move 0.4 m aside and sound its horn. The number of lights',
+    'never changes once the scene is up.', '',
+    "GSI's aerial photographs cannot tell the two apart under the trees.", '',
+    'The coping sits on the highest drawn ground behind it (so the ground never', 'shows through it.', '',
+    '- The loader always stays up until the scene has been drawn twice,',
+    '  so the hand-over shows no black frame.',
+  ].join('\n');
+  const rules = parse(text, 'design', 'docs/GAME.md');
+  assert.deepEqual(rules.map((r) => [r.line, r.text]), [
+    [3, 'Within a second that car must slow by at least 2 m/s, move 0.4 m aside and sound its horn.'],
+    [3, 'The number of lights never changes once the scene is up.'],
+    [12, 'The loader always stays up until the scene has been drawn twice, so the hand-over shows no black frame.'],
+  ]);
+  // prose under docs/ is read as design; a README is not mined
+  assert.equal(docType('docs/GAME.md'), 'design');
+  assert.equal(docType('docs/images/readme.md'), 'general');
+  assert.equal(docType('README.md'), 'general');
+});

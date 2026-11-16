@@ -109,7 +109,15 @@ function excerptOf(c, textOf, maxLines, ruleWords = new Set()) {
   const asserts = all.filter((n) => ASSERT.test(lines[n - 1]) || (callsHelper && callsHelper.test(lines[n - 1])));
   const relevance = (n) => { let k = 0; for (const t of new Set(tokenize(lines[n - 1]))) if (ruleWords.has(t)) k++; return k; };
   let pick = all, complete = true, hidden = 0;
-  if (all.length > maxLines) {
+  if (c.script && all.length > 200) {
+    // a whole program standing in for a test: its header says what it checks, and beyond that only the lines that
+    // speak of the rule are worth the model's time. Never the whole picture, so never grounds for "no proof".
+    const head = all.filter((n) => n <= c.line + 12 && /^\s*(\/\/|#|\*|\/\*)/.test(lines[n - 1])).slice(0, 5);
+    const rel = all.map((n) => [relevance(n), n]).filter(([r]) => r >= 2).sort((a, b) => b[0] - a[0] || a[1] - b[1]).slice(0, Math.max(4, maxLines - head.length)).map(([, n]) => n);
+    const keep = new Set([c.line, ...head, ...rel]);
+    pick = [...new Set([c.line, ...lines.map((_, i) => i + 1).filter((n) => n >= c.line && n <= c.end && keep.has(n))])];
+    complete = false; hidden = asserts.filter((n) => !keep.has(n)).length;
+  } else if (all.length > maxLines) {
     const hard = maxLines * 2;
     const keep = new Set(all.slice(0, 2));
     // assertions first, the ones that mention the rule's words before the others
@@ -132,7 +140,7 @@ function excerptOf(c, textOf, maxLines, ruleWords = new Set()) {
     out.push(fmt(n));
     prev = n;
   }
-  if (!complete) out.push(`… (${hidden} more assertion lines of this test are not shown)`);
+  if (!complete) out.push(hidden ? `… (${hidden} more assertion lines of this test are not shown)` : '… (the rest of this program is not shown)');
   const citable = new Set(asserts.filter((n) => shown.has(n)));
   for (const h of helpers) {
     out.push(`… helper ${h.name}, called by this test:`);

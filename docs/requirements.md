@@ -7,7 +7,7 @@ repository with the same rules it applies to any other.
 
 - **GATE-1 Rules with an ID.** An item that starts a heading, a list item or a table row with an ID (`REQ-12`, `DEC-4`, `AC-3`) is a rule; `REQ_007` and `req-7` name the same rule.
 - **GATE-2 Decision records.** An architecture decision record yields one decision; a decision that is superseded, rejected or still proposed is not counted.
-- **GATE-3 Rules without an ID.** In a requirement or design document that numbers nothing, a normative sentence (must, shall, should) is an inferred rule whose ID is a hash of its text; instructions to developers are not rules.
+- **GATE-3 Rules without an ID.** In a requirement or design document that numbers nothing, a normative sentence (must, shall, should, never, always) is an inferred rule whose ID is a hash of its text; a sentence is read whole across wrapped lines, and instructions to developers are not rules.
 - **GATE-4 Critical rules.** A rule about money, access control, customer data, calls to outside systems or data safety is critical, and the report names the word that made it so; a word that means risk only in some contexts does not make a rule critical on its own.
 
 ## Proof
@@ -32,7 +32,8 @@ repository with the same rules it applies to any other.
 ## CI
 
 - **GATE-13 Enforced means it can fail a pull request.** A check counts as enforced only when a step runs it in a workflow triggered by pull requests and the step's failure is not ignored.
-- **GATE-14 Scripts are followed.** A step that calls a package script or a make target is judged by the commands that script runs.
+- **GATE-14 Scripts are followed.** A step that calls a package script, a make target or a shell script of the repository is judged by the commands that script runs.
+- **GATE-29 Checks that are programs.** A program a CI step runs to check the product, named as a check or a test, is a test even without a test framework; each of its assertions that says in words what it checks is a test case named by those words.
 - **GATE-15 Priorities of CI gaps.** Tests that do not gate pull requests are P0; a linter or type checker that is set up and not enforced is P1; an optional check the repository never set up is shown in the CI table and is not a finding.
 - **GATE-28 No guesses in the list.** A sentence without an ID that nobody has judged to be a rule is counted in the report and produces no finding.
 

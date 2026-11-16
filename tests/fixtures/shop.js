@@ -27,7 +27,7 @@ const FILES = {
 - **REQ-2 Free shipping.** Orders over $50 ship free; the shipping fee is $5 otherwise.
 - **REQ-3 Payment retry.** When the payment gateway times out, the payment is retried at most 3 times.
 - **REQ-4 Refund window.** A refund can be requested within 30 days of delivery.
-- **REQ-5 Session expiry.** A session expires after 15 minutes of inactivity.
+- **REQ-5 Session expiry.** A login session expires after 15 minutes of inactivity.
 - **REQ-6 Password length.** Passwords must be at least 12 characters long.
 - **REQ-7 Order export.** An order history can be exported as CSV.
 - **REQ-8 Payment speed.** Payment processing should be fast.

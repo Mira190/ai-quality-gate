@@ -3,14 +3,14 @@
 // A check counts only when a step runs it, the step's workflow runs on pull requests, and the step can fail the run.
 // "The tool is configured" and "the tool runs somewhere" are both reported, as the gaps they are.
 const path = require('node:path');
-const { parseCI, loadScripts, expandCommand } = require('./workflows');
+const { parseCI, loadScripts, expandCommand, scriptTests } = require('./workflows');
 const { readText } = require('../util');
 
 const PM = '(?:npm|yarn|pnpm|bun)\\s+(?:run\\s+)?';
 const CHECKS = [
   {
     id: 'tests', title: 'Tests',
-    cmd: new RegExp(`\\b(jest|vitest|mocha|ava|node\\s+(?:--\\S+\\s+)*--test|pytest|py\\.test|python3?\\s+-m\\s+(?:pytest|unittest)|go\\s+test|cargo\\s+(?:test|nextest)|mvnw?\\s+[^\\n]*\\b(?:test|verify|install)|gradlew?\\s+[^\\n]*\\b(?:test|check|build)|dotnet\\s+test|rspec|rake\\s+(?:test|spec)|rails\\s+test|phpunit|pest|swift\\s+test|xcodebuild\\s+[^\\n]*test|flutter\\s+test|dart\\s+test|tox|nox|ctest|bazel\\s+test|karma\\s+start|playwright\\s+test|cypress\\s+run|deno\\s+test|bun\\s+test|${PM}test[\\w:.-]*|make\\s+(?:test|check))\\b`),
+    cmd: new RegExp(`\\b(jest|vitest|mocha|ava|node\\s+(?:--\\S+\\s+)*--test|pytest|py\\.test|python3?\\s+-m\\s+(?:pytest|unittest)|go\\s+test|cargo\\s+(?:test|nextest)|mvnw?\\s+[^\\n]*\\b(?:test|verify|install)|gradlew?\\s+[^\\n]*\\b(?:test|check|build)|dotnet\\s+test|rspec|rake\\s+(?:test|spec)|rails\\s+test|phpunit|pest|swift\\s+test|xcodebuild\\s+[^\\n]*test|flutter\\s+test|dart\\s+test|tox|nox|ctest|bazel\\s+test|karma\\s+start|playwright\\s+test|cypress\\s+run|deno\\s+test|bun\\s+test|${PM}test[\\w:.-]*|make\\s+(?:test|check))\\b|(?:^|[\\s/])(?:run[-_]?)?(?:tests?|checks?|verify|smoke)(?:[-_][\\w-]+)?\\.(?:sh|bash)\\b|[\\w./-]*[_-](?:check|test|probe)\\.(?:m?js|py|rb)\\b`),
   },
   {
     id: 'lint', title: 'Lint',
@@ -34,7 +34,7 @@ const CHECKS = [
   },
   {
     id: 'coverage', title: 'Coverage',
-    cmd: /(--coverage\b|--cov\b|--cov=|-coverprofile|\bc8\b|\bnyc\b|jacoco|coverlet|tarpaulin|llvm-cov|simplecov|\bcoverage\s+(?:run|report|xml)|--collect:"XPlat|--experimental-test-coverage|--test-coverage)/,
+    cmd: /(--coverage\b|--cov\b|--cov=|-coverprofile|(?:^|[\s;&|])(?:npx\s+)?(?:c8|nyc)\s|jacoco|coverlet|tarpaulin|llvm-cov|simplecov|\bcoverage\s+(?:run|report|xml)|--collect:"XPlat|--experimental-test-coverage|--test-coverage)/,
     uses: /codecov|coveralls|sonar|code-coverage/i,
     config: /^(codecov\.ya?ml|\.codecov\.ya?ml|\.nycrc.*|\.c8rc.*|sonar-project\.properties)$/,
   },
@@ -115,11 +115,20 @@ function analyzeCI({ root, inventory, config }) {
       const viaUses = c.uses && (c.uses.test(s.uses) || (s.system !== 'github' && c.uses.test(s.run)));
       if (!line && !viaUses) continue;
       if (c.id === 'lint' && line && /^\s*(?:npx\s+)?prettier\b/.test(line)) continue;
-      const hit = { step: s, state: stateOf(s, line), line: (line || s.uses).trim().slice(0, 120) };
+      // shown in the report: the command itself, not the shell line around it
+      let shown = s.uses;
+      if (line) {
+        const m = c.cmd.exec(line);
+        let a = m.index, b = m.index + m[0].length;
+        while (a > 0 && !/[\s"'()$;|&=]/.test(line[a - 1])) a--;
+        while (b < line.length && !/[\s"'();|&]/.test(line[b])) b++;
+        shown = line.slice(a, b);
+      }
+      const hit = { step: s, state: stateOf(s, line), line: shown.trim().slice(0, 120) };
       hits.push(hit);
       if (c.id === 'tests') {
         const command = s.full.split('\n').filter((l) => !/^\s*#/.test(l) && c.cmd.test(l)).join('\n');
-        testSteps.push({ ...hit, e2e: E2E_CMD.test(command) || E2E_CMD.test(s.name), command });
+        testSteps.push({ ...hit, e2e: E2E_CMD.test(command) || E2E_CMD.test(s.name), command, full: s.full });
       }
     }
     const need = applicability(c, inventory, facts);
@@ -140,7 +149,7 @@ function analyzeCI({ root, inventory, config }) {
     if (c.id === 'typecheck' && state === 'na') detail = inventory.langs.js && !inventory.langs.ts ? 'plain JavaScript, no type checker configured' : 'checked by the compiler';
     checks.push({ id: c.id, title: c.title, state, need, detail, configured: facts.configured[c.id], where: best.slice(0, 3).map(whereOf), command: best[0]?.line });
   }
-  return { checks, steps, workflows, systems, testSteps, errors, hasCI, deps: scripts.deps };
+  return { checks, steps, workflows, systems, testSteps, errors, hasCI, deps: scripts.deps, scriptTests: scriptTests(steps, inventory) };
 }
 const whereOf = (h) => ({ file: h.step.definedIn || h.step.file, line: h.step.line, job: h.step.job });
 
@@ -153,6 +162,17 @@ const whereOf = (h) => ({ file: h.step.definedIn || h.step.file, line: h.step.li
  */
 function runsOnPR(tf, ci) /** @type {string} */ {
   if (!ci.testSteps.length) return 'never';
+  if (tf.script) {
+    // a script-style test runs where a step names it
+    let state = 'never';
+    const order = ['pr', 'unknown', 'soft', 'not_pr', 'never'];
+    for (const t of ci.testSteps) {
+      if (!(t.full || '').includes(tf.path)) continue;
+      const s = t.state === 'enforced' || t.state === 'path_filtered' ? 'pr' : t.state === 'unverified' ? 'unknown' : t.state === 'non_blocking' ? 'soft' : 'not_pr';
+      if (order.indexOf(s) < order.indexOf(state)) state = s;
+    }
+    return state;
+  }
   const browser = tf.observed === 'e2e' && tf.why;
   let best = 'never';
   const better = (s) => { const o = ['pr', 'unknown', 'soft', 'not_pr', 'never']; if (o.indexOf(s) < o.indexOf(best)) best = s; };

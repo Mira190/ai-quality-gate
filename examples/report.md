@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | 1. Is every requirement and design decision proven by a test? | **5 of 11** rules proven · 2 with a hole · 3 with no test · 0 unverified · 1 not testable as written. Critical rules: **4 of 9** proven. | 2 | 3 |
 | 2. Is each thing tested at the right level? | 5 placement findings. Cases: unit 7 · component 0 · integration 2 · e2e 2. | 0 | 2 |
-| 3. Does CI enforce the checks on pull requests? | **2 of 8** checks enforced: Tests ✅ · Lint ❌ · Type check ❌ · Format ❌ · Coverage ❌ · Dependency scan ✅ · Secret scan ❌ · Static security analysis ❌. | 0 | 3 |
+| 3. Does CI enforce the checks on pull requests? | **2 of 5** checks enforced: Tests ✅ · Lint ❌ · Type check ❌ · Format ❌ · Dependency scan ✅. | 0 | 3 |
 
 ## Fix first: P0 and P1
 
@@ -76,10 +76,10 @@ Not counted: 1 rule superseded, rejected or still a draft; 1 sentence the model 
 | Lint | ❌ failures ignored | `.github/workflows/ci.yml:13` (check) | `npm run lint` |
 | Type check | ❌ set up, not run | set up: tsconfig.json |  |
 | Format | ❌ set up, not run | set up: .prettierrc |  |
-| Coverage | ❌ missing |  |  |
+| Coverage | ➖ not set up |  |  |
 | Dependency scan | ✅ enforced | set up: .github/dependabot.yml | by .github/dependabot.yml |
-| Secret scan | ❌ missing |  | GitHub secret scanning is a repository setting this run cannot see |
-| Static security analysis | ❌ missing |  |  |
+| Secret scan | ➖ not set up |  | GitHub secret scanning is a repository setting this run cannot see |
+| Static security analysis | ➖ not set up |  |  |
 
 - Branch protection (which checks are required to merge) is a repository setting this run does not read.
 
@@ -101,4 +101,4 @@ Not counted: 1 rule superseded, rejected or still a draft; 1 sentence the model 
 - Shown to the model: 5 candidate tests, 19 of their 19 lines (the opening, every assertion, the lines that share the rule's words). Every assertion of every candidate was shown.
 - Read by code, in full: 4 rule documents, 11 test files, 2 CI files. The model reads no file.
 - Tests are read, not run. Evidence levels: _code_ is decided by parsing; _model, verified_ is a model answer whose citation code checked; _advice_ never blocks.
-- Time: scan 4 ms · extract 23 ms · index 11 ms · ci 19 ms · model 0 ms · link 1 ms · judge 6 ms · assess 1 ms · execute 0 ms · placement 1 ms.
+- Time: scan 3 ms · extract 21 ms · ci-scripts 17 ms · index 8 ms · ci 3 ms · model 0 ms · link 2 ms · judge 4 ms · assess 1 ms · execute 0 ms · placement 1 ms.
