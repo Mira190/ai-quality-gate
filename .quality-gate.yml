@@ -1,0 +1,14 @@
+# The gate's own configuration. See examples/.quality-gate.yml for every key.
+rules:
+  # this repository's requirements are GATE-n, so they never collide with the REQ-n of the fixtures in its tests
+  id_prefixes: [GATE]
+docs:
+  # research notes quote other projects' requirement IDs; they state no rule of this repository
+  exclude: ['docs/research/**', 'docs/research*.md', 'examples/**']
+ci:
+  # ESLint is the style check here (no separate formatter); GitHub's secret scanning covers secrets
+  ignore: [format, secrets, sast]
+suppress:
+  - path: tests/unit/tests-index.test.js
+    check: placement.mislabelled
+    reason: the file holds snippets of browser and HTTP tests as data for the parser; it drives nothing

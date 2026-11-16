@@ -1,86 +1,121 @@
 'use strict';
-// Small shared helpers. No I/O except readText.
+// Small shared helpers. Everything here is pure or touches only the local file system.
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const readText = (root, rel) => { try { return fs.readFileSync(path.join(root, rel), 'utf8'); } catch { return null; } };
-const linesOf = (text) => String(text).replace(/\r\n?/g, '\n').split('\n');
+const sha = (s, n = 16) => crypto.createHash('sha256').update(String(s)).digest('hex').slice(0, n);
 
-// Natural rule-ID order: requirements before decisions, then by number (REQ-2 before REQ-10).
-const KIND_RANK = { requirement: 0, decision: 1 };
-const idNum = (id) => Number((String(id).match(/(\d+)(?!.*\d)/) || [0, 0])[1]);
-const idPrefix = (id) => String(id).replace(/[-_.]?\d+$/, '');
-function compareRules(a, b) {
-  const k = (KIND_RANK[a.kind] ?? 2) - (KIND_RANK[b.kind] ?? 2);
-  if (k) return k;
-  const p = idPrefix(a.id).localeCompare(idPrefix(b.id));
-  return p || idNum(a.id) - idNum(b.id);
-}
-
-// Greedy word wrap for one paragraph; width in characters (the report hard-wraps only the run line).
-function wrap(text, width) {
-  const out = []; let line = '';
-  for (const w of text.split(/ +/)) {
-    if (!line) line = w;
-    else if (line.length + 1 + w.length <= width) line += ' ' + w;
-    else { out.push(line); line = w; }
-  }
-  if (line) out.push(line);
-  return out.join('\n');
-}
-
-// Minimal glob → RegExp: ** (any dirs), * (no slash), ?, {a,b}. Paths use forward slashes.
-function globToRegExp(glob) {
-  let re = '', i = 0;
-  const g = glob.replace(/^\.\//, '');
-  while (i < g.length) {
-    const c = g[i];
-    if ('?@+*!'.includes(c) && g[i + 1] === '(') { // extglob: ?(a|b) @(a|b) +(a|b) *(a|b)
-      const j = g.indexOf(')', i), alt = g.slice(i + 2, j).split('|').map((s) => s.replace(/[.+^$|\\]/g, '\\$&')).join('|');
-      re += `(?:${alt})${{ '?': '?', '@': '', '+': '+', '*': '*', '!': '' }[c]}`; i = j + 1; continue;
-    }
-    if (c === '*' && g[i + 1] === '*') { i += 2; if (g[i] === '/') { i++; re += '(?:.*/)?'; } else re += '.*'; continue; }
-    if (c === '*') re += '[^/]*';
-    else if (c === '?') re += '[^/]';
-    else if (c === '[') { const j = g.indexOf(']', i); re += g.slice(i, j + 1); i = j; }
-    else if (c === '{') { const j = g.indexOf('}', i); re += '(?:' + g.slice(i + 1, j).split(',').map((s) => s.replace(/[.+^$()|\\]/g, '\\$&').replace(/\*/g, '[^/]*')).join('|') + ')'; i = j; }
-    else re += c.replace(/[.+^$()|[\]\\]/g, '\\$&');
-    i++;
+/** Glob → RegExp. Supports **, *, ?, {a,b}. Paths always use forward slashes. */
+function globToRe(glob) {
+  let re = '';
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === '*') {
+      if (glob[i + 1] === '*') {
+        i++;
+        if (glob[i + 1] === '/') { i++; re += '(?:.*/)?'; } else re += '.*';
+      } else re += '[^/]*';
+    } else if (c === '?') re += '[^/]';
+    else if (c === '{') {
+      const end = glob.indexOf('}', i);
+      if (end < 0) { re += '\\{'; continue; }
+      re += '(?:' + glob.slice(i + 1, end).split(',').map(escapeRe).join('|') + ')';
+      i = end;
+    } else re += escapeRe(c);
   }
   return new RegExp('^' + re + '$');
 }
-const globMatch = (glob, p) => globToRegExp(glob).test(p);
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
-// Numeric literals in source text (1,000 and 5_000 forms included), as numbers.
-function numbersIn(text) {
-  const out = new Set();
-  for (const m of String(text).matchAll(/(?<![\w.])(\d{1,3}(?:[,_]\d{3})+|\d+)(\.\d+)?(?![\w])/g)) out.add(Number((m[1] + (m[2] || '')).replace(/[,_]/g, '')));
+/** A matcher for a list of globs; a glob without a slash matches at any depth. */
+function matcher(globs) {
+  const res = (globs || []).filter(Boolean).map((g) => globToRe(g.includes('/') ? g.replace(/^\.\//, '') : '**/' + g));
+  return (p) => res.some((r) => r.test(p));
+}
+
+/** Run fn over items with at most `n` in flight. Results keep the input order. */
+async function pool(items, n, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(n, items.length)) }, worker));
   return out;
 }
 
+const STOP = new Set(('a an and are as at be been but by can could do does for from had has have if in into is it its may might more most must ' +
+  'no not of on only or other shall should so some such than that the their them then there these they this those to was were when where which ' +
+  'while who will with would each every any all per via within without after before between during system user users test tests spec should ' +
+  'given when then it describe expect assert true false null undefined return const let var function async await new').split(' '));
+
+/** Light stemmer: enough to make "discounts"/"discounted" meet "discount". Deterministic, no dictionary. */
+function stem(w) {
+  if (w.length > 5 && w.endsWith('ing')) return w.slice(0, -3);
+  if (w.length > 4 && w.endsWith('ed') && !w.endsWith('eed')) return w.slice(0, -2);
+  if (w.length > 4 && w.endsWith('ies')) return w.slice(0, -3) + 'y';
+  if (w.length > 4 && w.endsWith('es') && /(s|x|ch|sh)es$/.test(w)) return w.slice(0, -2);
+  if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
+  return w;
+}
+
+/**
+ * Words of a text for matching: camelCase and snake_case are split, numbers are kept (limits such as "20" matter),
+ * CJK runs become bigrams. Returns stems in order of appearance, duplicates included.
+ */
+function tokenize(text) {
+  const out = [];
+  const s = String(text).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+  for (const m of s.matchAll(/[A-Za-z]+|\d+(?:\.\d+)?|[一-鿿]+/g)) {
+    const w = m[0];
+    if (/[一-鿿]/.test(w)) {
+      if (w.length === 1) out.push(w);
+      for (let i = 0; i + 1 < w.length; i++) out.push(w.slice(i, i + 2));
+    } else if (/^\d/.test(w)) out.push(w);
+    else {
+      const l = w.toLowerCase();
+      if (l.length > 1 && !STOP.has(l)) out.push(stem(l));
+    }
+  }
+  return out;
+}
+const uniq = (a) => [...new Set(a)];
+
+const isBinary = (buf) => buf.subarray(0, 4096).includes(0);
+
+/** Read a text file, at most maxBytes. Returns null for a missing, binary or unreadable file. */
+function readText(file, maxBytes = 1 << 20) {
+  try {
+    const fd = fs.openSync(file, 'r');
+    try {
+      const size = fs.fstatSync(fd).size;
+      const buf = Buffer.alloc(Math.min(size, maxBytes));
+      fs.readSync(fd, buf, 0, buf.length, 0);
+      if (isBinary(buf)) return null;
+      return buf.toString('utf8');
+    } finally { fs.closeSync(fd); }
+  } catch { return null; }
+}
+
+/** Write through a temporary file so a killed run never leaves half a file behind. */
+function writeAtomic(file, text) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, text);
+  fs.renameSync(tmp, file);
+}
+const readJson = (file, fallback = null) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } };
+
+const clip = (s, n) => { s = String(s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
+const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+const by = (...keys) => (a, b) => { for (const k of keys) { const c = cmp(k(a), k(b)); if (c) return c; } return 0; };
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
-const cell = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\n+/g, ' ');
-const base = (p) => p.split('/').pop();
+const count = (arr, fn) => arr.reduce((n, x) => n + (fn(x) ? 1 : 0), 0);
+const groupBy = (arr, fn) => { const m = new Map(); for (const x of arr) { const k = fn(x); if (!m.has(k)) m.set(k, []); m.get(k).push(x); } return m; };
 
-// Self-consistency: of n model replies, a judgment needs a strict majority (1 of 1, 2 of 2, 2 of 3).
-const need = (n) => Math.floor(n / 2) + 1;
-// The most frequent value; a tie goes to the earliest reply.
-function mode(values) {
-  const c = new Map();
-  for (const v of values) c.set(v, (c.get(v) || 0) + 1);
-  let best, n = 0;
-  for (const [v, k] of c) if (k > n) { best = v; n = k; }
-  return best;
-}
-
-// Deterministic shuffle (mulberry32 seeded): vote k of a call sees the candidates in order k. Seed 0 keeps the order.
-function permute(list, seed) {
-  if (!seed) return list;
-  const a = [...list];
-  let t = (seed * 0x9e3779b9) >>> 0;
-  const rnd = () => { t = (t + 0x6d2b79f5) >>> 0; let x = Math.imul(t ^ (t >>> 15), 1 | t); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-  return a;
-}
-
-module.exports = { permute, need, mode, readText, linesOf, compareRules, idNum, wrap, globToRegExp, globMatch, numbersIn, plural, cell, base };
+module.exports = { sha, globToRe, matcher, escapeRe, pool, tokenize, stem, uniq, isBinary, readText, writeAtomic, readJson, clip, cmp, by, plural, count, groupBy };

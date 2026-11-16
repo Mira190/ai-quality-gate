@@ -1,96 +1,84 @@
-# AI quality gate: a pull-request check that traces the repository's requirements and design decisions to code and
-# tests, and blocks only on what it can prove and what the change introduced.
+# AI quality gate: a pull-request check that answers three questions about the repository and the change.
+#   1. Is every requirement and design decision proven by a test?
+#   2. Is each thing tested at the right level (unit, component, integration, end to end)?
+#   3. Does CI enforce its checks (tests, lint, type check ...) on pull requests?
 #
-#   - uses: Mira190/ai-quality-gate@v0
+#   - uses: actions/checkout@v4
+#   - uses: Mira190/ai-quality-gate@v1
 #     with:
-#       anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+#       copilot-token: ${{ secrets.COPILOT_PAT }}   # fine-grained token, "Copilot Requests" permission; optional
 #
-# What blocks (see src/gate.js): a finding at fail-on priority or above, whose evidence is executed (E), code-decided
-# (S) or model-proposed and code-verified (V), that is new against the default branch's baseline, that touches a
-# changed file, and that is not suppressed in .quality-gate.yml. Model-only judgments (M) are posted as advice.
-#
-# State kept between runs (actions/cache, never committed): the verdict memo (the same input gets the same model
-# verdict on every run) and the baseline (written by runs on the default branch).
+# Code decides everything it can. The model (GitHub Copilot CLI) is asked only whether specific tests prove specific
+# rules, and its answers are checked by code. Without a token the gate still runs, on code-decided findings alone.
+# What blocks: a P0 or P1 finding, with code-decided or code-verified evidence, that this change brings or touches.
 name: AI quality gate
-description: Requirement → code → test traceability gate with deterministic evidence first and the model last.
+description: Are requirements proven by tests, are tests at the right level, does CI enforce its checks. Deterministic first, the model last.
 author: Mira190
 branding:
   icon: shield
   color: green
 
 inputs:
-  anthropic-api-key:
-    description: Model key. Empty runs offline (code-decided findings only; sections that need the model show n/a).
+  copilot-token:
+    description: Fine-grained personal access token with the "Copilot Requests" permission. Empty runs without a model.
     required: false
     default: ''
-  fail-on:
-    description: Highest priority that fails the check (P0, P1, P2, P3, never). Overrides .quality-gate.yml.
+  model:
+    description: Model for the Copilot CLI (empty uses its default).
     required: false
     default: ''
-  basis:
-    description: Evidence that may block, comma separated (E, S, V, M). Overrides .quality-gate.yml.
+  copilot-version:
+    description: Version of @github/copilot to install.
     required: false
-    default: ''
-  all-findings:
-    description: 'true: every finding can block, not only the ones missing from the baseline.'
+    default: latest
+  provider:
+    description: auto (Copilot when a token is given, else none), copilot, command, handoff or none.
     required: false
-    default: 'false'
+    default: auto
   config:
     description: Path of the gate config.
     required: false
     default: .quality-gate.yml
-  model:
-    description: Model id.
-    required: false
-    default: claude-haiku-5-5
-  max-usd:
-    description: Model spend cap per run, USD.
-    required: false
-    default: '2'
-  votes:
-    description: Votes per model judgment (majority wins).
-    required: false
-    default: '3'
-  execute:
-    description: >-
-      'true': run rule-targeted mutants against the linked tests with test-command (or execute.test_command in the
-      config). This runs your repository's tests on this runner; dependencies must be installed before this step.
-    required: false
-    default: 'false'
-  test-command:
-    description: Command that runs the given test files; {files} is replaced by them (e.g. "npx vitest run {files}").
+  fail-on:
+    description: Lowest priority that fails the check (P0, P1, P2, P3, never). Overrides the config.
     required: false
     default: ''
+  enforce:
+    description: "'true' fails the step when the gate fails. 'false' reports only (use it for the first weeks)."
+    required: false
+    default: 'true'
   comment:
-    description: 'true: post or update one pull-request comment (needs pull-requests: write).'
+    description: "'true' posts or updates one pull-request comment (needs pull-requests: write)."
     required: false
     default: 'true'
   sarif:
-    description: 'true: upload findings to code scanning (needs security-events: write).'
+    description: "'true' uploads findings to code scanning (needs security-events: write)."
     required: false
     default: 'false'
-  batch-api:
-    description: "'true': runs on the default branch (the baseline) go through Message Batches at half price; slower (minutes to hours). Pull requests always call the API directly."
+  max-requests:
+    description: Model calls per run (empty uses the config, default 12).
     required: false
-    default: 'false'
-  enforce:
-    description: "'true': fail the step when the gate fails. 'false': report only (a first rollout)."
-    required: false
-    default: 'true'
+    default: ''
 
 outputs:
   verdict:
     description: pass or fail
-    value: ${{ steps.report.outputs.verdict }}
+    value: ${{ steps.gate.outputs.verdict }}
   blocking:
     description: Number of blocking findings
-    value: ${{ steps.report.outputs.blocking }}
-  sarif-path:
-    description: SARIF file
-    value: ${{ steps.report.outputs.sarif_path }}
+    value: ${{ steps.gate.outputs.blocking }}
+  p0:
+    description: Number of P0 findings
+    value: ${{ steps.gate.outputs.p0 }}
+  p1:
+    description: Number of P1 findings
+    value: ${{ steps.gate.outputs.p1 }}
+  report:
+    description: Path of report.md
+    value: ${{ steps.gate.outputs.report }}
   affected-tests:
-    description: Space-separated test files that guard the rules this change touches (run these first)
-    value: ${{ steps.report.outputs.affected_tests }}
+    description: Space-separated test files that reach the changed code (run these first)
+    value: ${{ steps.gate.outputs.affected_tests }}
 
 runs:
   using: composite
@@ -101,86 +89,74 @@ runs:
 
     - name: Install the gate
       shell: bash
-      run: npm ci --ignore-scripts --omit=dev --prefix "$GITHUB_ACTION_PATH" --no-audit --no-fund
+      run: npm ci --ignore-scripts --omit=dev --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH"
 
-    - name: Changed files
-      id: changed
+    # The model is optional. A failed install is a warning: the gate then runs on code-decided findings alone.
+    - name: Install the Copilot CLI
+      if: inputs.copilot-token != '' && (inputs.provider == 'auto' || inputs.provider == 'copilot')
       shell: bash
       env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      run: |
-        out="$RUNNER_TEMP/aqg-changed.txt"; diff="$RUNNER_TEMP/aqg-changes.diff"; : > "$out"
-        if [ -n "$BASE_SHA" ]; then
-          git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || true
-          if git diff --name-only "$BASE_SHA" HEAD > "$out" 2>/dev/null; then echo "path=$out" >> "$GITHUB_OUTPUT"; fi
-          # the diff itself: change impact (unguarded changes, spec drift), mutants on changed rules, pending tests
-          if git diff -U0 "$BASE_SHA" HEAD > "$diff" 2>/dev/null; then echo "diff=$diff" >> "$GITHUB_OUTPUT"; fi
-        fi
+        COPILOT_VERSION: ${{ inputs.copilot-version }}
+      run: npm install -g --no-audit --no-fund "@github/copilot@${COPILOT_VERSION}" || echo "::warning title=AI quality gate::The Copilot CLI could not be installed; running without a model."
 
-    - name: Restore the verdict memo and the baseline
+    # Parsed files and model verdicts, keyed by content: a pull request re-reads only what it changed, and an
+    # unchanged rule with unchanged tests is never sent to the model twice.
+    - name: Restore the cache and the baseline
       uses: actions/cache/restore@v4
       with:
-        path: .quality-gate-state
-        key: aqg-state-${{ github.event.repository.default_branch }}-${{ github.run_id }}
-        restore-keys: aqg-state-${{ github.event.repository.default_branch }}-
+        path: ${{ runner.temp }}/aqg-state
+        key: aqg-${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: aqg-${{ github.repository_id }}-
 
-    - name: Run
-      id: report
+    - name: Review
+      id: gate
       shell: bash
       env:
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        AQG_FAIL_ON: ${{ inputs.fail-on }}
-        AQG_BASIS: ${{ inputs.basis }}
-        AQG_ALL: ${{ inputs.all-findings }}
-        AQG_CONFIG: ${{ inputs.config }}
+        COPILOT_GITHUB_TOKEN: ${{ inputs.copilot-token }}
+        AQG_PROVIDER: ${{ inputs.provider }}
         AQG_MODEL: ${{ inputs.model }}
-        AQG_MAX_USD: ${{ inputs.max-usd }}
-        AQG_VOTES: ${{ inputs.votes }}
-        AQG_EXECUTE: ${{ inputs.execute }}
-        AQG_TEST_COMMAND: ${{ inputs.test-command }}
-        AQG_CHANGED: ${{ steps.changed.outputs.path }}
-        AQG_DIFF: ${{ steps.changed.outputs.diff }}
-        AQG_BATCH: ${{ inputs.batch-api }}
-        AQG_IS_DEFAULT: ${{ github.ref_name == github.event.repository.default_branch && github.event_name != 'pull_request' }}
-        AQG_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        AQG_REPO: ${{ github.repository }}
+        AQG_CONFIG: ${{ inputs.config }}
+        AQG_FAIL_ON: ${{ inputs.fail-on }}
+        AQG_MAX_REQUESTS: ${{ inputs.max-requests }}
+        AQG_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         AQG_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        AQG_NAME: ${{ github.repository }}
+        AQG_IS_DEFAULT: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
+        AQG_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        AQG_STATE: ${{ runner.temp }}/aqg-state
+        AQG_OUT: ${{ runner.temp }}/aqg
       run: |
-        mkdir -p .quality-gate-state
-        args=(--repo "$GITHUB_WORKSPACE" --name "$AQG_REPO" --sha "${AQG_SHA:0:7}" --out "$RUNNER_TEMP/aqg"
-              --config "$AQG_CONFIG" --model "$AQG_MODEL" --max-usd "$AQG_MAX_USD" --votes "$AQG_VOTES"
-              --memo .quality-gate-state/memo.json --baseline .quality-gate-state/baseline.json --report-url "$AQG_RUN_URL")
-        [ -z "$ANTHROPIC_API_KEY" ] && args+=(--offline)
+        mkdir -p "$AQG_STATE"
+        args=(run --repo "$GITHUB_WORKSPACE" --name "$AQG_NAME" --sha "${AQG_SHA:0:7}" --out "$AQG_OUT"
+              --cache "$AQG_STATE/cache" --baseline "$AQG_STATE/baseline.json" --report-url "$AQG_URL" --provider "$AQG_PROVIDER")
+        [ -f "$GITHUB_WORKSPACE/$AQG_CONFIG" ] && args+=(--config "$GITHUB_WORKSPACE/$AQG_CONFIG")
+        [ -n "$AQG_MODEL" ] && args+=(--model "$AQG_MODEL")
         [ -n "$AQG_FAIL_ON" ] && args+=(--fail-on "$AQG_FAIL_ON")
-        [ -n "$AQG_BASIS" ] && args+=(--basis "$AQG_BASIS")
-        [ "$AQG_ALL" = true ] && args+=(--all-findings)
-        [ -n "$AQG_CHANGED" ] && args+=(--changed-files "$AQG_CHANGED")
-        [ -n "$AQG_DIFF" ] && args+=(--diff "$AQG_DIFF")
-        [ "$AQG_EXECUTE" = true ] && args+=(--execute)
-        [ -n "$AQG_TEST_COMMAND" ] && args+=(--test-command "$AQG_TEST_COMMAND")
-        # the default branch writes the baseline that pull requests are compared against
-        [ "$AQG_IS_DEFAULT" = true ] && args+=(--write-baseline --history .quality-gate-state/history --commit "$GITHUB_SHA")
-        [ "$AQG_IS_DEFAULT" = true ] && [ "$AQG_BATCH" = true ] && args+=(--batch-api)
-        node "$GITHUB_ACTION_PATH/scripts/repo-report.js" "${args[@]}"
+        [ -n "$AQG_MAX_REQUESTS" ] && args+=(--max-requests "$AQG_MAX_REQUESTS")
+        if [ -n "$AQG_BASE" ]; then
+          # a shallow checkout does not hold the base commit; fetch it alone
+          git -C "$GITHUB_WORKSPACE" cat-file -e "$AQG_BASE^{commit}" 2>/dev/null || git -C "$GITHUB_WORKSPACE" fetch --no-tags --depth=1 origin "$AQG_BASE" 2>/dev/null || true
+          args+=(--base "$AQG_BASE")
+        fi
+        # the default branch writes the baseline that pull requests are compared with
+        [ "$AQG_IS_DEFAULT" = true ] && args+=(--write-baseline)
+        node "$GITHUB_ACTION_PATH/bin/aqg.js" "${args[@]}"
 
     - name: Job summary
-      if: always() && steps.report.outcome == 'success'
+      if: always() && steps.gate.outputs.verdict != ''
       shell: bash
-      run: |
-        cat "$RUNNER_TEMP/aqg/comment.md" >> "$GITHUB_STEP_SUMMARY"
-        printf '\n<details><summary>Full report</summary>\n\n' >> "$GITHUB_STEP_SUMMARY"
-        cat "$RUNNER_TEMP/aqg/report.md" >> "$GITHUB_STEP_SUMMARY"
-        printf '\n</details>\n' >> "$GITHUB_STEP_SUMMARY"
+      run: cat "$RUNNER_TEMP/aqg/report.md" >> "$GITHUB_STEP_SUMMARY"
 
-    - name: Save the verdict memo and the baseline
-      if: always() && steps.report.outcome == 'success'
+    - name: Save the cache and the baseline
+      if: always() && steps.gate.outputs.verdict != ''
       uses: actions/cache/save@v4
       with:
-        path: .quality-gate-state
-        key: aqg-state-${{ github.event.repository.default_branch }}-${{ github.run_id }}
+        path: ${{ runner.temp }}/aqg-state
+        key: aqg-${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: Pull-request comment
-      if: always() && steps.report.outcome == 'success' && inputs.comment == 'true' && github.event_name == 'pull_request'
+      if: always() && steps.gate.outputs.verdict != '' && inputs.comment == 'true' && github.event_name == 'pull_request'
+      continue-on-error: true   # a pull request from a fork has a read-only token; the job summary still has the report
       uses: actions/github-script@v7
       env:
         COMMENT_PATH: ${{ runner.temp }}/aqg/comment.md
@@ -195,14 +171,15 @@ runs:
           else await github.rest.issues.createComment({ owner, repo, issue_number, body });
 
     - name: Code scanning
-      if: always() && steps.report.outcome == 'success' && inputs.sarif == 'true'
+      if: always() && steps.gate.outputs.verdict != '' && inputs.sarif == 'true'
+      continue-on-error: true
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: ${{ runner.temp }}/aqg/results.sarif
         category: ai-quality-gate
 
     - name: Upload the report
-      if: always() && steps.report.outcome == 'success'
+      if: always() && steps.gate.outputs.verdict != ''
       uses: actions/upload-artifact@v4
       with:
         name: ai-quality-gate-${{ github.run_id }}-${{ github.run_attempt }}
@@ -210,10 +187,10 @@ runs:
         retention-days: 30
 
     - name: Enforce
-      if: steps.report.outcome == 'success' && inputs.enforce == 'true' && steps.report.outputs.verdict == 'fail'
+      if: inputs.enforce == 'true' && steps.gate.outputs.verdict == 'fail' && github.event_name != 'push'
       shell: bash
       env:
-        BLOCKING: ${{ steps.report.outputs.blocking }}
+        BLOCKING: ${{ steps.gate.outputs.blocking }}
       run: |
         echo "::error title=AI quality gate::$BLOCKING blocking finding(s). See the pull-request comment or the job summary."
         exit 1

@@ -1,4 +1,4 @@
-name: Test
+name: CI
 
 on:
   push:
@@ -8,8 +8,12 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -21,39 +25,26 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm test
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npm run typecheck
+      - name: Tests (unit, integration, end to end)
+        run: npm test
 
-  # The action itself, end to end, on the fixture repository: offline (no key) and in report-only mode.
-  action:
+  # The gate reviews its own repository: its requirements are in docs/requirements.md and its tests name them.
+  gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: ./
         with:
-          node-version: 22
-      - name: Build the fixture repository
-        run: |
-          dir="$RUNNER_TEMP/quote-service"
-          node -e "require('./tests/fixture/quote-service').build(process.argv[1])" "$dir"
-          git -C "$dir" init -q && git -C "$dir" add -A && git -C "$dir" -c user.email=ci@example.com -c user.name=ci commit -qm fixture
-      - name: Gate (replayed model replies)
-        run: |
-          npm ci --ignore-scripts
-          node scripts/repo-report.js --repo "$RUNNER_TEMP/quote-service" --name acme/quote-service --sha a1b2c3d --date 2026-10-22 \
-            --replay --cassette tests/fixture/quote-service.cassette.json --out out
-          node -e "const g=require('./out/gate.json'); if(!['pass','fail'].includes(g.verdict)||!g.findings.length) process.exit(1); console.log(g.verdict, g.counts)"
-          test -s out/results.sarif && test -s out/comment.md
-      - name: Gate on a pull-request diff (impact, construct)
-        run: |
-          dir="$RUNNER_TEMP/quote-service"
-          sed -i 's/RETENTION_DAYS = 30/RETENTION_DAYS = 45/' "$dir/src/quote/repo.ts"
-          git -C "$dir" diff -U0 > "$RUNNER_TEMP/pr.diff"
-          node scripts/repo-report.js --repo "$dir" --name acme/quote-service --sha a1b2c3d --date 2026-10-22 \
-            --replay --cassette tests/fixture/quote-service.cassette.json --out out-pr --diff "$RUNNER_TEMP/pr.diff"
-          node -e "const g=require('./out-pr/gate.json'); if(!g.findings.some(f=>f.check==='Code drifts from spec')) process.exit(1)"
-          test -s out-pr/construct.patch && git -C "$dir" apply --check "$GITHUB_WORKSPACE/out-pr/construct.patch"
+          # optional: without the secret the gate runs on code-decided findings alone
+          copilot-token: ${{ secrets.COPILOT_PAT }}
+          enforce: 'true'

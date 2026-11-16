@@ -1,42 +1,62 @@
-# .quality-gate.yml at the repository root. Every key is optional; an unknown key fails the run.
-version: 1
+# .quality-gate.yml: every key, with its default. Delete what you do not change.
+
+exclude: []                    # globs the gate never looks at, e.g. ["legacy/**"]
+
+docs:
+  include: []                  # globs always read as rule documents, e.g. ["product/**/*.md"]
+  exclude: []
+  max_kb: 256                  # a larger document is listed as "not read"
+  max_files: 300
+
+rules:
+  id_prefixes: []              # extra rule ID prefixes besides REQ, FR, NFR, AC, US, UC, BR, SR, RULE, INV, SEC, DEC, ADR, DR, AD, DD
+  decision_prefixes: []        # which of the extra prefixes are design decisions
+  infer: true                  # rules without an ID: normative sentences in requirement and design documents
+  max: 3000
+
+risk:
+  critical_ids: []             # rules that are critical whatever their text says
+  extra_terms: {}              # area → words, e.g. { money: [premium, excess] }; areas: money, auth, data, external, safety
+
+tests:
+  include: []                  # globs that are test files whatever they are called
+  levels: {}                   # level → globs, when the folder name does not say it: { e2e: ["apps/web/journeys/**"] }
+  max_kb: 512
+
+trace:
+  candidates: 4                # nearest tests shown to the model per rule
+  min_overlap: 0.34            # share of a rule's distinctive words a test must contain to be a candidate
+  excerpt_lines: 30
+
+ci:
+  required: [tests, lint, typecheck]   # a gap in one of these is P0 (tests) or P1
+  ignore: []                           # checks this repository chooses not to run: format, coverage, deps, secrets, sast
+
+ai:
+  provider: auto               # auto | copilot | command | handoff | none
+  model: ''                    # empty: the Copilot CLI's default
+  command: ''                  # provider "command": a program that reads the prompt on stdin and prints the answer
+  copilot_args: []             # extra arguments for the Copilot CLI
+  scope: critical              # critical: ask about critical rules and rules the change touches; all: every unlinked rule
+  max_requests: 12             # model calls per run
+  max_rules: 60                # rules judged per run, most severe first
+  batch: 6                     # rules per call
+  timeout_s: 180
+  retries: 1
+  concurrency: 2
 
 gate:
-  fail_on: P1          # P0 | P1 | P2 | P3 | never
-  basis: [E, S, V]     # E executed · S code · V model + code check · M model (never blocks unless listed)
-  new_only: true       # only findings missing from the default branch's baseline block
-  min_agreement:       # vote agreement a model-backed finding needs to block (scripts/calibrate.js)
-    default: 0.67
-    Asserts the rule: 1
-  probation: []        # checks that report but never block (scripts/usefulness.js)
+  fail_on: P1                  # P0 | P1 | P2 | P3 | never
+  basis: [S, V]                # evidence that may block: S code-decided, V model-proposed and code-verified, A advice
+  new_only: true               # pull requests: only what the change brings or touches
 
-documents:
-  include: ['docs/specs/**/*.md']
-  exclude: ['docs/archive/**']
-  budget_kb: 60
+report:
+  max_rows: 25
 
-critical:              # added to the built-in word lists
-  money: [premium, payout]
-  access control: [tenant]
-
-execute:               # used with the action input execute: 'true'
-  test_command: npx vitest run {files}
-  timeout_s: 120
-  max_mutants: 60
-  scope: diff          # with a pull-request diff: only rules whose implementation the change edits (or: all)
-
-model:
-  name: claude-haiku-5-5
-  votes: { default: 3, built: 1 }   # model-only stages never block, so they can take one vote
-  adaptive: true       # two votes first, the third only when they disagree
-  max_usd: 2
-
-suppress:
-  - fingerprint: 3124619a02c0ffee1234   # from the pull-request comment
-    reason: Covered by the contract tests in acme/pricing-contracts
-    until: 2027-03-31
-    by: alice
-  - rule: REQ-07
-    check: Placement
-    reason: The rule lives in a stored procedure; no unit seam until the Q2 migration
-    until: 2027-06-30
+suppress: []
+# - id: REQ-12                 # a rule ID, a file path or a finding fingerprint
+#   check: proof.limit         # optional: only this check (prefix match)
+#   reason: the limit moves to config in Q3
+#   until: 2027-03-31          # optional: after this date the suppression is ignored and reported
+# - path: legacy/**
+#   reason: frozen code

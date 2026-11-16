@@ -1,79 +1,113 @@
 'use strict';
-// .quality-gate.yml: the repository's own settings for the gate. Everything is optional; unknown keys are an error
-// (a typo in a gate config must not silently weaken the gate).
-//
-//   version: 1
-//   gate:
-//     fail_on: P1            # P0 | P1 | P2 | P3 | never
-//     basis: [E, S, V]       # evidence that may block (E executed, S code, V model + code check, M model)
-//     new_only: true         # only findings missing from the baseline block
-//     min_agreement:         # vote agreement a V/M finding needs to block (scripts/calibrate.js prints these)
-//       default: 0.67
-//       Asserts the rule: 1
-//     probation: [Placement] # checks that inform but never block (scripts/usefulness.js suggests these)
-//   documents: { include: [globs], exclude: [globs], budget_kb: 60 }
-//   critical:                # extra strong words per area (added to the built-in lists)
-//     money: [premium]
-//     access control: [tenant]
-//   execute:                 # opt-in mutation probe; runs this repository's own tests
-//     test_command: "npx vitest run {files}"
-//     timeout_s: 120
-//     max_mutants: 60
-//     scope: diff            # diff (default with a diff: only rules the change edits) or all
-//   model:
-//     name: claude-haiku-5-5
-//     votes: 3                # or per stage: { default: 3, built: 1, asserts: 1 }
-//     adaptive: true          # two votes first, the third only when they disagree
-//     max_usd: 2
-//   suppress:
-//     - fingerprint: 3f2a…    # or rule: REQ-07 + check: Placement
-//       reason: "Covered by the contract test suite in another repository"
-//       until: 2027-03-31
-//       by: alice
+// .quality-gate.yml: defaults, loading, validation. An invalid config is reported and the defaults are used for the
+// invalid keys; a typo must never switch the gate off silently, and never crash it either.
 const fs = require('node:fs');
 const YAML = require('yaml');
 
-const SHAPE = {
-  version: 'number',
-  gate: { fail_on: 'string', basis: 'array', new_only: 'boolean', min_agreement: 'object', probation: 'array' },
-  documents: { include: 'array', exclude: 'array', budget_kb: 'number' },
-  critical: 'object',
-  execute: { test_command: 'string', timeout_s: 'number', max_mutants: 'number', scope: 'string' },
-  model: { name: 'string', votes: 'votes', max_usd: 'number', adaptive: 'boolean' },
-  suppress: 'array',
+const DEFAULTS = {
+  exclude: [],                      // globs never looked at
+  docs: {
+    include: [],                    // globs always read as rule documents
+    exclude: [],
+    max_kb: 256,                    // a larger document is listed as not read
+    max_files: 300,                 // the highest-scoring documents are read first
+  },
+  rules: {
+    id_prefixes: [],                // extra ID prefixes, e.g. ["PAY", "SEC"]
+    decision_prefixes: [],          // which of them are design decisions
+    infer: true,                    // rules without an ID: normative sentences in requirement and design documents
+    max: 3000,
+  },
+  risk: {
+    critical_ids: [],               // rule IDs that are critical whatever their text says
+    extra_terms: {},                // area → extra words, e.g. { money: ["premium"] }
+  },
+  tests: {
+    include: [],                    // globs that are test files whatever their name
+    levels: {},                     // level → globs, overrides detection: { e2e: ["apps/web/journeys/**"] }
+    max_kb: 512,
+  },
+  trace: {
+    candidates: 4,                  // nearest tests shown to the model per rule
+    min_overlap: 0.34,              // share of a rule's distinctive words a test must contain to be a candidate
+    excerpt_lines: 30,
+  },
+  ci: {
+    required: ['tests', 'lint', 'typecheck'],   // a missing one is P0 (tests) or P1
+    ignore: [],                     // checks this repository chooses not to run, e.g. ["sast"]
+  },
+  ai: {
+    provider: 'auto',               // auto | copilot | command | handoff | none
+    model: '',                      // empty: the provider's default
+    command: '',                    // provider "command": reads the prompt on stdin, writes the answer on stdout
+    copilot_args: [],               // extra arguments for the Copilot CLI
+    max_requests: 12,               // model calls per run
+    max_rules: 60,                  // rules judged per run, most severe first
+    batch: 6,                       // rules per call
+    timeout_s: 180,
+    retries: 1,
+    concurrency: 2,
+    scope: 'critical',              // critical | all: which unlinked rules the model is asked about
+  },
+  gate: {
+    fail_on: 'P1',                  // P0 | P1 | P2 | P3 | never
+    basis: ['S', 'V'],              // evidence that may block: S code-decided, V model-proposed and code-verified, M model only
+    new_only: true,                 // pull requests: only findings that are new or touch the change
+  },
+  report: {
+    max_rows: 25,                   // rows per table; the rest is counted, and kept in findings.json
+  },
+  suppress: [],                     // [{ id | check | path, reason, until: YYYY-MM-DD }]
 };
 
-function validate(o, shape, at, errs) {
-  for (const [k, v] of Object.entries(o || {})) {
-    const want = shape[k];
-    if (!want) { errs.push(`${at}${k}: unknown key`); continue; }
-    if (typeof want === 'object') { if (typeof v !== 'object' || Array.isArray(v)) errs.push(`${at}${k}: must be a mapping`); else validate(v, want, `${at}${k}.`, errs); continue; }
-    const ok = want === 'votes' ? typeof v === 'number' || (v && typeof v === 'object' && Object.values(v).every((n) => typeof n === 'number' && n >= 1)) : want === 'array' ? Array.isArray(v) : want === 'object' ? v && typeof v === 'object' && !Array.isArray(v) : typeof v === want;
-    if (!ok) errs.push(`${at}${k}: must be ${want === 'array' ? 'a list' : `a ${want}`}`);
+const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+
+function merge(base, over, at, errors) {
+  const out = { ...base };
+  for (const [k, v] of Object.entries(over || {})) {
+    const where = at ? `${at}.${k}` : k;
+    if (!(k in base)) { errors.push(`${where}: unknown key`); continue; }
+    const b = base[k];
+    if (isObj(b) && Object.keys(b).length) {
+      if (!isObj(v)) { errors.push(`${where}: must be a mapping`); continue; }
+      out[k] = merge(b, v, where, errors);
+    } else if (isObj(b)) {
+      if (!isObj(v)) errors.push(`${where}: must be a mapping`); else out[k] = v;
+    } else if (Array.isArray(b)) {
+      if (!Array.isArray(v)) errors.push(`${where}: must be a list`); else out[k] = v;
+    } else if (typeof b !== typeof v) errors.push(`${where}: must be a ${typeof b}`);
+    else out[k] = v;
   }
+  return out;
 }
 
-function loadConfig(file) {
-  if (!file || !fs.existsSync(file)) return { config: {}, errors: [] };
-  let config;
-  try { config = YAML.parse(fs.readFileSync(file, 'utf8')) || {}; } catch (e) { return { config: {}, errors: [`${file}: ${e.message}`] }; }
+function validate(c, errors) {
+  if (!/^(P[0-3]|never)$/.test(c.gate.fail_on)) { errors.push('gate.fail_on: must be P0, P1, P2, P3 or never'); c.gate.fail_on = DEFAULTS.gate.fail_on; }
+  const basis = c.gate.basis.filter((b) => ['S', 'V', 'M'].includes(b));
+  if (basis.length !== c.gate.basis.length) errors.push('gate.basis: only S, V and M are evidence levels');
+  c.gate.basis = basis.length ? basis : DEFAULTS.gate.basis;
+  if (!['auto', 'copilot', 'command', 'handoff', 'none'].includes(c.ai.provider)) { errors.push('ai.provider: must be auto, copilot, command, handoff or none'); c.ai.provider = 'auto'; }
+  if (!['critical', 'all'].includes(c.ai.scope)) { errors.push('ai.scope: must be critical or all'); c.ai.scope = 'critical'; }
+  const today = new Date().toISOString().slice(0, 10);
+  c.suppress = c.suppress.filter((s, i) => {
+    if (!isObj(s) || !(s.id || s.check || s.path)) { errors.push(`suppress[${i}]: needs id, check or path`); return false; }
+    if (!s.reason) { errors.push(`suppress[${i}]: needs a reason`); return false; }
+    if (s.until && String(s.until).slice(0, 10) < today) { errors.push(`suppress[${i}]: expired on ${String(s.until).slice(0, 10)}, no longer applied`); return false; }
+    return true;
+  });
+  return c;
+}
+
+function loadConfig(file, overrides = {}) {
   const errors = [];
-  validate(config, SHAPE, '', errors);
-  const fo = config.gate?.fail_on;
-  if (config.execute?.scope && !['diff', 'all'].includes(config.execute.scope)) errors.push('execute.scope: must be diff or all');
-  if (fo && !/^(P[0-3]|never)$/.test(fo)) errors.push('gate.fail_on: must be P0, P1, P2, P3 or never');
-  for (const b of config.gate?.basis || []) if (!['E', 'S', 'V', 'M'].includes(b)) errors.push(`gate.basis: unknown evidence "${b}"`);
-  for (const [k, v] of Object.entries(config.gate?.min_agreement || {})) if (typeof v !== 'number' || v < 0 || v > 1) errors.push(`gate.min_agreement.${k}: must be a number from 0 to 1`);
-  return { config, errors };
+  let raw = {};
+  if (file && fs.existsSync(file)) {
+    try { raw = YAML.parse(fs.readFileSync(file, 'utf8')) || {}; } catch (e) { errors.push(`${file}: ${e.message.split('\n')[0]}`); }
+    if (!isObj(raw)) { errors.push(`${file}: must be a mapping`); raw = {}; }
+  }
+  let config = merge(DEFAULTS, raw, '', errors);
+  config = merge(config, overrides, '', errors);
+  return { config: validate(config, errors), errors };
 }
 
-/** Gate policy from the config, with CLI overrides. */
-const policyOf = (config, o = {}) => ({
-  failOn: o.failOn || config.gate?.fail_on || 'P1',
-  basis: o.basis || config.gate?.basis || ['E', 'S', 'V'],
-  newOnly: o.newOnly ?? config.gate?.new_only ?? true,
-  minAgreement: config.gate?.min_agreement || {},
-  probation: config.gate?.probation || [],
-});
-
-module.exports = { loadConfig, policyOf };
+module.exports = { loadConfig, DEFAULTS };

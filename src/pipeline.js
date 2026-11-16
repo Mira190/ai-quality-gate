@@ -1,143 +1,158 @@
 'use strict';
-// The whole run: stages 1-12. Returns the ledger (every fact behind the report) and the report itself.
-const { listFiles } = require('./inventory');
-const { discover, reverseLookup, ID } = require('./discover');
-const { extractRules } = require('./rules');
-const { tagRules } = require('./critical');
-const { indexTests } = require('./tests-index');
-const { analyzeCI } = require('./ci');
-const { classifyDocs, atomize, judgeRules, statusOf } = require('./judge');
-const { traceRules } = require('./trace');
-const { judgeAsserts, judgeBuilt, evaluate } = require('./evidence');
-const { probeRules } = require('./execute');
-const { analyzeImpact, implChanged, impactText } = require('./impact');
-const { construct, boundarySnippet, LANG } = require('./construct');
-const { buildIssues } = require('./issues');
-const { planTests, buildActions } = require('./actions');
-const { writeCells, writeActions } = require('./write');
-const { render } = require('./render');
-const { readText, numbersIn, linesOf, base, compareRules } = require('./util');
+// The run: scan → extract → index → trace → placement → ci → gate → report.
+//
+//   stage      input                         decided by           output
+//   scan       git ls-files                  code                 inventory (kinds, packages, languages)
+//   extract    documents                     code                 rules (requirements, decisions), risk, limits
+//   index      test files                    code                 test cases, the level each file needs
+//   ci         workflows, manifests          code                 checks and their enforcement on pull requests
+//   trace      rules × tests                 code, then the model links; the model sees only what code could not link
+//   placement  proofs, test levels           code                 placement findings
+//   gate       findings, diff, baseline      code                 verdict
+//   report     ledger                        code                 report.md, comment.md, findings.json, results.sarif
+//
+// Every stage is guarded: one that throws is recorded under "Run" and the stages that do not need it still report.
+// The gate never fails a build because the gate itself broke; it says so and passes what it could not judge.
+const fs = require('node:fs');
+const path = require('node:path');
+const git = require('./git');
+const { buildInventory } = require('./scan/inventory');
+const { extractRules, idPattern } = require('./extract/rules');
+const { indexTests, LEVELS } = require('./index/tests');
+const { analyzeCI, bindTestDirs } = require('./ci/checks');
+const { linkRules } = require('./trace/link');
+const { judgeRules } = require('./trace/judge');
+const { assessRules } = require('./trace/evidence');
+const { assessPlacement } = require('./placement');
+const { proofFindings, placementFindings, ciFindings } = require('./findings');
+const { analyzeChange } = require('./change');
+const { decide } = require('./gate');
+const { makeProvider } = require('./ai/provider');
+const { Cache } = require('./cache');
+const { renderReport, renderComment, summarize } = require('./report/markdown');
+const { toSarif } = require('./report/sarif');
+const { readJson, writeAtomic } = require('./util');
 
-// Sources the pipeline never reads in this version; the run line names them so a reader knows what the answer cannot cover.
-const NEVER_READ = ['Jira', 'Confluence', 'PR history'];
-
-async function run({ root, repo, sha, date, llm, external = [], budgetKb = 60, maxDocs, include = [], exclude = [], branchProtection = 'not readable', critical = null, execute = null, diff = null, progress = () => {} }) {
-  const files = listFiles(root), fileSet = new Set(files);
-  progress(`files: ${files.length}`);
-  const docsIn = external.filter((e) => e.kindHint !== 'test' && e.text);
-  const testDocs = external.filter((e) => e.kindHint === 'test' && e.text);
-  const disc = await discover({ root, files, external: docsIn, budgetKb, maxDocs, include, exclude, classify: (c) => classifyDocs(llm, c) });
-  const testIndex = indexTests(root, files);
-  // ID reverse lookup: IDs that code or tests mention, defined in a file the content scan did not admit
-  const mentioned = new Set(testIndex.tests.flatMap((t) => t.text.match(ID) || []).map((id) => id.toUpperCase()));
-  let extracted = await extractRules(disc.read, { atomize: (d) => atomize(llm, d) });
-  const extra = reverseLookup({ root, files, mentioned, defined: new Set(extracted.rules.map((r) => r.id)), already: new Set([...disc.read, ...disc.notRead, ...disc.skipped].map((d) => d.path)) });
-  if (extra.length) { disc.read.push(...extra.map((p) => ({ path: p, text: readText(root, p), score: 0, reverse: true }))); extracted = await extractRules(disc.read, { atomize: (d) => atomize(llm, d) }); }
-  const rules = extracted.rules.sort(compareRules);
-  progress(`documents read: ${disc.read.length}; rules: ${rules.length}; tests: ${testIndex.caseCount} in ${testIndex.tests.length} files`);
-
-  const ci = analyzeCI(root, files, testIndex);
-  await judgeRules(llm, rules, { root, fileSet });
-  for (const r of rules) r.status = statusOf(r);
-  tagRules(rules, critical);
-  progress('sections 1-2 judged');
-
-  await traceRules(llm, rules, { root, files, testIndex });
-  linkFromTestDocs(rules, testDocs, testIndex);
-  const [asserts, built] = await Promise.all([judgeAsserts(llm, rules, testIndex), judgeBuilt(llm, rules, root, files)]);
-  // execution evidence (opt-in, the repository's own workflow only): rule-targeted mutants against the linked tests
-  // with a diff, only the rules whose implementation the change edits are probed (Google surfaces mutants on changed
-  // lines only): seconds on a pull request instead of minutes
-  const probeSet = diff && execute?.scope !== 'all' ? rules.filter((r) => implChanged(r, diff, root)) : rules;
-  const probes = execute?.command ? probeRules(probeSet, { root, testIndex, command: execute.command, timeoutS: execute.timeoutS || 120, maxTotal: execute.maxMutants || 60, log: (m) => progress(`probe ${m}`) }) : new Map();
-  evaluate(rules, { testIndex, ci, srcImports: testIndex.srcImports, asserts, built, root, probes });
-  progress('sections 3-4 judged');
-
-  const impact = analyzeImpact(rules, diff, { root, testIndex });
-  const built_ = construct(rules, { root, testIndex, diff });
-  for (const f of impact.findings) f.text = impactText(f);
-  const issues = buildIssues(rules, ci);
-  const tests = await planTests(llm, issues);
-  const actions = buildActions(issues, tests, rules);
-  const byId = new Map(rules.map((r) => [r.id, r]));
-  const actionOfTest = new Map(actions.flatMap((a) => (a.tests || []).map((t) => [t.key, a.n])));
-  const testsByIssue = new Map();
-  for (const t of tests) for (const n of t.issues) testsByIssue.set(n, [...(testsByIssue.get(n) || []), t]);
-  const docsAction = actions.find((a) => a.kind === 'docs')?.n || null;
-  const ctx = {
-    root, files, fileSet, rules, byId, issues, actions, tests, actionOfTest, testsByIssue, docsAction, dropped: [...extracted.dropped], branchProtection,
-    docNumbers: new Set(disc.read.flatMap((d) => [...numbersIn(d.text)])),
-    waitingTests: (id) => tests.filter((t) => t.rules.includes(id)).map((t) => ({ test: t.key, level: t.level, action: actionOfTest.get(t.key) })),
+/**
+ * Options:  root, config, name, sha, base, staged, diffFile, cacheDir, baselineFile, outDir, answersFile, log
+ * @returns the ledger: every fact behind the report.
+ */
+async function runPipeline(o) {
+  const { root, config } = o;
+  const log = o.log || (() => {});
+  const timings = {}, degraded = [];
+  const stage = async (name, fallback, fn) => {
+    const t = Date.now();
+    try { return await fn(); } catch (e) {
+      degraded.push(`Stage "${name}" failed and was skipped: ${String(e.message).split('\n')[0]}`);
+      log(`stage ${name} failed: ${e.stack || e.message}`);
+      return fallback;
+    } finally { timings[name] = Date.now() - t; }
   };
-  ctx.cells = await writeCells(llm, ctx);
-  const texts = await writeActions(llm, ctx);
-  actions.forEach((a, k) => { a.text = texts[k]; });
-  progress('report text written');
+  const cache = new Cache(o.cacheDir || null);
 
-  const reqs = rules.filter((r) => r.kind === 'requirement'), decs = rules.filter((r) => r.kind === 'decision'), own = decs.filter((d) => d.addsBehaviour);
-  const noTests = !testIndex.tests.length;
-  // Scores count only the rules the model judged (1-2) or traced (3-4); the run line names the rest.
-  const judged = (rs) => rs.filter((r) => r.judged), traced = (rs) => rs.filter((r) => r.traced !== false);
-  const ratio = (rs, all, ok, na) => (all.length && !rs.length ? { n: 0, na } : { x: rs.filter(ok).length, n: rs.length });
-  const NOT_JUDGED = 'Not judged: no model reply', NOT_TRACED = 'Not traced: no model reply';
-  const scores = {
-    s1: ratio(judged(reqs), reqs, (r) => r.status === 'Ready', NOT_JUDGED),
-    s2: ratio(judged(decs), decs, (r) => r.status === 'Ready', NOT_JUDGED),
-    s3: noTests ? { n: 0, na: 'No tests found' } : ratio(traced(reqs), reqs, (r) => r.evidence.level === 'Meets', NOT_TRACED),
-    s4: noTests ? { n: 0, na: 'No tests found' } : ratio(traced(own), own, (r) => r.evidence.level === 'Meets', NOT_TRACED),
-    s5: { x: ci.checks.filter((c) => c.ok).length, n: ci.checks.length },
-  };
-  const ledger = {
-    meta: { repo, sha, date, model: llm.model, aiu: llm.aiu, usage: llm.usage, llmLog: llm.log, memo: llm.memoPath ? llm.memoStats : null, executed: probes.size },
-    sources: {
-      // documents with requirements first, then design documents, each by path
-      read: disc.read.map((d) => ({ path: d.path, ...(extracted.perDoc.get(d.path) || { requirements: 0, decisions: 0 }) })).filter((d) => d.requirements + d.decisions).sort((a, b) => (b.requirements > 0) - (a.requirements > 0) || a.path.localeCompare(b.path)),
-      notRead: [...disc.notRead, ...external.filter((e) => e.error).map((e) => ({ path: e.path, reason: e.error }))],
-      never: NEVER_READ, skipped: disc.skipped,
-    },
-    tests: { files: testIndex.tests.length, cases: testIndex.caseCount },
-    ci: { workflowCount: ci.workflowCount, checks: ci.checks, workflows: ci.workflows.map((w) => ({ path: w.path, pr: w.pr, scheduled: w.scheduled })) },
-    branchProtection, rules, issues, impact, construct: built_, testPlan: tests, actions, scores, cells: Object.fromEntries(ctx.cells), dropped: ctx.dropped,
-  };
-  // a suggested boundary table for every "Covers stated limits" finding, in the language of the rule's tests
-  for (const i of issues.filter((x) => x.check === 'Covers stated limits')) i.suggestion = boundarySnippet(i.rule, LANG(i.rule.links?.[0]?.path || i.rule.impl?.path || '') || 'js');
-  checkInvariants(ledger);
-  return { ledger, report: render(ledger), details: details(ledger) };
-}
-
-// A test plan or test-strategy document that names a rule ID and a test file on one line links them (source: test doc).
-function linkFromTestDocs(rules, docs, testIndex) {
-  for (const d of docs) for (const line of linesOf(d.text)) {
-    const ids = (line.match(ID) || []).map((x) => x.toUpperCase().replace(/^([A-Z]+)[-_]?(\d+)$/, (_, a, n) => `${a}-${n.padStart(2, '0')}`));
-    const tests = testIndex.tests.filter((t) => line.includes(t.path) || line.includes(base(t.path)));
-    for (const r of rules.filter((x) => ids.includes(x.id))) for (const t of tests) if (!r.links.some((l) => l.path === t.path)) r.links.push({ path: t.path, source: 'test doc' });
+  // scan
+  const listed = git.listFiles(root);
+  const inventory = await stage('scan', buildInventory([], config), () => buildInventory(listed.files, config));
+  if (listed.truncated) degraded.push(`${listed.truncated} files beyond the listing limit were not looked at.`);
+  let changes = null;
+  if (o.diffFile) changes = git.parseDiff(fs.readFileSync(o.diffFile, 'utf8'));
+  else if (o.base || o.staged) {
+    changes = listed.git ? git.changes(root, { base: o.base, staged: o.staged }) : null;
+    if (!changes) {
+      // Asked to review a change and unable to see it: report everything, block nothing. Failing a pull request for
+      // the repository's whole history because of a shallow clone would be the gate breaking the build.
+      degraded.push(`The change could not be read (${o.base ? `base ${o.base} is not in this clone; check out with fetch-depth: 0` : 'not a git repository'}): everything is reported and nothing blocks.`);
+      changes = new Map();
+    }
   }
+
+  // extract
+  const idp = idPattern(config);
+  const extracted = await stage('extract', { rules: [], docs: [], notRead: [], duplicates: [], truncated: 0, idp }, () => {
+    /** @type {any} */
+    const idHits = listed.git ? git.grep(root, idp.grep) : [];
+    idHits.grepRan = listed.git;
+    return extractRules({ root, inventory, idHits, cache, config });
+  });
+  if (extracted.truncated) degraded.push(`${extracted.truncated} rules over the rules.max limit (${config.rules.max}) were left out, non-critical first.`);
+
+  // index
+  const tests = await stage('index', { files: [], cases: [], skippedFiles: [] }, () => indexTests({ root, inventory, cache, config, idp }));
+
+  // ci
+  const ci = await stage('ci', { checks: [], steps: [], workflows: [], systems: [], testSteps: [], errors: [], hasCI: false, failed: true }, () => {
+    const r = analyzeCI({ root, inventory, config });
+    bindTestDirs(r, tests.files);
+    return r;
+  });
+
+  // trace
+  const provider = await stage('model', { name: 'none', available: false, note: 'the provider could not start' }, () => makeProvider(config, { answersFile: o.answersFile, requestsFile: o.outDir && path.join(o.outDir, 'ai-requests.json') }));
+  const links = await stage('link', new Map(extracted.rules.map((r) => [r.id, { explicit: [], candidates: [], terms: [] }])), () => linkRules(extracted.rules, tests, config));
+  const emptyStats = { needed: 0, cached: 0, asked: 0, requests: 0, pending: 0, failed: 0, overBudget: 0, chars: 0, errors: [] };
+  const judged = await stage('judge', { verdicts: new Map(), stats: emptyStats }, () => judgeRules({ root, rules: extracted.rules, links, provider, cache, config, changedPaths: new Set(changes ? changes.keys() : []), log }));
+  provider.flush?.();
+  const { proofs } = await stage('assess', { proofs: [] }, () => assessRules({ root, rules: extracted.rules, links, verdicts: judged.verdicts, ci }));
+
+  // placement
+  const emptyLevels = Object.fromEntries(LEVELS.map((l) => [l, { files: 0, cases: 0, pr: 0, notRun: [] }]));
+  const placement = await stage('placement', { issues: [], levels: emptyLevels }, () => assessPlacement({ proofs, tests, ci }));
+
+  // findings and gate
+  const change = changes ? await stage('change', null, () => analyzeChange({ changes, inventory, tests, proofs, config })) : null;
+  const findings = [
+    ...proofFindings(proofs, config),
+    ...placementFindings(placement.issues),
+    ...(ci.failed ? [] : ciFindings(ci, inventory, config)),
+    ...(change?.findings || []),
+  ];
+  const baseline = o.baselineFile ? readJson(o.baselineFile) : null;
+  const gate = decide({ findings, config, changes, baseline: baseline?.fingerprints ? baseline : null });
+
+  const ledger = {
+    version: 1,
+    run: {
+      name: o.name || path.basename(path.resolve(root)), sha: o.sha || git.head(root), base: o.base || null,
+      changedFiles: changes ? changes.size : 0, files: { listed: inventory.stats.listed, ignored: inventory.stats.ignored },
+      docs: extracted.docs, notRead: [...extracted.notRead, ...tests.skippedFiles], testFiles: tests.files.length, testCases: tests.cases.length, ciFiles: (inventory.byKind.ci || []).length,
+      rules: { total: extracted.rules.length, withId: extracted.rules.filter((r) => !r.inferred).length, inferred: extracted.rules.filter((r) => r.inferred).length },
+      langs: inventory.langs, packages: inventory.packages.length, degraded, configErrors: o.configErrors || [], timings,
+    },
+    config, gate, findings, proofs, placement, ci, change,
+    ai: { provider: provider.name, model: provider.model || '', note: provider.note || '', stats: judged.stats, cache: cache.stats },
+  };
+  ledger.summary = summarize(ledger);
+  cache.save();
+  return ledger;
 }
 
-function checkInvariants(L) {
-  const fail = (m) => { throw new Error(`invariant broken: ${m}`); };
-  const shown = L.issues.filter((i) => i.shown);
-  shown.forEach((i, k) => { if (i.n !== k + 1) fail(`issue numbers not contiguous at I-${i.n}`); });
-  for (const i of shown.filter((x) => x.section <= 4)) if (!L.cells[i.n]) fail(`I-${i.n} has no cell`);
-  const reqs = L.rules.filter((r) => r.kind === 'requirement');
-  if (L.scores.s1.n !== reqs.filter((r) => r.judged).length) fail('section 1 denominator');
-  for (const i of shown.filter((x) => x.section === 1)) if (i.rule.status === 'Ready') fail(`${i.rule.id} is Ready but has a section 1 row`);
-  const credited = L.actions.flatMap((a) => a.credits.map((c) => c.rule.id));
-  if (new Set(credited).size !== credited.length) fail('a rule is credited twice');
-  for (const id of credited) { const r = L.rules.find((x) => x.id === id); if (!r.critical) fail(`${id} credited but not critical`); }
-  if (L.actions.length > 5) fail('more than 5 top actions');
+/** The ledger without the object graph: what findings.json holds, and what tools downstream may rely on. */
+function serialise(ledger) {
+  return {
+    version: ledger.version, run: ledger.run, gate: ledger.gate, summary: ledger.summary,
+    findings: ledger.findings.map(({ anchors: _a, ...f }) => f),
+    rules: ledger.proofs.map((p) => ({
+      id: p.rule.id, kind: p.rule.kind, title: p.rule.title, path: p.rule.path, line: p.rule.line, critical: p.rule.critical, tags: p.rule.tags.map((t) => t.area), inferred: p.rule.inferred,
+      status: p.status, evidence: p.basis, holes: p.holes.map((h) => h.kind), expectedLevel: p.placement?.expected || p.modelLevel || p.rule.lowest,
+      tests: p.links.map((l) => ({ path: l.case.file.path, line: l.case.line, name: l.case.name, level: l.case.file.level, by: l.by, skipped: l.case.skipped })),
+      implementation: p.impl,
+    })),
+    levels: Object.fromEntries(Object.entries(ledger.placement.levels).map(([l, s]) => [l, { files: s.files, cases: s.cases, runOnPullRequests: s.pr }])),
+    ci: ledger.ci.checks.map(({ id, state, where, command, detail }) => ({ id, state, where, command, detail })),
+    change: ledger.change && { affectedTests: ledger.change.affectedTests, touchedRules: ledger.change.touchedRules },
+    ai: ledger.ai,
+  };
 }
 
-// Every item, including the P2/P3 rows the report leaves out, so every score can be checked.
-function details(L) {
-  const row = (i) => `| ${i.n ? `I-${i.n}` : '–'} | ${i.priority} | ${i.section} | ${i.rule ? i.rule.id : i.check} | ${i.measure || i.check}${i.part ? ` (${i.part})` : ''} | ${i.shown ? 'yes' : 'no'} |`;
-  const rules = L.rules.map((r) => `| ${r.id} | ${r.kind} | \`${r.path}:${r.line}\` | ${r.critical ? `${r.critical.area}${r.critical.inherited ? `, as ${r.critical.inherited}` : r.critical.word ? ` · "${r.critical.word}"` : ''}` : '–'} | ${r.status} | ${r.kind === 'decision' ? (r.addsBehaviour ? 'adds behaviour' : `restates ${r.restates}`) : '–'} | ${r.evidence.level} | ${r.links.map((l) => `${l.path} (${l.source})`).join(', ') || '–'} |`);
-  return [`# Report details: ${L.meta.repo} @ \`${L.meta.sha}\``, '', 'Every rule and every issue, including the P2 and P3 rows the report leaves out. Generated with the report.', '',
-    '## Rules', '', '| Rule | Kind | Source | Critical | Status | Decision | Test level | Linked tests |', '| --- | --- | --- | --- | --- | --- | --- | --- |', ...rules, '',
-    '## Issues', '', '| Issue | Priority | Section | Rule or check | Fails on | In report |', '| --- | --- | --- | --- | --- | --- |', ...L.issues.map(row), '',
-    ...(L.impact?.findings?.length || L.impact?.affected?.length ? ['## Change impact', '', ...L.impact.findings.map((f) => `- ${f.priority} ${f.rule.id} ${f.check}: ${f.text}`), '', `Rules this change touches: ${L.impact.affected.map((a) => a.rule).join(', ') || 'none'}. Tests that guard them: ${L.impact.testsToRun.map((t) => `\`${t}\``).join(', ') || 'none'}.`, ''] : []),
-    '## Dropped model output', '', ...(L.dropped.length ? L.dropped.map((d) => `- ${d.issue || d.id}: ${d.reason}`) : ['None.']), '',
-    `## AI usage`, '', `${L.meta.usage.calls} calls, ${L.meta.usage.input_tokens} input and ${L.meta.usage.output_tokens} output tokens, US$${L.meta.usage.usd.toFixed(4)} (${L.meta.aiu.toFixed(2)} AIU).${L.meta.llmLog.length ? ` Failed calls: ${L.meta.llmLog.map((x) => `${x.key} (${x.error})`).join('; ')}.` : ''}`, ''].join('\n');
+function writeOutputs(ledger, outDir, { reportUrl = '', writeBaseline = null } = {}) {
+  fs.mkdirSync(outDir, { recursive: true });
+  writeAtomic(path.join(outDir, 'report.md'), renderReport(ledger));
+  writeAtomic(path.join(outDir, 'comment.md'), renderComment(ledger, { url: reportUrl }));
+  writeAtomic(path.join(outDir, 'findings.json'), JSON.stringify(serialise(ledger), null, 2) + '\n');
+  writeAtomic(path.join(outDir, 'results.sarif'), JSON.stringify(toSarif(ledger), null, 2) + '\n');
+  // The baseline is what pull requests are compared against: every finding of this run, by fingerprint.
+  if (writeBaseline) writeAtomic(writeBaseline, JSON.stringify({ sha: ledger.run.sha, fingerprints: ledger.findings.map((f) => f.fingerprint).sort() }) + '\n');
 }
 
-module.exports = { run, checkInvariants };
+module.exports = { runPipeline, writeOutputs, serialise };
