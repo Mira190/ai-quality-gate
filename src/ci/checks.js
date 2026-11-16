@@ -7,10 +7,11 @@ const { parseCI, loadScripts, expandCommand, scriptTests } = require('./workflow
 const { readText } = require('../util');
 
 const PM = '(?:npm|yarn|pnpm|bun)\\s+(?:run\\s+)?';
+/** @type {any[]} */
 const CHECKS = [
   {
     id: 'tests', title: 'Tests',
-    cmd: new RegExp(`\\b(jest|vitest|mocha|ava|node\\s+(?:--\\S+\\s+)*--test|pytest|py\\.test|python3?\\s+-m\\s+(?:pytest|unittest)|go\\s+test|cargo\\s+(?:test|nextest)|mvnw?\\s+[^\\n]*\\b(?:test|verify|install)|gradlew?\\s+[^\\n]*\\b(?:test|check|build)|dotnet\\s+test|rspec|rake\\s+(?:test|spec)|rails\\s+test|phpunit|pest|swift\\s+test|xcodebuild\\s+[^\\n]*test|flutter\\s+test|dart\\s+test|tox|nox|ctest|bazel\\s+test|karma\\s+start|playwright\\s+test|cypress\\s+run|deno\\s+test|bun\\s+test|${PM}test[\\w:.-]*|make\\s+(?:test|check))\\b|(?:^|[\\s/])(?:run[-_]?)?(?:tests?|checks?|verify|smoke)(?:[-_][\\w-]+)?\\.(?:sh|bash)\\b|[\\w./-]*[_-](?:check|test|probe)\\.(?:m?js|py|rb)\\b`),
+    cmd: new RegExp(`\\b(jest|vitest|mocha|ava|node\\s+(?:--\\S+\\s+)*--test|pytest|py\\.test|python3?\\s+-m\\s+(?:pytest|unittest)|go\\s+test|cargo\\s+(?:test|nextest)|mvnw?\\s+[^\\n]*\\b(?:test|verify|install)|gradlew?\\s+[^\\n]*\\b(?:test|check|build)|dotnet\\s+test|rspec|rake\\s+(?:test|spec)|rails\\s+test|phpunit|pest|swift\\s+test|xcodebuild\\s+[^\\n]*test|flutter\\s+test|dart\\s+test|tox|nox|ctest|bazel\\s+test|karma\\s+start|playwright\\s+test|cypress\\s+run|deno\\s+test|bun\\s+test|${PM}test[\\w:.-]*|make\\s+(?:test|check))\\b|(?:^|[\\s/])(?:run[-_]?)?(?:tests?|checks?|verify|smoke)(?:[-_][\\w-]+)?\\.(?:sh|bash)\\b|[\\w./-]*[_-](?:check|test|probe)\\.(?:[cm]?[jt]s|py|rb)\\b`),
   },
   {
     id: 'lint', title: 'Lint',
@@ -57,6 +58,12 @@ const CHECKS = [
     config: /^(\.semgrep\.ya?ml|sonar-project\.properties)$/,
   },
 ];
+// Formal models: the design's invariants, checked by a model checker. Set up means the models are in the repository.
+CHECKS.splice(3, 0, {
+  id: 'specs', title: 'Formal models',
+  cmd: /\b(tlc2?\b|tla2tools|apalache(?:-mc)?\b|quint\s+(?:verify|run|test)|alloy\b|[\w./-]*tlc[\w.-]*\.(?:[cm]?[jt]s|sh|py)|(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:tla|tlc|model-?check|specs?:check))/,
+  uses: /tlaplus|tla-plus|apalache/i,
+});
 const THRESHOLD = /--cov-fail-under|coverageThreshold|--check-coverage|--fail-under|--test-coverage-(lines|branches|functions)|thresholds?\s*[:=]|minimum_coverage|violationRules|fail_under|target:\s*\d/;
 const SOFT = /\|\|\s*(true|:|exit\s+0|echo\b)|;\s*true\s*$|--exit-zero|--passWithNoTests\s*\|\||set \+e/;
 const E2E_CMD = /playwright|cypress|\be2e\b|wdio|detox|maestro|cucumber|behave|selenium/i;
@@ -70,6 +77,7 @@ function applicability(check, inv, facts) {
   switch (check.id) {
     case 'tests': return anyCode ? 'required' : 'na';
     case 'lint': return anyCode ? 'required' : 'na';
+    case 'specs': return facts.configured.specs ? 'required' : 'na';
     case 'typecheck':
       if (L.ts || facts.configured.typecheck) return 'required';
       if (L.python) return 'optional';
@@ -97,6 +105,8 @@ function analyzeCI({ root, inventory, config }) {
     facts.configured[c.id] = by ? by.path : script ? `package.json script "${script}"` : tool ? `pyproject ${tool}]` : null;
   }
   if ((inventory.byKind.test || []).length) facts.configured.tests ||= `${inventory.byKind.test.length} test files`;
+  const models = (inventory.byKind.spec || []).filter((f) => f.path.endsWith('.tla'));
+  if (models.length) { const script = [...scripts.npm.entries()].find(([, defs]) => defs.some((d) => CHECKS.find((c) => c.id === 'specs').cmd.test(d.body))); facts.configured.specs = `${models.length} TLA+ ${models.length === 1 ? 'model' : 'models'}${script ? `, checked by \`npm run ${script[0]}\`` : ''}`; }
 
   for (const s of steps) s.full = expandCommand(s.run, scripts, s.cwd);
   const stateOf = (s, matchedLine) => {

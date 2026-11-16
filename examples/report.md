@@ -18,7 +18,7 @@
 | 4 | P1 | **yes** | **e2e tests do not gate pull requests** | 2 e2e test files (2 cases) are run only outside pull requests. 1 rule is proven only there, 1 critical: REQ-2. _(code)_ | Run a smoke subset on pull requests, or accept the gap and say so in .quality-gate.yml. |
 | 5 | P1 | **yes** | **REQ-3 Payment retry (critical: money, external · "payment") is proven only against fakes** | REQ-3 is about a real boundary (gateway), and every test that proves it fakes that boundary (`jest.mock(` in tests/unit/payment.test.ts). _(code)_ | Add one integration test that crosses the real boundary; the unit tests can keep the edge cases. |
 | 6 | P1 | **yes** | **REQ-2 Free shipping (critical: money · "fee") is tested above the level it needs** | REQ-2 is logic with limits (over $50, $5), and is proven only at e2e level (5 cases in tests/e2e/shipping.spec.ts). _(code)_ | Add unit tests for the rule and its boundary values against `src/shipping.ts`; keep one e2e case for the wiring. |
-| 7 | P1 | **yes** | **REQ-7 Order export has no test** | "Order export. An order history can be exported as CSV." (`docs/requirements.md:9`): no test names `REQ-7` or shares its words (searched: csv, export, history, order). _(code)_ | Write a unit test that fails when the rule is broken; name `REQ-7` in the test (its title or a `// covers: REQ-7` comment) so the link is a fact from then on. |
+| 7 | P1 | **yes** | **REQ-7 Order export has no test** | "Order export. An order history can be exported as CSV." (`docs/requirements.md:9`): no test comes near it, by the model's reading, done twice: no test exports an order history as CSV. _(model, verified)_ | Write a unit test that fails when the rule is broken; name `REQ-7` in the test (its title or a `// covers: REQ-7` comment) so the link is a fact from then on. |
 | 8 | P1 | **yes** | **Lint: failures are ignored** | Lint runs on pull requests (`npm run lint`, `.github/workflows/ci.yml:13`), and its failure is ignored (continue-on-error or `\|\| true`). _(code)_ | Remove `continue-on-error` / `\|\| true`, or fix what fails and then remove it. |
 | 9 | P1 | **yes** | **Type check: set up, not enforced** | Type check is set up (tsconfig.json) and no CI step runs it: nothing stops a change that breaks it. _(code)_ | Add a pull-request step that runs it. |
 | 10 | P1 | no (advice) | **REQ-8 Payment speed (critical: money · "payment") cannot be tested as written** | "Payment speed. Payment processing should be fast." (`docs/requirements.md:10`): "fast" has no number; state a time limit such as p95 under <N> ms _(advice)_ | Rewrite it with a subject, a trigger and a checkable outcome (a number, a state, an error). |
@@ -44,7 +44,7 @@
 | **REQ-1** Discount cap (`docs/requirements.md:3`) | money | ✅ proven | `tests/unit/discount.test.ts:4` (unit, names the ID) |
 | **REQ-3** Payment retry (`docs/requirements.md:5`) | money, external | ✅ proven | `tests/unit/payment.test.ts:8` (unit, names the ID) |
 | **REQ-5** Session expiry (`docs/requirements.md:7`) | auth | ✅ proven | `tests/unit/session.test.ts:6` (unit, model-linked) |
-| **REQ-7** Order export (`docs/requirements.md:9`) |  | ❌ no test | no test names it or shares its words |
+| **REQ-7** Order export (`docs/requirements.md:9`) |  | ❌ no test | the model read the nearest tests: none asserts it |
 | **D-F72D1A** The cart must reject a quantity above 99 for one item (`docs/design.md:3`) |  | ✅ proven | `tests/unit/cart.test.ts:5` (unit, model-linked) |
 
 </details>
@@ -75,6 +75,7 @@ Not counted: 1 rule superseded, rejected or still a draft; 1 sentence the model 
 | Tests | ✅ enforced | `.github/workflows/ci.yml:16` (check) | `npm test` |
 | Lint | ❌ failures ignored | `.github/workflows/ci.yml:13` (check) | `npm run lint` |
 | Type check | ❌ set up, not run | set up: tsconfig.json |  |
+| Formal models | — not applicable |  |  |
 | Format | ❌ set up, not run | set up: .prettierrc |  |
 | Coverage | ➖ not set up |  |  |
 | Dependency scan | ✅ enforced | set up: .github/dependabot.yml | by .github/dependabot.yml |
@@ -97,8 +98,8 @@ Not counted: 1 rule superseded, rejected or still a draft; 1 sentence the model 
 
 - Files: 35 listed, 0 vendored or generated and skipped; read: 4 rule documents, 11 test files (11 cases), 2 CI files. Source files are not read, except the ones a change touches.
 - Rules: 13 (11 with an ID in the source, 2 inferred from normative sentences) from `docs/requirements.md` (9), `docs/adr/0003-idempotent-webhooks.md` (1), `docs/adr/0004-soap-gateway.md` (1), `docs/design.md` (2).
-- Model: handoff (stand-in (recorded answers)). 6 rules needed a judgment: 0 from the verdict cache, 6 asked, 1 read a second time, in 2 calls (5k characters, about 1k tokens sent).
-- Shown to the model: 5 candidate tests, 19 of their 19 lines (the opening, every assertion, the lines that share the rule's words). Every assertion of every candidate was shown.
+- Model: handoff (stand-in (recorded answers)). 7 rules needed a judgment: 0 from the verdict cache, 7 asked, 2 read a second time, in 3 calls (8k characters, about 2k tokens sent).
+- Shown to the model: 6 candidate tests, 22 of their 22 lines (the opening, every assertion, the lines that share the rule's words). Every assertion of every candidate was shown.
 - Read by code, in full: 4 rule documents, 11 test files, 2 CI files. The model reads no file.
 - Tests are read, not run. Evidence levels: _code_ is decided by parsing; _model, verified_ is a model answer whose citation code checked; _advice_ never blocks.
-- Time: scan 3 ms · extract 21 ms · ci-scripts 17 ms · index 8 ms · ci 3 ms · model 0 ms · link 2 ms · judge 4 ms · assess 1 ms · execute 0 ms · placement 1 ms.
+- Time: scan 5 ms · extract 33 ms · formal 0 ms · ci-scripts 30 ms · index 15 ms · ci 4 ms · model 0 ms · link 4 ms · judge 9 ms · assess 2 ms · execute 0 ms · placement 1 ms.

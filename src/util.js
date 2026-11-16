@@ -55,14 +55,60 @@ const STOP = new Set(('a an and are as at be been but by can could do does for f
   'given when then it describe expect assert true false null undefined return const let var function async await new').split(' '));
 
 /** Light stemmer: enough to make "discounts"/"discounted" meet "discount". Deterministic, no dictionary. */
+// Short forms programmers write and prose spells out. Both become the long form's stem, so that a rule that says
+// "acknowledging" meets the test that says "acks". A fixed list: it does not depend on the repository.
+const ABBR = { ack: 'acknowledg', auth: 'authent', authn: 'authent', authz: 'authoriz', config: 'configur', cfg: 'configur', conf: 'configur', init: 'initial', env: 'environ', doc: 'document', spec: 'specif', repo: 'repository', sync: 'synchron', temp: 'temporary', tmp: 'temporary', max: 'maximum', min: 'minimum', num: 'numb', param: 'paramet', arg: 'argument', dir: 'directory', msg: 'messag', db: 'databas', err: 'error', req: 'request', res: 'respons', resp: 'respons', del: 'delet', dup: 'duplicat', dedup: 'duplicat', dedupe: 'duplicat', info: 'inform', admin: 'administrat', app: 'applicat', util: 'utility', perf: 'perform', nav: 'navigat', btn: 'button', pwd: 'password', passwd: 'password', txn: 'transact', tx: 'transact', evt: 'event', ctx: 'context', idx: 'index', src: 'sourc', dest: 'destinat', dst: 'destinat', prev: 'previou', cur: 'current', curr: 'current', calc: 'calculat', gen: 'generat', exec: 'execut', eval: 'evaluat', impl: 'implement', ref: 'referenc', attr: 'attribut', prop: 'property', props: 'property', creds: 'credential', cred: 'credential', perm: 'permiss', perms: 'permiss', notif: 'notificat', sub: 'subscript', pub: 'publish', recv: 'receiv', rcv: 'receiv' };
+// and the long forms in all their endings come down to the same stem: configuration, configured → "configur"
+const LONG = [...new Set(Object.values(ABBR))].filter((p) => p.length >= 6).sort((a, b) => b.length - a.length);
 function stem(w) {
-  if (w.length > 5 && w.endsWith('ing')) return w.slice(0, -3);
-  if (w.length > 4 && w.endsWith('ed') && !w.endsWith('eed')) return w.slice(0, -2);
-  if (w.length > 4 && w.endsWith('ies')) return w.slice(0, -3) + 'y';
-  if (w.length > 4 && w.endsWith('es') && /(s|x|ch|sh)es$/.test(w)) return w.slice(0, -2);
-  if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
-  return w;
+  const s = stemOnly(w);
+  if (ABBR[s] || ABBR[w]) return ABBR[s] || ABBR[w];
+  return (s.length > 6 && LONG.find((p) => s.startsWith(p))) || s;
 }
+function stemOnly(w) {
+  // One stem per word family, so that a rule and a test meet whichever form each uses: walk, walks, walked,
+  // walking, walker, walkers → "walk"; drive, driver, driving → "driv"; retry, retried, retries → "retry".
+  // Crude on purpose ("number" → "numb"): both sides go through the same function, so only families matter.
+  let s = w;
+  if (s.length > 4 && s.endsWith('ies')) s = s.slice(0, -3) + 'y';
+  else if (s.length > 4 && /(s|x|ch|sh)es$/.test(s)) s = s.slice(0, -2);
+  else if (s.length > 3 && s.endsWith('s') && !s.endsWith('ss')) s = s.slice(0, -1);
+  if (s.length > 4 && s.endsWith('ied')) s = s.slice(0, -3) + 'y';
+  else if (s.length > 5 && s.endsWith('ing')) s = s.slice(0, -3);
+  else if (s.length > 4 && s.endsWith('ed') && !s.endsWith('eed')) s = s.slice(0, -2);
+  else if (s.length > 5 && s.endsWith('er')) s = s.slice(0, -2);
+  if (s.length > 4 && s.endsWith('e')) s = s.slice(0, -1);
+  if (s.length > 4 && /([b-df-hj-np-tv-z])\1$/.test(s) && !/(ss|ll|ff)$/.test(s)) s = s.slice(0, -1);   // stopp → stop
+  return s;
+}
+
+// Ideas that rules and tests name with different words. A rule says "never the same message twice"; its test says
+// "sends a message once per send ID". Neither stemming nor counting will bring "twice" and "once" together: they are
+// the same idea said from two sides. Each word below also yields its idea as a token ("=once"), so a rule and a test
+// that speak of the same idea share a word. A fixed list about what tests check, the same for every repository.
+const IDEAS = {
+  once: 'once twice duplicat repeat again idempotent exactly singl uniqu redeliver',
+  lost: 'lost lose loss drop miss keep kept surviv persist durabl retain preserv',
+  crash: 'crash die dy dead kill restart reboot recover fail outag interrupt',
+  refuse: 'refus reject deny denied forbid forbidden disallow block prevent invalid unauthoriz',
+  allow: 'allow accept permit grant valid',
+  limit: 'limit cap maximum minimum exceed most least bound threshold quota',
+  order: 'order sort sequenc first last befor after earlier later follow preced',
+  wait: 'wait delay debounc paus timeout expir deadlin later schedul',
+  remove: 'delet remov purg eras clear drop',
+  create: 'creat add insert new made',
+  show: 'show display render visibl appear print list',
+  hide: 'hide hidden invisibl secret mask redact conceal',
+  error: 'error fail throw exception reject',
+  empty: 'empty none zero nothing blank absent',
+  store: 'stor sav persist writ disk databas record log',
+  send: 'send sent deliver post publish emit notify',
+};
+const IDEA_OF = new Map();
+for (const [idea, words] of Object.entries(IDEAS)) for (const w of words.split(' ')) for (const form of [w, stem(w)]) if (!IDEA_OF.has(form)) IDEA_OF.set(form, `=${idea}`);
+
+// a few of those words are stop words everywhere else ("first", "after", "most"): kept when they carry an idea
+const IDEA_WORDS = new Set(['once', 'twice', 'again', 'first', 'last', 'before', 'after', 'most', 'least', 'none', 'nothing', 'new', 'later', 'earlier']);
 
 /**
  * Words of a text for matching: camelCase and snake_case are split, numbers are kept (limits such as "20" matter),
@@ -70,7 +116,9 @@ function stem(w) {
  */
 function tokenize(text) {
   const out = [];
-  const s = String(text).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+  // "each other" is two stop words and one meaning (things acting on one another: colliding, overlapping, queueing).
+  // Kept as one word, it is often the only thing a rule and its test have in common.
+  const s = String(text).replace(/\b(each other|one another)\b/gi, ' mutualxx ').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
   for (const m of s.matchAll(/[A-Za-z]+|\d+(?:\.\d+)?|[一-鿿]+/g)) {
     const w = m[0];
     if (/[一-鿿]/.test(w)) {
@@ -79,7 +127,7 @@ function tokenize(text) {
     } else if (/^\d/.test(w)) out.push(w);
     else {
       const l = w.toLowerCase();
-      if (l.length > 1 && !STOP.has(l)) out.push(stem(l));
+      if (IDEA_WORDS.has(l)) { const s = stem(l); out.push(s); if (IDEA_OF.has(s)) out.push(IDEA_OF.get(s)); } else if (l.length > 1 && !STOP.has(l)) { const s = stem(l); out.push(s); if (IDEA_OF.has(s)) out.push(IDEA_OF.get(s)); }
     }
   }
   return out;
@@ -118,4 +166,6 @@ const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const count = (arr, fn) => arr.reduce((n, x) => n + (fn(x) ? 1 : 0), 0);
 const groupBy = (arr, fn) => { const m = new Map(); for (const x of arr) { const k = fn(x); if (!m.has(k)) m.set(k, []); m.get(k).push(x); } return m; };
 
-module.exports = { sha, globToRe, matcher, escapeRe, pool, tokenize, stem, uniq, isBinary, readText, writeAtomic, readJson, clip, cmp, by, plural, count, groupBy };
+const ideaOf = (stemmed) => IDEA_OF.get(stemmed) || null;
+
+module.exports = { ideaOf, sha, globToRe, matcher, escapeRe, pool, tokenize, stem, uniq, isBinary, readText, writeAtomic, readJson, clip, cmp, by, plural, count, groupBy };

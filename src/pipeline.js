@@ -18,6 +18,7 @@ const path = require('node:path');
 const git = require('./git');
 const { buildInventory } = require('./scan/inventory');
 const { extractRules, idPattern } = require('./extract/rules');
+const { extractFormal } = require('./extract/formal');
 const { indexTests, LEVELS } = require('./index/tests');
 const { analyzeCI, bindTestDirs } = require('./ci/checks');
 const { linkRules } = require('./trace/link');
@@ -77,6 +78,8 @@ async function runPipeline(o) {
     idHits.grepRan = listed.git;
     return extractRules({ root, inventory, idHits, cache, config });
   });
+  const formal = await stage('formal', { rules: [], models: [] }, () => extractFormal({ root, inventory, config }));
+  extracted.rules.push(...formal.rules.filter((r) => !extracted.rules.some((x) => x.id === r.id)));
   if (extracted.truncated) degraded.push(`${extracted.truncated} rules over the rules.max limit (${config.rules.max}) were left out, non-critical first.`);
 
   // Tests that are programs CI runs (`node tools/x_check.js`) are found through CI, so CI is read once before the
@@ -94,6 +97,20 @@ async function runPipeline(o) {
 
   // index
   const tests = await stage('index', { files: [], cases: [], skippedFiles: [] }, () => indexTests({ root, inventory, cache, config, idp }));
+
+  // A test that names a property of a formal model (`SentOnce`, `Outbox.SentOnce`) is linked to it, as a test that
+  // names REQ-12 is linked to REQ-12: found with one grep over the test files.
+  if (formal.rules.length && listed.git) await stage('formal-links', null, () => {
+    const byName = new Map(formal.rules.map((r) => [r.id.split('.').pop(), r]));
+    const hits = git.grep(root, `\\b(${[...byName.keys()].join('|')})\\b`);
+    for (const h of hits) {
+      const tf = tests.files.find((f) => f.path === h.path);
+      const name = new RegExp(`\\b(${[...byName.keys()].join('|')})\\b`).exec(h.text)?.[1];
+      if (!tf || !name) continue;
+      const c = tf.cases.find((x) => h.line >= x.line - 3 && h.line <= x.end);
+      if (c && !c.ids.includes(byName.get(name).id)) c.ids.push(byName.get(name).id);
+    }
+  });
 
   // ci
   const ci = await stage('ci', { checks: [], steps: [], workflows: [], systems: [], testSteps: [], errors: [], hasCI: false, failed: true }, () => {
@@ -124,7 +141,7 @@ async function runPipeline(o) {
   const findings = [
     ...proofFindings(proofs, config, new Set(placement.issues.filter((i) => i.kind === 'level-not-run').map((i) => i.level))),
     ...placementFindings(placement.issues, proofs),
-    ...(ci.failed ? [] : ciFindings(ci, inventory, config)),
+    ...(ci.failed ? [] : ciFindings(ci, inventory, config, proofs)),
     ...(change?.findings || []),
   ];
   const baseline = o.baselineFile ? readJson(o.baselineFile) : null;
@@ -138,7 +155,7 @@ async function runPipeline(o) {
       changedFiles: changes ? changes.size : 0, files: { listed: inventory.stats.listed, ignored: inventory.stats.ignored },
       docs: extracted.docs, notRead: [...extracted.notRead, ...tests.skippedFiles], testFiles: tests.files.length, testCases: tests.cases.length, ciFiles: (inventory.byKind.ci || []).length,
       rules: { total: extracted.rules.length, withId: extracted.rules.filter((r) => !r.inferred).length, inferred: extracted.rules.filter((r) => r.inferred).length },
-      langs: inventory.langs, packages: inventory.packages.length, degraded, configErrors: o.configErrors || [], timings,
+      models: formal.models, langs: inventory.langs, packages: inventory.packages.length, degraded, configErrors: o.configErrors || [], timings,
     },
     config, gate, findings, proofs, placement, ci, change, tests, executed, history,
     ai: { provider: provider.name, model: provider.model || '', note: provider.note || '', stats: judged.stats, cache: cache.stats },

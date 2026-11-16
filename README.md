@@ -8,7 +8,7 @@
 
 **确定的问题交给代码，不确定的才交给模型。** 规则抽取、测试索引、层级判定、CI 解析、placement、优先级、是否阻断，全部是确定性规则。模型（GitHub Copilot CLI）只回答一件事：代码没能链接上的规则，这几个候选测试到底有没有断言它——而且它的回答要过代码核对才算数。按规则 ID 给测试打标的仓库，模型调用次数是 0。
 
-- 真实仓库上的报告：[examples/open-earth-3d-report.md](examples/open-earth-3d-report.md)（3500 个文件，1.7 秒）
+- 真实仓库上的报告：[examples/open-earth-3d-report.md](examples/open-earth-3d-report.md)（3500 个文件，叙述体文档，测试是检查程序）、[examples/pi-durable-bot-report.md](examples/pi-durable-bot-report.md)（TLA+ 模型加常规测试；模型部分由替身回答）
 - 报告示例：[examples/report.md](examples/report.md)（PR 评论：[examples/comment.md](examples/comment.md)，修复清单：[examples/fix-brief.md](examples/fix-brief.md)）
 - 设计与取舍：[docs/architecture.md](docs/architecture.md)；别家怎么做、我们借了什么：[docs/research-full-repo-review.md](docs/research-full-repo-review.md)
 - 本工具自己的需求：[docs/requirements.md](docs/requirements.md)（CI 里用它审查本仓库）
@@ -74,7 +74,7 @@ outputs：`verdict`、`blocking`、`p0`、`p1`、`report`。产物（artifact）
 
 ## 成本与稳定性
 
-- 代码能判定的不问模型。fixture 仓库（13 条规则）整个流程是 2 次调用、约 1k token；本仓库（38 条规则，全部按 ID 打标）是 0 次。
+- 代码能判定的不问模型。fixture 仓库（13 条规则）整个流程是 2 次调用、约 1k token；本仓库（41 条规则，全部按 ID 打标）是 0 次。
 - 每条模型结论按内容缓存，规则和候选测试不变就不再问；`aqg run --write-lock` 还可以把结论提交进仓库（`.quality-gate.lock.json`），换机器、清缓存、没有模型时结论照旧。
 - 模型说"已证明"必须引用一行断言并通过代码核对；说"没有证明"且词法检索不同意时要换问法再读一遍，两次一致才可阻断。
 - 模型从不读文件：代码把文档、测试、CI 文件完整读完，再给模型看挑出来的片段（开头、全部断言、与规则共有词最多的行、同文件 helper 里的断言）。断言没展示全的测试，模型的"没有证明"不作数。
@@ -94,6 +94,8 @@ it('refunds pro rata', () => { /* … */ });
 ```
 
 测试不一定叫 `*.test.*`：CI 里运行的检查程序（`node tools/game_check.js` 这类）也算，它里面每个带说明文字的断言是一个用例。
+
+仓库里有 TLA+ 模型时，配置里列出的每个不变式也是一条设计决策：既要模型检查器在 CI 里跑，也要代码里有测试。
 
 规则来自仓库里的文档：带 ID 的条目（`REQ-12`、`DEC-4`、`AC-3` 等，前缀可配）、ADR（`docs/adr/0007-*.md`，一份一个决策）、需求和设计文档里的规范性句子（must / shall / should / 必须 / 不得）。
 

@@ -234,3 +234,52 @@ test('the prompt asks for the evidence before the verdict, and gives each rule i
   assert.match(p, /RULE R1 REQ-1 in "Pricing › Discounts" \[requirement\]/);
   assert.ok(p.indexOf('"cites"') < p.indexOf('"proof":"partial"'), 'cites come before proof in the reply shape');
 });
+
+test('GATE-24 a whole program standing in for a test never grounds a "no proof", however short it is', () => {
+  const src = '// Installs the package and talks to the bot.\nconst out = run();\nif (!out.includes("bot stopped")) process.exit(1);\n';
+  const c = { key: 'k', name: 'install-test.ts: Installs the package', line: 1, end: 3, skipped: false, script: true, whole: true, file: { path: 'scripts/install-test.ts', level: 'integration' } };
+  const rule = { id: 'D-1', kind: 'decision', title: 't', text: 'The gateway must stop cleanly.', critical: true, tags: [{ area: 'external', word: 'gateway' }], limits: [] };
+  const item9 = buildItem(rule, { candidates: [{ case: c }] }, () => src, { trace: { excerpt_lines: 30 } });
+  assert.equal(item9.cands[0].ex.complete, false);
+  const v = verify(normalise({ rule: 'R1', proof: 'none' }, item9, 0), item9);
+  assert.deepEqual([v.status, v.basis], ['unverified', 'A']);
+});
+
+test('GATE-30 words that keep company in the repository order the wider circle and never make a candidate', () => {
+  const mk = (path, name, body = '') => ({ key: `${path} › ${name}`, name, ids: [], line: 1, end: 1, nt: [...new Set(tokenize(name))], bt: [...new Set(tokenize(body))], file: { path, pkg: '', imports: [] } });
+  // "crowd" keeps company with "walkers" in this suite
+  const cases = [
+    mk('c.js', 'the crowd keeps out of each other, two walkers'), mk('c.js', 'the crowd of walkers waits at the kerb'), mk('c.js', 'walkers in the crowd cross on green'),
+    mk('c.js', 'the crowd thins at night'),
+    ...Array.from({ length: 30 }, (_, i) => mk('o.js', `unrelated thing number ${i} about fares and trains`)),
+  ];
+  const rule = { id: 'R-1', title: '', text: 'Pairs of walkers never pass through each other on a footway.', critical: false, limits: [], pkg: '' };
+  const link = linkRules([rule], { cases, files: [] }, { trace: { candidates: 4, min_overlap: 0.34, excerpt_lines: 30 } }).get('R-1');
+  assert.equal(link.candidates.length, 0, 'one shared word is not a candidate');
+  assert.equal(link.wider[0].case.name, 'the crowd keeps out of each other, two walkers');   // "walk", "each other", and "crowd" by association
+  assert.ok(link.wider.some((c) => c.case.name === 'the crowd thins at night'), 'reached through "crowd" alone');
+  assert.ok(!link.wider.some((c) => /unrelated/.test(c.case.name)));
+});
+
+test('GATE-32 a rule and its test meet across word forms, short forms and two sides of one idea; breadth is ranked before rarity', () => {
+  const mk = (path, name, body = '') => ({ key: `${path} › ${name}`, name, ids: [], line: 1, end: 6, nt: [...new Set(tokenize(name))], bt: [...new Set(tokenize(body))], file: { path, pkg: '', imports: [] } });
+  const cases = [
+    mk('gateway.test.ts', 'sends once per send ID and answers a repeat with the same message'),
+    mk('gateway.test.ts', 'can be stopped twice, and says so to calls after the stop'),
+    mk('slack.test.ts', 'stores an event before it acks it'),
+    mk('routes.test.ts', 'walkers keep to the footway'),
+    ...Array.from({ length: 20 }, (_, i) => mk('other.test.ts', `renders page ${i}`)),
+  ];
+  const rule = (id, text) => ({ id, title: '', text, critical: true, limits: [], pkg: '' });
+  const config = { trace: { candidates: 4, min_overlap: 0.34, excerpt_lines: 30 } };
+  const links = linkRules([
+    rule('Outbox.NoDuplicateSend', 'Never the same message twice.'),
+    rule('Inbox.StoredBeforeAck', 'Store before acknowledging: an acknowledged event is on disk.'),
+    rule('R-walk', 'A walker never leaves the footway while walking.'),
+  ], { cases, files: [] }, config);
+  const names = (id) => links.get(id).candidates.map((c) => c.case.name);
+  // "twice" is the rarer word, and "once per send ID … the same message" speaks of three of the rule's things
+  assert.equal(names('Outbox.NoDuplicateSend')[0], 'sends once per send ID and answers a repeat with the same message');
+  assert.deepEqual(names('Inbox.StoredBeforeAck'), ['stores an event before it acks it']);
+  assert.deepEqual(names('R-walk'), ['walkers keep to the footway']);
+});

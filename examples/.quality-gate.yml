@@ -29,8 +29,8 @@ trace:
   excerpt_lines: 30
 
 ci:
-  required: [tests, lint, typecheck]   # a gap in one of these is P0 (tests) or P1
-  ignore: []                           # checks this repository chooses not to run: format, coverage, deps, secrets, sast
+  required: [tests, lint, typecheck, specs]   # a gap in one of these is P0 (tests) or P1; specs: formal models (TLA+), when the repository has them
+  ignore: []                                  # checks this repository chooses not to run: format, coverage, deps, secrets, sast
 
 ai:
   provider: auto               # auto | copilot | command | handoff | none

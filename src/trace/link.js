@@ -5,7 +5,16 @@
 //              few nearest candidates and decides (trace/judge.js). Without a model it stays a lead.
 // The candidate search is an inverted index over test-case words, so cost grows with the tests that mention a
 // rule's words, not with rules × tests.
-const { tokenize, uniq } = require('../util');
+const { tokenize, uniq, ideaOf } = require('../util');
+
+/** How many different things of the rule a test speaks of: its words, and its ideas not already counted by a word. */
+function breadthOf(shared, inName = new Set(shared)) {
+  const words = shared.filter((w) => !w.startsWith('='));
+  const said = new Set(words.map(ideaOf).filter(Boolean));
+  // what a test's name says counts in full; a word that only turns up somewhere in its body counts half
+  const worth = (w) => (inName.has(w) ? 1 : 0.5);
+  return words.reduce((n, w) => n + worth(w), 0) + shared.filter((w) => w.startsWith('=') && !said.has(w)).reduce((n, w) => n + worth(w), 0);
+}
 
 function buildIndex(cases) {
   const postings = new Map(); // token → [caseIndex, inName]
@@ -16,6 +25,36 @@ function buildIndex(cases) {
   const n = Math.max(1, cases.length);
   const idf = (t) => { const df = postings.get(t)?.length || 0; return Math.log(1 + (n - df + 0.5) / (df + 0.5)); };
   return { postings, idf, n };
+}
+
+/**
+ * Words that keep company with a word in this repository: "crowd" with "walker", "fare" with "wallet". Counted over
+ * the test cases and the rules themselves, so the vocabulary is the project's own and costs nothing to learn.
+ * A rule that says "walkers" then also reaches the check that says "the crowd keeps out of each other".
+ */
+function associates(index, units) {
+  const memo = new Map();
+  const byWord = new Map();
+  units.forEach((u, i) => { for (const t of u) { if (!byWord.has(t)) byWord.set(t, []); byWord.get(t).push(i); } });
+  const n = Math.max(1, units.length);
+  return (t) => {
+    if (memo.has(t)) return memo.get(t);
+    const mine = byWord.get(t) || [];
+    const out = [];
+    if (mine.length >= 2 && mine.length <= n * 0.2) {
+      const co = new Map();
+      for (const i of mine.slice(0, 400)) for (const u of units[i]) if (u !== t && !/^\d/.test(u)) co.set(u, (co.get(u) || 0) + 1);
+      for (const [u, c] of co) {
+        const df = byWord.get(u).length;
+        if (c < 2 || df > n * 0.2) continue;
+        const strength = c / Math.sqrt(mine.length * df);
+        if (strength >= 0.3) out.push({ w: u, strength });
+      }
+      out.sort((a, b) => b.strength - a.strength || (a.w < b.w ? -1 : 1));
+    }
+    memo.set(t, out.slice(0, 3));
+    return memo.get(t);
+  };
 }
 
 /** The words that identify a rule: its 10 rarest across the test suite, with its limits always included. */
@@ -43,6 +82,7 @@ function linkRules(rules, tests, config, { preferPkg = true } = {}) {
     }
     casesBySource.get(src).push(...f.cases);
   }
+  const assoc = associates(index, [...tests.cases.map((c) => [...c.nt, ...c.bt]), ...rules.map((r) => uniq(tokenize(`${r.title} ${r.text}`)))]);
   const out = new Map();
   const k = config.trace.candidates, minOverlap = config.trace.min_overlap;
   for (const rule of rules) {
@@ -50,17 +90,29 @@ function linkRules(rules, tests, config, { preferPkg = true } = {}) {
     const q = queryOf(rule, index);
     const allWords = uniq(tokenize(`${rule.title} ${rule.text}`));
     const total = q.reduce((s, x) => s + x.idf, 0) || 1;
-    const scores = new Map(), shared = new Map();
+    const scores = new Map(), shared = new Map(), extra = new Map(), named = new Map();
     if (!explicit.length) {
-      for (const { w, idf } of q) {
+      // the rule's own words, then the words that keep company with them here, at a fraction of the weight
+      const own = new Set(q.map((x) => x.w));
+      /** @type {any[]} */
+      const wide = [];
+      for (const { w } of q) for (const a of assoc(w)) if (!own.has(a.w) && !wide.some((x) => x.w === a.w)) wide.push({ w: a.w, idf: index.idf(a.w) * 0.4 * Math.min(1, a.strength * 2), via: w });
+      // the rule's commoner words are left out of the candidate test (they match too much to decide anything)
+      // and still help order the wider circle: "walk" is common here, and it is what the rule is about
+      const rest = allWords.filter((w) => !own.has(w) && !/^\d/.test(w)).map((w) => ({ w, idf: index.idf(w), via: 'rule' }));
+      for (const { w, idf, via } of /** @type {any[]} */ ([...q, ...wide.slice(0, 8), ...rest])) {
         const seen = new Set();
         for (const p of index.postings.get(w) || []) {
           const ci = p >> 1, inName = p & 1;
           if (seen.has(ci)) continue;
           seen.add(ci);
+          // Associated words never make a candidate: what is a candidate must not depend on what else is in the
+          // suite. They only order the wider circle that the model's second reading is shown.
+          if (via) { extra.set(ci, (extra.get(ci) || 0) + idf * (inName ? 1 : 0.7)); if (!scores.has(ci)) scores.set(ci, 0); continue; }
           scores.set(ci, (scores.get(ci) || 0) + idf * (inName ? 1 : 0.7));
           if (!shared.has(ci)) shared.set(ci, []);
           shared.get(ci).push(w);
+          if (inName) { if (!named.has(ci)) named.set(ci, new Set()); named.get(ci).add(w); }
         }
       }
     }
@@ -68,10 +120,15 @@ function linkRules(rules, tests, config, { preferPkg = true } = {}) {
       const c = tests.cases[ci];
       // a test in the rule's own package is the likelier proof; a small, bounded nudge
       const near = preferPkg && rule.pkg !== undefined && c.file.pkg === rule.pkg ? 1.1 : 1;
-      return { case: c, score: Math.min(1, (s / total) * near), shared: shared.get(ci) };
-    }).sort((a, b) => b.score - a.score || (a.case.key < b.case.key ? -1 : 1));
+      const sh = shared.get(ci) || [];
+      return { case: c, score: Math.min(1, (s / total) * near), shared: sh, breadth: breadthOf(sh, named.get(ci) || new Set()), reach: (s + (extra.get(ci) || 0)) / total };
+      // A test that speaks of three things the rule speaks of is a better lead than one that shares its single rarest
+      // word: "sends a message once" for "never the same message twice", before "can be stopped twice".
+    }).sort((a, b) => b.breadth - a.breadth || b.score - a.score || (a.case.key < b.case.key ? -1 : 1));
     /** @type {any[]} */
-    let candidates = scored.filter((c) => c.score >= minOverlap && c.shared.length >= Math.min(2, q.length));
+    // a candidate: enough of the rule's distinctive words by weight, or three of them by count (three shared words
+    // are a lead whatever their weight in this suite: "send", "message" and the idea of "once")
+    let candidates = scored.filter((c) => (c.score >= minOverlap && c.breadth >= Math.min(2, q.length)) || c.breadth >= 3);
     // "No test" on a critical rule is the most expensive thing to get wrong. Before saying it, show the two nearest
     // tests to whoever judges (the model, or a person reading "unverified"), if they share at least two of the rule's
     // words. That count does not depend on the rest of the suite: adding an unrelated test cannot move a rule
@@ -117,7 +174,14 @@ function linkRules(rules, tests, config, { preferPkg = true } = {}) {
       perFile.set(c.case.file.path, n); lines += size;
       return true;
     }).slice(0, k * 3);
-    out.set(rule.id, { explicit, candidates, terms: q.map((x) => x.w) });
+    // The next nearest, beyond the budget: named, not shown. When the first reading finds no proof, the second one
+    // is given these as well, so a "no test" is said only after a wider look (trace/judge.js).
+    const taken = new Set(candidates.map((c) => c.case));
+    const ranked = explicit.length ? [] : scored.filter((c) => !taken.has(c.case) && !c.case.whole).sort((a, b) => b.breadth - a.breadth || b.reach - a.reach || (a.case.key < b.case.key ? -1 : 1));
+    // the wider circle is a budget of lines too: two dozen one-line checks, or a handful of ordinary tests
+    let room = 20;
+    const wider = ranked.filter((c) => { const size = Math.min(5, Math.max(1, (c.case.end || 1) - (c.case.line || 1) + 1)); if (room < size) return false; room -= size; return true; }).slice(0, 20);
+    out.set(rule.id, { explicit, candidates, wider, terms: q.map((x) => x.w) });
   }
   return out;
 }

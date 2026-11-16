@@ -31,7 +31,7 @@
   REQ-2 is logic with limits (over $50, $5), and is proven only at e2e level (5 cases in tests/e2e/shipping.spec.ts). _(code)_
   **Fix:** Add unit tests for the rule and its boundary values against `src/shipping.ts`; keep one e2e case for the wiring.
 - **P1 REQ-7 Order export has no test** (`docs/requirements.md:9`)
-  "Order export. An order history can be exported as CSV." (`docs/requirements.md:9`): no test names `REQ-7` or shares its words (searched: csv, export, history, order). _(code)_
+  "Order export. An order history can be exported as CSV." (`docs/requirements.md:9`): no test comes near it, by the model's reading, done twice: no test exports an order history as CSV. _(model, verified)_
   **Fix:** Write a unit test that fails when the rule is broken; name `REQ-7` in the test (its title or a `// covers: REQ-7` comment) so the link is a fact from then on.
 - **P1 Lint: failures are ignored** (`.github/workflows/ci.yml:13`)
   Lint runs on pull requests (`npm run lint`, `.github/workflows/ci.yml:13`), and its failure is ignored (continue-on-error or `|| true`). _(code)_
@@ -52,4 +52,4 @@
 - **P2 tests/e2e/totals.e2e.test.ts is a unit test in the e2e suite**: tests/e2e/totals.e2e.test.ts is filed as e2e and crosses no boundary: it calls `src/totals.ts` directly (1 case). **Fix:** Move these cases to the unit suite: same proof, feedback in seconds, and they run on every pull request.
 - **P2 tests/e2e/shipping.spec.ts runs a parameter table at e2e level**: tests/e2e/shipping.spec.ts runs 5 parameter rows at e2e level. **Fix:** Move the table to a unit test of the logic it varies; keep one row here to prove the wiring.
 
-<sub>Model: handoff, 2 calls, 0 cached. Full report: job summary and the report artifact.</sub>
+<sub>Model: handoff, 3 calls, 0 cached. Full report: job summary and the report artifact.</sub>

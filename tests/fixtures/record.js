@@ -15,6 +15,7 @@ const { sha } = require('../../src/util');
 const JUDGMENTS = {
   'REQ-5': { testable: true, proof: 'full', cite: [1, 6], level: 'unit' },
   'REQ-6': { testable: true, proof: 'partial', cite: [1, 5], missing: 'the 12-character boundary: the test only tries 8 characters, never 11 and 12', level: 'unit' },
+  'REQ-7': { testable: true, proof: 'none', missing: 'no test exports an order history as CSV', level: 'unit' },
   'REQ-8': { testable: false, proof: 'none', missing: '"fast" has no number; state a time limit such as p95 under <N> ms', level: 'integration' },
   'REQ-9': { testable: true, proof: 'none', missing: 'no test rejects a gift card payment above $500', level: 'unit' },
   'REQ-10': { testable: true, proof: 'none', missing: 'rounding half up to whole cents; the test only checks the currency sign', level: 'unit' },

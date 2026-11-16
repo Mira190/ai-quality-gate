@@ -17,6 +17,8 @@ repository with the same rules it applies to any other.
 - **GATE-7 Limits.** When a rule states a limit and no linked test uses that value, the report names the limit as a hole in the proof.
 - **GATE-8 Citations are checked.** A model verdict that a test proves a rule is believed only when it cites a candidate test it was shown, at a line it was shown, and that line is an assertion; anything else is advice.
 - **GATE-9 Model budget.** The model is called for rules code could not link, most severe first, never more often than the configured number of calls; a rule whose text and candidate tests are unchanged is answered from the verdict cache or the lock file, and what the budget did not reach is judged by the next run.
+- **GATE-30 A wider second look.** The second reading is also shown the next nearest tests, ordered with the help of words that keep company in this repository, and an assertion it cites there that checks out links the test to the rule; what counts as a candidate without a model never depends on the rest of the suite.
+- **GATE-32 Different words, same thing.** A rule and a test meet when they use different forms of a word (walkers, walked), a short form and its long form (acks, acknowledging), or two sides of one idea (never twice, once); and a test that speaks of more of the rule's things in its name is shown before one that shares a single rare word.
 - **GATE-21 Read twice.** A model verdict that no candidate test proves a rule stands on the model's word alone, so it blocks only after a second, differently framed reading of the same tests agrees; a disagreement is advice.
 - **GATE-24 Nothing is concluded from part of a test.** The model is shown each candidate test whole, or its opening, its assertions and the lines that share the rule's words; assertions made through a helper, in the same file or in a helper file the test imports, are shown too, with the setup block above the test; and when not every assertion fits, a verdict that the test proves nothing is advice.
 - **GATE-25 Candidates through imports.** A test that imports a source file named by one of the rule's words is a candidate for the rule even when the test shares none of its wording.
@@ -31,6 +33,7 @@ repository with the same rules it applies to any other.
 
 ## CI
 
+- **GATE-31 Formal models.** Each invariant or property that a TLA+ configuration names is a design decision, said in the words of the comment above its definition; it asks for two proofs: the model checker run by CI where it can stop a change (when it is only run by hand that is one finding that lists the properties, not one finding each), and a test of the code, found like the test of any rule or by the property's name in the test.
 - **GATE-13 Enforced means it can fail a pull request.** A check counts as enforced only when a step runs it in a workflow triggered by pull requests and the step's failure is not ignored.
 - **GATE-14 Scripts are followed.** A step that calls a package script, a make target or a shell script of the repository is judged by the commands that script runs.
 - **GATE-29 Checks that are programs.** A program a CI step runs to check the product, named as a check or a test, is a test even without a test framework; each of its assertions that says in words what it checks is a test case named by those words.

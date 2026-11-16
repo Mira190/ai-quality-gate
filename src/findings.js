@@ -77,6 +77,7 @@ function proofFindings(proofs, config, collapsed = new Set()) {
       }));
     } else if (p.status === 'weak') {
       for (const h of p.holes) {
+        if (h.kind === 'model-by-hand') continue;   // one finding for the model checker (ci.specs), not one per property
         // one root cause, one finding: when a whole level never gates pull requests, that finding lists the rules
         if (h.kind === 'not-in-pr' && p.links.filter((l) => !l.case.skipped).every((l) => collapsed.has(l.case.file.level))) continue;
         const first = p.links.find((l) => !l.case.skipped).case;
@@ -148,7 +149,7 @@ function placementFindings(issues, proofs = []) {
 
 const CI_TEXT = {
   missing: (c) => `No CI step runs ${c.title.toLowerCase()}.`,
-  configured: (c) => `${c.title} is set up (${c.configured}) and no CI step runs it: nothing stops a change that breaks it.`,
+  configured: (c) => `${c.title} ${/s$/.test(c.title) ? 'are' : 'is'} set up (${c.configured}) and no CI step runs ${/s$/.test(c.title) ? 'them' : 'it'}: nothing stops a change that breaks ${/s$/.test(c.title) ? 'them' : 'it'}.`,
   not_on_pr: (c) => `${c.title} ${c.id === 'tests' ? 'run' : 'runs'} (\`${c.command}\`, \`${c.where[0]?.file}\`), but not on pull requests: a failure is found after the merge.`,
   non_blocking: (c) => `${c.title} ${c.id === 'tests' ? 'run' : 'runs'} on pull requests (\`${c.command}\`, \`${c.where[0]?.file}:${c.where[0]?.line}\`), and its failure is ignored (continue-on-error or \`|| true\`).`,
 };
@@ -159,7 +160,7 @@ const CI_FIX = {
   non_blocking: () => 'Remove `continue-on-error` / `|| true`, or fix what fails and then remove it.',
 };
 
-function ciFindings(ci, inventory, config) {
+function ciFindings(ci, inventory, config, proofs = []) {
   const out = [];
   const anchors = [...(inventory.byKind.ci || []).map((f) => ({ path: f.path })), ...(inventory.byKind.manifest || []).filter((m) => !m.path.includes('/')).map((f) => ({ path: f.path }))];
   const hasCode = Object.keys(inventory.langs).length > 0;
@@ -182,11 +183,18 @@ function ciFindings(ci, inventory, config) {
     out.push(make({
       section: 'ci', check: `ci.${c.id}`, priority, basis: 'S', subject: c.id,
       title: { missing: `${c.title}: not run in CI`, configured: `${c.title}: set up, not enforced`, not_on_pr: `${c.title}: not run on pull requests`, non_blocking: `${c.title}: failures are ignored` }[c.state],
-      detail: c.detail && c.state === 'missing' ? `${CI_TEXT.missing(c)} (${c.detail})` : CI_TEXT[c.state](c), fix: CI_FIX[c.state](c),
+      detail: `${c.detail && c.state === 'missing' ? `${CI_TEXT.missing(c)} (${c.detail})` : CI_TEXT[c.state](c)}${c.id === 'specs' ? formalNote(proofs) : ''}`, fix: c.id === 'specs' ? 'Run the model checker in a pull-request job (it needs Java and tla2tools.jar; cache the jar), at least when the models or the code they describe change.' : CI_FIX[c.state](c),
       loc: c.where[0] ? { path: c.where[0].file, line: c.where[0].line } : null, anchors, global: true,
     }));
   }
   return out;
+}
+
+function formalNote(proofs) {
+  const props = proofs.filter((p) => p.rule.formal);
+  if (!props.length) return '';
+  const crit = props.filter((p) => p.rule.critical).length;
+  return ` ${plural(props.length, 'property', 'properties')} of the design ${props.length === 1 ? 'is' : 'are'} proven only by it${crit ? ` (${crit} critical)` : ''}: ${props.slice(0, 10).map((p) => p.rule.id).join(', ')}${props.length > 10 ? ` +${props.length - 10}` : ''}.`;
 }
 
 module.exports = { proofFindings, placementFindings, ciFindings, make, boundaryValues, critTag, ruleLabel };

@@ -1,7 +1,7 @@
 {
   "_model": "stand-in (recorded answers)",
   "_note": "Answers to the prompts the gate writes for tests/fixtures/shop.js, keyed by prompt hash. Written by tests/fixtures/record.js from the judgments in that file.",
-  "7989cea38723": {
+  "80570ef8dc0f": {
     "verdicts": [
       {
         "rule": "R1",
@@ -26,24 +26,24 @@
       },
       {
         "rule": "R3",
-        "testable": false,
-        "proof": "none",
-        "cites": [],
-        "missing": "\"fast\" has no number; state a time limit such as p95 under <N> ms",
-        "level": "integration"
-      },
-      {
-        "rule": "R4",
         "testable": true,
         "proof": "partial",
         "cites": [
           {
-            "test": "R4.T1",
+            "test": "R3.T1",
             "line": 5
           }
         ],
         "missing": "the 12-character boundary: the test only tries 8 characters, never 11 and 12",
         "level": "unit"
+      },
+      {
+        "rule": "R4",
+        "testable": false,
+        "proof": "none",
+        "cites": [],
+        "missing": "\"fast\" has no number; state a time limit such as p95 under <N> ms",
+        "level": "integration"
       },
       {
         "rule": "R5",
@@ -68,15 +68,31 @@
       }
     ]
   },
-  "cb8c39db9d87": {
+  "0249da7b048e": {
+    "verdicts": [
+      {
+        "rule": "R1",
+        "testable": true,
+        "proof": "none",
+        "cites": [],
+        "missing": "no test exports an order history as CSV",
+        "level": "unit"
+      }
+    ]
+  },
+  "5888d907c6d4": {
     "finds": [
       {
         "rule": "R1",
         "test": null
+      },
+      {
+        "rule": "R2",
+        "test": null
       }
     ]
   },
-  "33b641dcb28c": {
+  "973d0cf923aa": {
     "verdicts": [
       {
         "rule": "R1",
@@ -101,27 +117,11 @@
       },
       {
         "rule": "R3",
-        "testable": false,
-        "proof": "none",
-        "cites": [],
-        "missing": "\"fast\" has no number; state a time limit such as p95 under <N> ms",
-        "level": "integration"
-      },
-      {
-        "rule": "R4",
-        "testable": true,
-        "proof": "none",
-        "cites": [],
-        "missing": "no test rejects a gift card payment above $500",
-        "level": "unit"
-      },
-      {
-        "rule": "R5",
         "testable": true,
         "proof": "partial",
         "cites": [
           {
-            "test": "R5.T1",
+            "test": "R3.T1",
             "line": 5
           }
         ],
@@ -129,16 +129,32 @@
         "level": "unit"
       },
       {
-        "rule": "R6",
+        "rule": "R4",
+        "testable": false,
+        "proof": "none",
+        "cites": [],
+        "missing": "\"fast\" has no number; state a time limit such as p95 under <N> ms",
+        "level": "integration"
+      },
+      {
+        "rule": "R5",
         "testable": false,
         "proof": "none",
         "cites": [],
         "missing": "readability is not behaviour of the software",
         "level": "unit"
+      },
+      {
+        "rule": "R6",
+        "testable": true,
+        "proof": "none",
+        "cites": [],
+        "missing": "no test rejects a gift card payment above $500",
+        "level": "unit"
       }
     ]
   },
-  "afd2a6dcf97e": {
+  "b2ad32292d37": {
     "verdicts": [
       {
         "rule": "R1",
@@ -152,10 +168,18 @@
         ],
         "missing": "",
         "level": "unit"
+      },
+      {
+        "rule": "R2",
+        "testable": true,
+        "proof": "none",
+        "cites": [],
+        "missing": "no test exports an order history as CSV",
+        "level": "unit"
       }
     ]
   },
-  "998ffe3b633b": {
+  "841e35a75bea": {
     "finds": [
       {
         "rule": "R1",
@@ -164,10 +188,14 @@
       {
         "rule": "R2",
         "test": null
+      },
+      {
+        "rule": "R3",
+        "test": null
       }
     ]
   },
-  "cd05f336c7a7": {
+  "4909b464983a": {
     "verdicts": [
       {
         "rule": "R1",
@@ -192,24 +220,24 @@
       },
       {
         "rule": "R3",
-        "testable": false,
-        "proof": "none",
-        "cites": [],
-        "missing": "\"fast\" has no number; state a time limit such as p95 under <N> ms",
-        "level": "integration"
-      },
-      {
-        "rule": "R4",
         "testable": true,
         "proof": "partial",
         "cites": [
           {
-            "test": "R4.T1",
+            "test": "R3.T1",
             "line": 5
           }
         ],
         "missing": "the 12-character boundary: the test only tries 8 characters, never 11 and 12",
         "level": "unit"
+      },
+      {
+        "rule": "R4",
+        "testable": false,
+        "proof": "none",
+        "cites": [],
+        "missing": "\"fast\" has no number; state a time limit such as p95 under <N> ms",
+        "level": "integration"
       },
       {
         "rule": "R5",
@@ -218,6 +246,14 @@
         "cites": [],
         "missing": "readability is not behaviour of the software",
         "level": "unit"
+      }
+    ]
+  },
+  "28667f0fc0aa": {
+    "finds": [
+      {
+        "rule": "R1",
+        "test": null
       }
     ]
   }

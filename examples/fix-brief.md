@@ -83,7 +83,7 @@ it.each([
 - **Done when:** `placement.too-high` for `REQ-2` is gone from the next report.
 
 ## 7. P1 REQ-7 Order export has no test
-- **Evidence:** "Order export. An order history can be exported as CSV." (`docs/requirements.md:9`): no test names `REQ-7` or shares its words (searched: csv, export, history, order).
+- **Evidence:** "Order export. An order history can be exported as CSV." (`docs/requirements.md:9`): no test comes near it, by the model's reading, done twice: no test exports an order history as CSV.
 - **Do:** Write a unit test that fails when the rule is broken; name `REQ-7` in the test (its title or a `// covers: REQ-7` comment) so the link is a fact from then on.
 - **Where:** a new file next to `tests/unit/cart.test.ts` (`tests/unit/`) (unit level)
 - **Rule:** "Order export. An order history can be exported as CSV." (`docs/requirements.md:9`)

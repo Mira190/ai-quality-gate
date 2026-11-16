@@ -14,7 +14,7 @@ const path = require('node:path');
 const { sha, readText, pool, by, tokenize } = require('../util');
 const { ASSERT, LEVELS } = require('../index/tests');
 
-const PROMPT_VERSION = 'j6';
+const PROMPT_VERSION = 'j7';
 const HEADER = `You judge whether automated tests prove rules (requirements and design decisions). Reply with one JSON object and nothing else.
 
 For each RULE decide:
@@ -131,6 +131,8 @@ function excerptOf(c, textOf, maxLines, ruleWords = new Set()) {
     for (const [, n] of rest) { if (keep.size >= maxLines) break; keep.add(n); }
     pick = all.filter((n) => keep.has(n));
   }
+  // a whole program standing in for a test is never seen whole, whatever its length: no "no proof" rests on it
+  if (c.whole) complete = false;
   const shown = new Set(pick);
   const fmt = (n) => `${n}| ${lines[n - 1].replace(/^(\s{0,8})\s*/, '$1').slice(0, 160)}`;
   const out = [];
@@ -159,11 +161,17 @@ function buildItem(rule, link, textOf, config) {
     const ex = excerptOf(cand.case, textOf, config.trace.excerpt_lines, ruleWords);
     if (ex) cands.push({ case: cand.case, ex, weak: Boolean(cand.weak), via: cand.via || null });
   }
+  // the wider circle: a few lines of each, for the second reading only
+  const wide = [];
+  for (const cand of link.wider || []) {
+    const ex = excerptOf(cand.case, textOf, 3, ruleWords);
+    if (ex) wide.push({ case: cand.case, ex });
+  }
   const head = `${rule.id}${rule.section ? ` in "${rule.section}"` : ''} [${rule.kind}${rule.critical ? `; critical: ${rule.tags.map((t) => t.area).join(', ')}` : ''}]${rule.limits.length ? ` limits: ${rule.limits.map((l) => l.raw).join(', ')}` : ''}`;
   // The model's name is not part of the key: a verdict that was checked and kept is a fact about the rule and the
   // tests, and swapping models must not reopen every one of them. Bump PROMPT_VERSION to reopen them on purpose.
-  const key = sha(JSON.stringify([PROMPT_VERSION, head, rule.text, cands.map((c) => [c.case.key, c.case.file.level, sha(c.ex.text, 12)])]), 20);
-  return { rule, cands, head, key };
+  const key = sha(JSON.stringify([PROMPT_VERSION, head, rule.text, cands.map((c) => [c.case.key, c.case.file.level, sha(c.ex.text, 12)]), wide.map((c) => [c.case.key, sha(c.ex.text, 12)])]), 20);
+  return { rule, cands, wide, head, key };
 }
 
 function renderPrompt(items) {
@@ -213,6 +221,12 @@ function verify(v, item) {
     if (!links.some((l) => l.case === cand.case)) links.push({ case: cand.case, line: near, by: 'model' });
   }
   if (v.proof !== 'none' && !links.length) return { status: 'unverified', basis: 'A', links: [], missing: v.missing, level: v.level, testable: v.testable, note: `the model said "${v.proof}" without a citation that checks out${rejected.length ? ` (${rejected[0]})` : ''}` };
+  // The second reading found the proving assertion in the wider circle: a link like any other, checked like any other.
+  if (v.found) {
+    const w = (item.wide || []).find((x) => x.case.key === v.found.key);
+    const near = w && [0, 1, -1, 2, -2].map((d) => v.found.line + d).find((n) => (w.ex.citable ? w.ex.citable.has(n) : false));
+    if (near) return { status: 'proven', basis: 'V', links: [{ case: w.case, line: near, by: 'model' }], missing: '', level: v.level, testable: true, widened: true };
+  }
   // A "no proof" about a test the model saw only part of is not a finding about the test.
   const cut = item.cands.filter((c) => c.ex.complete === false);
   if (v.proof === 'none' && v.testable && cut.length) return { status: 'unverified', basis: 'A', links: [], missing: v.missing, level: v.level, testable: true, note: `\`${cut[0].case.file.path}:${cut[0].case.line}\` is too long to show the model in full (${cut[0].ex.hidden} assertion lines left out), so its "no proof" is not relied on` };
@@ -240,6 +254,8 @@ function renderConfirm(items) {
   items.forEach((it, i) => {
     parts.push(`RULE R${i + 1} ${it.head}\n${it.rule.text}`);
     [...it.cands.keys()].reverse().forEach((j) => { const c = it.cands[j]; parts.push(`TEST R${i + 1}.T${j + 1} ${c.case.file.level} ${c.case.file.path} "${c.case.name.slice(0, 120)}"\n${c.ex.text}`); });
+    // and a wider circle the first reading was not shown
+    (it.wide || []).forEach((c, j) => parts.push(`TEST R${i + 1}.W${j + 1} ${c.case.file.level} ${c.case.file.path} "${c.case.name.slice(0, 120)}"\n${c.ex.text}`));
   });
   return parts.join('\n\n') + '\n';
 }
@@ -266,7 +282,7 @@ async function judgeRules({ root, rules, links, provider, cache, lock = {}, conf
   const texts = new Map();
   const textOf = (p) => { if (!texts.has(p)) texts.set(p, readText(path.join(root, p), 1 << 20)); return texts.get(p); };
 
-  const unlinked = rules.filter((r) => r.active && !links.get(r.id).explicit.length && (links.get(r.id).candidates.length || r.inferred || r.critical));
+  const unlinked = rules.filter((r) => r.active && !links.get(r.id).explicit.length && (links.get(r.id).candidates.length || links.get(r.id).wider?.length || r.inferred || r.critical));
   const need = unlinked.filter((r) => config.ai.scope === 'all' || r.critical);
   // most severe first: this order decides who gets the budget
   // and within a severity, the rules with a real candidate before the ones where the model can only say "testable or not"
@@ -344,7 +360,7 @@ async function judgeRules({ root, rules, links, provider, cache, lock = {}, conf
       const v = normalise(raw, item, i);
       // only a "no proof" that code cannot back needs a second reading: strong candidates exist and the model
       // dismissed them all. With no candidate, or only weak ones, the word search already agrees.
-      if (config.ai.confirm && v.proof === 'none' && v.testable && item.cands.some((c) => !c.weak)) { v.confirm = 'needed'; toConfirm.push({ item, v }); }
+      if (config.ai.confirm && v.proof === 'none' && v.testable && (item.cands.some((c) => !c.weak) || item.wide.length)) { v.confirm = 'needed'; toConfirm.push({ item, v }); }
       cache.set('verdicts', item.key, v); used[item.key] = v;
       verdicts.set(item.rule.id, verify(v, item));
       stats.asked++;
@@ -360,11 +376,18 @@ async function judgeRules({ root, rules, links, provider, cache, lock = {}, conf
       if (!raw) return;
       const v = { ...toConfirm.find((c) => c.item === item).v };
       const second = raw.test == null ? null : verify(normalise({ proof: 'full', cites: [{ test: raw.test, line: raw.line }] }, item, i), item);
-      // the second reading counts as "found one" only if its citation checks out
-      v.confirm = second && second.links.length ? 'disagree' : 'agree';
+      const w = /(?:R(\d+)\.)?W(\d+)$/.exec(String(raw.test ?? ''));
+      const inWide = w && (!w[1] || Number(w[1]) === i + 1) && item.wide[Number(w[2]) - 1];
+      if (inWide && Number.isInteger(raw.line)) {
+        // found in the wider circle, which the first reading never saw: not a disagreement, a discovery
+        v.found = { key: inWide.case.key, line: raw.line };
+        v.confirm = verify(v, item).widened ? 'found' : 'agree';
+        if (v.confirm !== 'found') delete v.found;
+      } else v.confirm = second && second.links.length ? 'disagree' : 'agree';   // "found one" only if its citation checks out
       cache.set('verdicts', item.key, v); used[item.key] = v;
       verdicts.set(item.rule.id, verify(v, item));
       stats.confirmed++;
+      if (v.confirm === 'found') stats.widened = (stats.widened || 0) + 1;
     });
   });
   if (stopped) stats.stopped = stopped;

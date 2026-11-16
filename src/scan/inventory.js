@@ -61,6 +61,7 @@ function classify(p) /** @type {any} */ {
     return { kind: TEST_DIR.test(p) && lang !== 'go' ? 'support' : 'source', lang, ts: TS_EXT.has(ext) };
   }
   if (DOC_EXT.has(ext)) return { kind: 'doc', ext };
+  if (ext === 'tla' || (ext === 'cfg' && /(^|\/)(specs?|tla|models?|formal)\//i.test(p))) return { kind: 'spec', ext };
   return { kind: 'other' };
 }
 

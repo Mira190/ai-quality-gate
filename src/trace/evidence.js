@@ -75,6 +75,15 @@ function assessRules({ root, rules, links, verdicts, ci }) {
     }
     p.status = p.holes.length ? 'weak' : 'proven';
   }
+  // A property of a formal model has two proofs to ask for: the model checker proves the design keeps it, and a test
+  // proves the code keeps to the design. The first is asked of CI here; the second went through the trace above.
+  const specs = ci.checks.find((c) => c.id === 'specs');
+  const checked = Boolean(specs && ['enforced', 'path_filtered', 'unverified'].includes(specs.state));
+  for (const p of proofs) {
+    if (!p.rule.formal || !p.rule.active) continue;
+    p.checked = checked ? 'ci' : 'by hand';
+    if (!checked) { p.holes.push({ kind: 'model-by-hand', basis: 'S', text: 'its model is checked only when someone runs the checker by hand' }); if (p.status === 'proven') p.status = 'weak'; }
+  }
   return { proofs, convention };
 }
 

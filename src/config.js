@@ -33,7 +33,7 @@ const DEFAULTS = {
     excerpt_lines: 30,
   },
   ci: {
-    required: ['tests', 'lint', 'typecheck'],   // a missing one is P0 (tests) or P1
+    required: ['tests', 'lint', 'typecheck', 'specs'],   // a gap in one is P0 (tests) or P1; specs: formal models, when the repository has them
     ignore: [],                     // checks this repository chooses not to run, e.g. ["sast"]
   },
   ai: {

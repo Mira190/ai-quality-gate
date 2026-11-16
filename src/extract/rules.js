@@ -14,7 +14,7 @@ const path = require('node:path');
 const { sha, clip, matcher, readText } = require('../util');
 const { tagRule } = require('./risk');
 
-const PARSER_VERSION = 4; // bump when parseDoc changes: cached parses of unchanged documents are then redone
+const PARSER_VERSION = 6; // bump when parseDoc changes: cached parses of unchanged documents are then redone
 const REQ_PREFIXES = ['REQ', 'FR', 'NFR', 'AC', 'US', 'UC', 'BR', 'SR', 'RULE', 'INV', 'SEC'];
 const DEC_PREFIXES = ['DEC', 'ADR', 'DR', 'AD', 'DD'];
 

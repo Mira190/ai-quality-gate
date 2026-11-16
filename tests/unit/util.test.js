@@ -13,8 +13,17 @@ test('globs: ** crosses directories, * does not, a bare name matches at any dept
 });
 
 test('words: identifiers are split, plurals and tenses meet, numbers stay, Chinese becomes bigrams', () => {
-  assert.deepEqual(tokenize('applyDiscount caps discounts at 20%'), ['apply', 'discount', 'cap', 'discount', '20']);
-  assert.deepEqual(tokenize('retried retries retry_count'), ['retri', 'retry', 'retry', 'count']);
+  assert.deepEqual(tokenize('applyDiscount caps discounts at 20%'), ['apply', 'discount', 'cap', '=limit', 'discount', '20']);
+  // the same idea said from two sides shares a token: "never twice" and "once", "nothing is lost" and "keeps"
+  const idea = (text) => tokenize(text).filter((t) => t.startsWith('='));
+  assert.deepEqual([idea('Never the same message twice.'), idea('sends a message once per send ID')], [['=once'], ['=send', '=once', '=send']]);
+  assert.ok(idea('Nothing acknowledged is lost').includes('=lost') && idea('keeps an event when the gateway is killed').includes('=lost'));
+  assert.ok(idea('however often the process dies').includes('=crash') && idea('after a restart').includes('=crash'));
+  assert.deepEqual(tokenize('retried retries retry_count'), ['retry', 'retry', 'retry', 'count']);
+  // short forms meet what prose spells out
+  for (const [short, long] of [['acks', 'acknowledging'], ['config', 'configuration'], ['init', 'initialise'], ['auth', 'authentication'], ['msgs', 'messages'], ['dedupe', 'duplicates']]) assert.deepEqual(tokenize(short), tokenize(long), short);
+  // one stem per word family, whichever form the rule or the test uses
+  for (const family of [['walk', 'walks', 'walked', 'walking', 'walker', 'walkers'], ['drive', 'driver', 'driving', 'drives'], ['stop', 'stopped', 'stopping'], ['cache', 'caches', 'cached', 'caching']]) assert.equal(new Set(family.flatMap((w) => tokenize(w))).size, 1, family.join());
   assert.deepEqual(tokenize('折扣上限'), ['折扣', '扣上', '上限']);
 });
 

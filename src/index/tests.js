@@ -11,7 +11,7 @@ const path = require('node:path');
 const { tokenize, uniq, sha, readText, pool } = require('../util');
 const { idsIn } = require('../extract/rules');
 
-const PARSER_VERSION = 11;
+const PARSER_VERSION = 16;
 const LEVELS = ['unit', 'component', 'integration', 'e2e'];
 const rank = (l) => LEVELS.indexOf(l);
 
@@ -229,11 +229,14 @@ function parseTestFile(p, text, lang, idp, script = false) {
       // the statement: this line and up to three more, until it closes
       let stmt = lines[i], end = i;
       while (end < i + 3 && end + 1 < lines.length && !/[;)]\s*$/.test(stmt.trimEnd()) && lines[end + 1].length < 4000) stmt += '\n' + lines[++end];
-      // its message: the last string of the statement, without the values spliced into it
-      const strings = [...stmt.matchAll(/(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)].map((m) => m[2]);
-      let msg = strings.length ? strings[strings.length - 1] : '';
-      for (let k = 0; k < 4 && /\$\{[^{}]*\}/.test(msg); k++) msg = msg.replace(/\$\{[^{}]*\}/g, ' ');
-      msg = msg.replace(/\$\{.*$/, ' ').replace(/\\(['"`n])/g, ' ').replace(/\(\s*[^a-zA-Z]*\)/g, ' ').replace(/[%{}]\w?/g, ' ').replace(/\s+/g, ' ').trim();
+      // its message: the string of the statement that says the most, without the values spliced into it. (A
+      // template with a template inside it is cut into pieces by the inner quotes: the longest piece is the sentence.)
+      const clean = (m) => {
+        for (let k = 0; k < 4 && /\$\{[^{}]*\}/.test(m); k++) m = m.replace(/\$\{[^{}]*\}/g, ' ');
+        return m.replace(/\$\{.*$/, ' ').replace(/^[^$]*\}/, ' ').replace(/\\(['"`n])/g, ' ').replace(/\(\s*[^a-zA-Z]*\)/g, ' ').replace(/[%{}]\w?/g, ' ').replace(/\s+/g, ' ').replace(/^[\s:;,.')]+/, '').trim();
+      };
+      let msg = '';
+      for (const m of stmt.matchAll(/(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)) { const c = clean(m[2]); if (tokenize(c).length > tokenize(msg).length) msg = c; }
       const words = uniq(tokenize(msg));
       if (words.length < 3) continue;
       const nameSet = new Set(words);
@@ -252,7 +255,7 @@ function parseTestFile(p, text, lang, idp, script = false) {
       const nameTokens = uniq(tokenize(`${name} ${header}`));
       const nameSet = new Set(nameTokens);
       cases.push({
-        name, line: 1, end, skipped: false, params: 0, script: true,
+        name, line: 1, end, skipped: false, params: 0, script: true, whole: true,
         asserts: lines.slice(0, end).reduce((n, l) => n + (ASSERT.test(l) || fails.test(l) ? 1 : 0), 0),
         // matched by what its header says it checks, not by every word of a long program: a bag of four hundred
         // words shares something with any sentence
