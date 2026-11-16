@@ -134,7 +134,7 @@ async function runPipeline(o) {
 
   // placement
   const emptyLevels = Object.fromEntries(LEVELS.map((l) => [l, { files: 0, cases: 0, pr: 0, notRun: [] }]));
-  const placement = await stage('placement', { issues: [], levels: emptyLevels }, () => assessPlacement({ proofs, tests, ci }));
+  const placement = await stage('placement', { issues: [], levels: emptyLevels, plan: { heavy: 0, movable: 0, pure: 0, variations: 0, twins: 0, waitMs: 0 } }, () => assessPlacement({ proofs, tests, ci }));
 
   // findings and gate
   const change = changes ? await stage('change', null, () => analyzeChange({ changes, inventory, tests, proofs, config })) : null;
@@ -180,6 +180,7 @@ function serialise(ledger) {
       implementation: p.impl,
     })),
     levels: Object.fromEntries(Object.entries(ledger.placement.levels).map(([l, s]) => [l, { files: s.files, cases: s.cases, runOnPullRequests: s.pr }])),
+    shiftLeft: ledger.placement.plan,
     ci: ledger.ci.checks.map(({ id, state, where, command, detail }) => ({ id, state, where, command, detail })),
     change: ledger.change && { affectedTests: ledger.change.affectedTests, touchedRules: ledger.change.touchedRules },
     ai: ledger.ai,

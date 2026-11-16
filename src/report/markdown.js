@@ -113,6 +113,12 @@ function placementSection(ledger, max) {
     ['integration', 'a real database, HTTP, queue or process', lv.integration.files, lv.integration.cases, `${lv.integration.pr} of ${lv.integration.files}`],
     ['e2e', 'the whole system, driven from outside', lv.e2e.files, lv.e2e.cases, `${lv.e2e.pr} of ${lv.e2e.files}`],
   ]));
+  const plan = ledger.placement.plan;
+  if (plan && plan.heavy) {
+    out.push(plan.movable
+      ? `**Shift left:** ${plan.movable} of ${plural(plan.heavy, 'integration and end-to-end case')} can be ${plan.movable === 1 ? 'a unit test' : 'unit tests'}: ${[plan.pure && `${plan.pure} cross no boundary`, plan.variations && `${plan.variations} repeat a case with other data`].filter(Boolean).join(', ')}${plan.waitMs >= 1000 ? `; the repeated ones wait at least ${Math.round(plan.waitMs / 1000)} s` : ''}.${plan.twins ? ` ${plural(plan.twins, 'more')} may repeat a unit test (advice).` : ''} Read from the tests alone: no document and no model is needed for this.`
+      : `**Shift left:** none of the ${plural(plan.heavy, 'integration and end-to-end case')} can be moved down on what the tests show: each calls out of its process, waits, or uses what its suite set up.${plan.twins ? ` ${plural(plan.twins, 'case')} may repeat a unit test (advice).` : ''}`);
+  }
   const fs = ledger.findings.filter((f) => f.section === 'placement' && !f.suppressed);
   const judged = ledger.proofs.filter((p) => p.placement);
   if (!fs.length) out.push(`No placement findings: ${judged.length ? `${plural(judged.length, 'rule')} with tests ${judged.length === 1 ? 'is' : 'are'} tested at the level ${judged.length === 1 ? 'it needs' : 'they need'}, and ` : ''}every test file needs what its folder says.`);

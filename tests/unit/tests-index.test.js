@@ -110,3 +110,48 @@ test('a test that asserts through a helper is not reported as asserting nothing'
   assert.deepEqual(r.cases.map((c) => c.asserts), [1, 1, 0]);
   assert.equal(parse('def assert_valid(o):\n    assert o.ok\n\ndef test_it():\n    assert_valid(order())\n', 'python').cases[0].asserts, 1);
 });
+
+test('GATE-33 what a case does is read line by line: crossing, waiting, using the setup, or none of these', () => {
+  const r = parse([
+    "import { test, expect } from '@playwright/test';",
+    "import { total } from '../src/totals';",
+    "const { spawnSync } = require('node:child_process');",
+    'let server;',
+    'beforeAll(async () => { server = await start(); });',
+    "const cli = (args) => spawnSync('node', ['bin.js', ...args], { encoding: 'utf8' });",
+    "test('adds prices', () => {",
+    '  expect(total([1, 2])).toBe(3);',
+    '});',
+    "test('shows the cart', async ({ page }) => {",
+    "  await page.goto('/cart');",
+    '  await page.waitForTimeout(3000);',
+    "  expect(await page.textContent('#n')).toBe('2');",
+    '});',
+    "test('uses what the suite set up', () => {",
+    '  expect(server.port).toBe(80);',
+    '});',
+    "test('through a helper that starts a process', () => {",
+    "  expect(cli(['--version']).status).toBe(0);",
+    '});',
+    "test('fee for 10', async ({ page }) => {",
+    "  await page.goto('/checkout?total=10');",
+    "  expect(await page.textContent('#fee')).toBe('5');",
+    '});',
+    "test('fee for 60', async ({ page }) => {",
+    "  await page.goto('/checkout?total=60');",
+    "  expect(await page.textContent('#fee')).toBe('0');",
+    '});',
+  ].join('\n'), 'js', 'e2e/x.spec.ts');
+  assert.deepEqual(r.cases.map((c) => [c.name, c.pure, c.waitMs]), [
+    ['adds prices', true, 0], ['shows the cart', false, 3000], ['uses what the suite set up', false, 0],
+    ['through a helper that starts a process', false, 0], ['fee for 10', false, 0], ['fee for 60', false, 0],
+  ]);
+  // the two fee cases are one case with other data; the others have shapes of their own
+  assert.equal(r.cases[4].shape, r.cases[5].shape);
+  assert.notEqual(r.cases[1].shape, r.cases[4].shape);
+  // the names taken from the tests' own helper files are kept, so that a call to one can unmask a pure-looking case
+  assert.deepEqual(parse("import { openGateway, until } from './support/gateway';\nit('x', () => { expect(1).toBe(1); });\n").named, [['./support/gateway', ['openGateway', 'until']]]);
+  // python: fixtures are the parameters
+  const py = parse('def test_total():\n    assert total([1, 2]) == 3\n\ndef test_page(client):\n    assert client.get("/").status_code == 200\n', 'python', 'tests/integration/test_x.py');
+  assert.deepEqual(py.cases.map((c) => c.pure), [true, false]);
+});

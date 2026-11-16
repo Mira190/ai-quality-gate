@@ -61,7 +61,7 @@ test('GATE-10 GATE-11 GATE-12 placement: too high, proven against fakes, misfile
   assert.deepEqual(checks(ledger, 'placement').sort(), [
     'placement.boundary-mocked:REQ-3:P1:S',
     'placement.mislabelled:tests/unit/geo.test.ts:P2:S',
-    'placement.no-boundary:tests/e2e/totals.e2e.test.ts:P2:S',
+    'placement.no-boundary:tests/e2e/totals.e2e.test.ts:P1:S',   // no pull request runs the e2e suite: as a unit test it would gate
     'placement.table-at-top:tests/e2e/shipping.spec.ts:P2:S',
     'placement.too-high:REQ-2:P1:S',
   ]);

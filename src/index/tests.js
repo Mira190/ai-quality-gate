@@ -11,7 +11,7 @@ const path = require('node:path');
 const { tokenize, uniq, sha, readText, pool } = require('../util');
 const { idsIn } = require('../extract/rules');
 
-const PARSER_VERSION = 17;
+const PARSER_VERSION = 19;
 const LEVELS = ['unit', 'component', 'integration', 'e2e'];
 const rank = (l) => LEVELS.indexOf(l);
 
@@ -36,6 +36,70 @@ const DECLARED = [
 function declaredLevel(p, levelGlobs = []) {
   for (const [level, match] of levelGlobs) if (match(p)) return level;
   return DECLARED.find(([, re]) => re.test(p))?.[0] || null;
+}
+
+// What a single test case does, for placement. A case in a slow suite that calls nothing outside its process, waits
+// for nothing and uses nothing the suite set up is a unit test wherever it is filed.
+const CROSSES = /\bpage\.|\bbrowser\.|\bcy\.|\bdriver\.|\brequest\s*\(|\bfetch\s*\(|\baxios\b|\bsupertest\b|\bhttp\.(?:get|request|post)\b|\.(?:get|post|put|patch|delete)\(\s*['"`]\/|\b(?:SELECT|INSERT INTO|UPDATE|DELETE FROM)\b|\.query\(|\.execute\(|\bspawn(?:Sync)?\(|\bexec(?:File)?(?:Sync)?\(|\bsubprocess\.|\bexec\.Command|\bos\.system\(|\b(?:read|write)File(?:Sync)?\(|\bmkdtemp(?:Sync)?\(|\brender\(|\bmount\(|\.goto\(|\.click\(|\.fill\(|\bres(?:ponse)?\.status|\bstatus_code\b|\brequests\.\w+\(|\bclient\.\w+\(|\bsession\.\w+\(/;
+const WAITS = /\b(?:waitForTimeout|sleep|pause|delay)\(\s*([\d_.]+)\s*\)|\btime\.sleep\(\s*([\d.]+)\s*\)|\bsetTimeout\([^,()]+,\s*([\d_]+)\s*\)|\bThread\.sleep\(\s*(\d+)\s*\)/g;
+const ASYNC = /\bawait\b|\.then\(|\bdone\(|\byield\b/;
+
+/** Names a test file's cases share through its setup: what `beforeEach` builds, what the suite declares to fill later. */
+function fixturesOf(lines, lang) {
+  const names = new Set();
+  if (lang !== 'js') return names;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const decl = /^\s*let\s+([\w$,\s:<>[\]|.]+?);?\s*$/.exec(l);
+    if (decl) for (const n of decl[1].split(',')) { const id = /^\s*([\w$]+)/.exec(n); if (id) names.add(id[1]); }
+    if (/^\s*(?:beforeEach|beforeAll|before)\s*\(/.test(l)) {
+      const base = indentOf(l);
+      for (let j = i + 1; j < Math.min(lines.length, i + 30) && (!lines[j].trim() || indentOf(lines[j]) > base); j++) {
+        const a = /^\s*(?:(?:const|let|var)\s+)?(?:\{\s*([\w$,\s]+)\}|([\w$]+))\s*=[^=]/.exec(lines[j]);
+        if (a) for (const n of (a[1] || a[2]).split(',')) if (n.trim()) names.add(n.trim());
+      }
+    }
+  }
+  return names;
+}
+
+/**
+ * Helpers of this file that leave the process (or wait for something that does): `const run = (args) =>
+ * spawnSync(...)`. A case that calls one crosses what the helper crosses.
+ */
+function crossersOf(lines) {
+  const names = [];
+  for (let i = 0; i < lines.length; i++) {
+    const d = /^(\s*)(?:export\s+)?(?:async\s+)?(?:function\s+(\w+)\s*\(|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:\(|function\b|\w+\s*=>)|def\s+(\w+)\s*\()/.exec(lines[i]);
+    const name = d && (d[2] || d[3] || d[4]);
+    if (!name || lines[i].length > 400) continue;
+    if (CROSSES.test(lines[i]) || /\basync\b/.test(lines[i])) { names.push(name); continue; }
+    const base = indentOf(lines[i]);
+    for (let j = i + 1; j < Math.min(lines.length, i + 40); j++) {
+      if (lines[j].trim() && indentOf(lines[j]) <= base && !/^\s*[)\]}]/.test(lines[j])) break;
+      if (CROSSES.test(lines[j]) || ASYNC.test(lines[j])) { names.push(name); break; }
+    }
+  }
+  return new Set(names);
+}
+
+function weigh(body, decl, lang, fixtures, crossers = new Set()) {
+  const text = body.join('\n');
+  let waitMs = 0;
+  for (const m of text.matchAll(WAITS)) { const n = Number(String(m[1] ?? m[3] ?? m[4] ?? '').replace(/_/g, '')); waitMs += m[2] ? Number(m[2]) * 1000 : n >= 50 ? n : n * 1000; }
+  const calls = [...new Set([...body.slice(1).join('\n').matchAll(/(?<![.\w$])([A-Za-z_$][\w$]*)\s*\(/g)].map((m) => m[1]))];
+  const crosses = body.reduce((n, l) => n + (CROSSES.test(l) ? 1 : 0), 0) + calls.filter((n) => crossers.has(n)).length;
+  // fixtures handed to the case itself: `async ({ page }) =>`, `def test_x(client, db)`
+  const handed = lang === 'js' ? /\(\s*\{\s*([\w$,\s]+)\}\s*(?:,[^)]*)?\)\s*=>/.exec(decl)?.[1] : lang === 'python' ? /def\s+\w+\(([^)]*)\)/.exec(decl)?.[1] : null;
+  const own = new Set(fixtures);
+  for (const n of (handed || '').split(',')) { const id = n.trim().split(/[:=\s]/)[0]; if (id && id !== 'self' && id !== 'cls') own.add(id); }
+  const usesFixture = [...own].some((n) => new RegExp(`(?<![.\\w$])${n.replace(/\$/g, '\\$')}(?![\\w$])`).test(body.slice(1).join('\n')));
+  const pure = (lang === 'js' || lang === 'python') && crosses === 0 && waitMs === 0 && !ASYNC.test(text) && !usesFixture;
+  // the case with its data taken out: cases of one shape differ only in the values they try
+  const shape = body.length >= 3 ? sha(body.slice(1).join('\n').replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, '_').replace(/\b\d[\d_.]*\b/g, '_').replace(/\s+/g, ' '), 10) : null;
+  // what a pure-looking case calls is kept, so that a helper imported from the tests' own support files can still
+  // unmask it (indexTests knows which imports those are)
+  return { crosses, waitMs, pure, shape, ...(pure ? { calls: calls.slice(0, 40) } : {}) };
 }
 
 const indentOf = (l) => { const m = /^[ \t]*/.exec(l)[0]; return m.replace(/\t/g, '    ').length; };
@@ -171,6 +235,8 @@ function parseTestFile(p, text, lang, idp, script = false) {
     }
   }
   const callsHelper = asserting.length ? new RegExp(`(?<![.\\w])(?:${[...new Set(asserting)].slice(0, 40).join('|')})\\s*\\(`) : null;
+  const fixtures = fixturesOf(lines, lang);
+  const crossers = crossersOf(lines);
   const firstMark = marks.length ? marks[0].line - (marks[0].above || 0) : lines.length;
   const headerIds = idsIn(lines.slice(0, Math.min(firstMark, 40)).filter((l) => /^\s*(\/\/|#|\*|\/\*|--|@)/.test(l)).join('\n'), idp);
   const classSkip = (lang === 'java' || lang === 'csharp') && /@(Disabled|Ignore)\b[^\n]*\n(\s*@[^\n]*\n)*\s*(public\s+|final\s+|abstract\s+|internal\s+|open\s+)*class\b/.test(text);
@@ -209,6 +275,7 @@ function parseTestFile(p, text, lang, idp, script = false) {
       ids: uniq(idsIn(`${name}\n${lines.slice(Math.max(0, from - 3), from).filter((l) => /^\s*(\/\/|#|\*|\/\*|@|--)/.test(l)).join('\n')}\n${bodyText}`, idp)),
       nt: nameTokens,
       bt: uniq(tokenize(bodyText)).filter((t) => !nameSet.has(t)).slice(0, 300),
+      ...weigh(lines.slice(m.at ?? m.line, end + 1), lines[m.at ?? m.line] || '', lang, fixtures, crossers),
     });
   }
 
@@ -271,7 +338,12 @@ function parseTestFile(p, text, lang, idp, script = false) {
   const imports = [];
   if (lang === 'js') for (const m of text.matchAll(/(?:\bfrom\s+|\brequire\(\s*|\bimport\(\s*|^\s*import\s+)(['"])([^'"\n]+)\1/gm)) imports.push(m[2]);
   else if (lang === 'python') for (const m of text.matchAll(/^\s*(?:from\s+([\w.]+)\s+import\s+([\w, ]+)|import\s+([\w.]+))/gm)) { imports.push(m[1] || m[3]); if (m[1]) for (const n of m[2].split(',')) imports.push(`${m[1]}.${n.trim().split(' ')[0]}`); }
-  return { lang, cases, headerIds, observed, why: needs[observed] || null, fs: FS.test(text), mock: mock ? mock[0].slice(0, 30) : null, imports: uniq(imports).slice(0, 80) };
+  const named = [];
+  if (lang === 'js') {
+    for (const m of text.matchAll(/^\s*import\s+(?:type\s+)?(?:([\w$]+)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s+(['"])(\.[^'"\n]+)\3/gm)) named.push([m[4], [m[1], ...(m[2] || '').split(',').map((n) => n.trim().split(/\s+as\s+/).pop())].filter(Boolean)]);
+    for (const m of text.matchAll(/^\s*(?:const|let|var)\s+(?:\{([^}]*)\}|([\w$]+))\s*=\s*require\(\s*(['"])(\.[^'"\n]+)\3\s*\)/gm)) named.push([m[4], [m[2], ...(m[1] || '').split(',').map((n) => n.trim().split(/\s*:\s*/).pop())].filter(Boolean)]);
+  }
+  return { lang, named, cases, headerIds, observed, why: needs[observed] || null, fs: FS.test(text), mock: mock ? mock[0].slice(0, 30) : null, imports: uniq(imports).slice(0, 80) };
 }
 
 /** The test's own helper files: relative imports that are not source (tests/helpers/*.js, conftest-style modules). */
@@ -357,9 +429,17 @@ async function indexTests({ root, inventory, cache, config, idp }) {
     // The level a test counts at is what it needs when that is known to be higher than its folder says, otherwise
     // what its folder says: a browser test filed under unit/ is still a browser test.
     const level = declared && rank(declared) >= rank(rec.observed) ? declared : rec.observed;
-    const tf = { path: f.path, pkg: f.pkg, script: Boolean(f.script), lang: rec.lang, declared, observed: rec.observed, level, why: rec.why, fs: rec.fs, mock: rec.mock, headerIds: rec.headerIds, imports: resolveImports(f, rec, inventory), support: resolveSupport(f, rec, inventory), cases: [] };
+    // names this file takes from the tests' own helper files: calling one may cross anything
+    const support = resolveSupport(f, rec, inventory);
+    const helperNames = new Set();
+    for (const [spec, names] of rec.named || []) {
+      const base = path.posix.normalize(path.posix.join(path.posix.dirname(f.path), spec)).replace(/\.(js|mjs|cjs)$/, '');
+      if (support.some((s) => s === base || s.startsWith(base + '.') || s.startsWith(base + '/index.'))) for (const n of names) helperNames.add(n);
+    }
+    const tf = { path: f.path, pkg: f.pkg, script: Boolean(f.script), lang: rec.lang, declared, observed: rec.observed, level, why: rec.why, fs: rec.fs, mock: rec.mock, headerIds: rec.headerIds, imports: resolveImports(f, rec, inventory), support, cases: [] };
     for (const c of rec.cases) {
       const tc = { ...c, file: tf, key: `${f.path} › ${c.name}`, ids: uniq([...c.ids, ...rec.headerIds]) };
+      if (tc.pure && (tc.calls || []).some((n) => helperNames.has(n))) tc.pure = false;
       tf.cases.push(tc); cases.push(tc);
     }
     files.push(tf);

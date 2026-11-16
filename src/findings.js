@@ -119,8 +119,9 @@ const PLACEMENT_TITLES = {
   'too-high': (i) => `${ruleLabel(i.rule)}${critTag(i.rule)} is tested above the level it needs`,
   'boundary-mocked': (i) => `${ruleLabel(i.rule)}${critTag(i.rule)} is proven only against fakes`,
   mislabelled: (i) => `${i.files[0].path} is not a ${i.files[0].declared} test`,
-  'no-boundary': (i) => `${i.files[0].path} is a unit test in the ${i.files[0].declared} suite`,
+  'no-boundary': (i) => (i.cases && i.cases.length < i.files[0].cases.length ? `${plural(i.cases.length, 'unit test')} in the ${i.files[0].level} suite: ${i.files[0].path}` : `${i.files[0].path} is a unit test in the ${i.files[0].declared || i.files[0].level} suite`),
   'table-at-top': (i) => `${i.files[0].path} runs a parameter table at ${i.files[0].level} level`,
+  'duplicate-below': (i) => `${i.files[0].path} repeats what unit tests say`,
   pyramid: () => 'The test suite is top-heavy',
   'level-not-run': (i) => `${i.level} tests do not gate pull requests`,
 };
@@ -129,6 +130,10 @@ function placementFindings(issues, proofs = []) {
   return issues.filter((i) => !i.silent).map((i) => {
     let critical = Boolean(i.rule?.critical);
     let priority = i.kind === 'level-not-run' ? { unit: 'P0', component: 'P0', integration: 'P1', e2e: 'P2' }[i.level] : i.rule ? P(critical, 'P1', 'P2') : 'P2';
+    // A unit test filed with a suite that no pull request runs gates nothing today, and would the day it moves:
+    // that is worth more than tidiness.
+    if (i.kind === 'no-boundary' && i.gates === false) { priority = 'P1'; i = { ...i, text: `${i.text} No pull-request step runs this suite, so today ${i.cases.length === 1 ? 'this check gates' : 'these checks gate'} no change; as unit tests they would.` }; }
+    if (i.kind === 'duplicate-below') priority = 'P3';
     if (i.kind === 'level-not-run') {
       // the rules whose only proof lives at this level: their proof never gates a pull request
       const hit = proofs.filter((p) => p.holes?.some((h) => h.kind === 'not-in-pr') && p.links.filter((l) => !l.case.skipped).every((l) => l.case.file.level === i.level));

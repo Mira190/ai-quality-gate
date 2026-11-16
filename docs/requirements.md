@@ -29,6 +29,7 @@ repository with the same rules it applies to any other.
 
 - **GATE-10 Tested too high.** A rule that is pure logic and is proven only by integration or end-to-end tests is reported, with the level it needs.
 - **GATE-11 Proven against fakes.** A rule about a real boundary that is proven only by tests which fake their collaborators is reported.
+- **GATE-33 Shift left, case by case.** Read from the tests alone, with no document and no model: a case in an integration or end-to-end file that makes no call out of its process, awaits nothing and uses nothing its suite set up is reported as a unit test in the wrong suite; three or more cases that differ only in their data are reported as a table at the top, with one to stay; and when no pull request runs that suite, the misplaced unit tests are a P1, because moved down they would gate every change.
 - **GATE-12 Misfiled tests.** A test file filed as unit that needs a network, a browser or a child process is reported, and so is a file filed as integration or end to end that crosses no boundary.
 
 ## CI

@@ -1,6 +1,6 @@
 # Fix brief
 
-9 blocking findings in acme/shop @ 4f2a9c1, most severe first. Each task names the evidence, the change to make, and how the gate will know it is done.
+10 blocking findings in acme/shop @ 4f2a9c1, most severe first. Each task names the evidence, the change to make, and how the gate will know it is done.
 
 ## 1. P0 REQ-4 Refund window (critical: money · "refund") is proven only by skipped tests
 - **Evidence:** `tests/unit/refund.test.ts:3` is skipped, so nothing checks the rule.
@@ -105,3 +105,8 @@ it('REQ-7 Order export', () => {
 - **Evidence:** Type check is set up (tsconfig.json) and no CI step runs it: nothing stops a change that breaks it.
 - **Do:** Add a pull-request step that runs it.
 - **Done when:** `ci.typecheck` for `typecheck` is gone from the next report.
+
+## 10. P1 tests/e2e/totals.e2e.test.ts is a unit test in the e2e suite
+- **Evidence:** tests/e2e/totals.e2e.test.ts is filed as e2e and crosses no boundary: it calls `src/totals.ts` directly (1 case). No pull-request step runs this suite, so today this check gates no change; as unit tests they would.
+- **Do:** Move these cases to the unit suite: same proof, feedback in seconds, and they run on every pull request.
+- **Done when:** `placement.no-boundary` for `tests/e2e/totals.e2e.test.ts` is gone from the next report.

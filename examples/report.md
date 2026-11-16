@@ -1,11 +1,11 @@
 # Quality gate: acme/shop @ 4f2a9c1
 
-**❌ Fail**: 9 findings block the gate (2 P0, 7 P1). Full review of the repository.
+**❌ Fail**: 10 findings block the gate (2 P0, 8 P1). Full review of the repository.
 
 | Question | Answer | P0 | P1 |
 | --- | --- | --- | --- |
 | 1. Is every requirement and design decision proven by a test? | **5 of 11** rules proven · 2 with a hole · 3 with no test · 0 unverified · 1 not testable as written. Critical rules: **4 of 9** proven. | 2 | 3 |
-| 2. Is each thing tested at the right level? | 5 placement findings. Cases: unit 7 · component 0 · integration 2 · e2e 2. | 0 | 2 |
+| 2. Is each thing tested at the right level? | 5 placement findings. Cases: unit 7 · component 0 · integration 2 · e2e 2. | 0 | 3 |
 | 3. Does CI enforce the checks on pull requests? | **2 of 5** checks enforced: Tests ✅ · Lint ❌ · Type check ❌ · Format ❌ · Dependency scan ✅. | 0 | 3 |
 
 ## Fix first: P0 and P1
@@ -21,7 +21,8 @@
 | 7 | P1 | **yes** | **REQ-7 Order export has no test** | "Order export. An order history can be exported as CSV." (`docs/requirements.md:9`): no test comes near it, by the model's reading, done twice: no test exports an order history as CSV. _(model, verified)_ | Write a unit test that fails when the rule is broken; name `REQ-7` in the test (its title or a `// covers: REQ-7` comment) so the link is a fact from then on. |
 | 8 | P1 | **yes** | **Lint: failures are ignored** | Lint runs on pull requests (`npm run lint`, `.github/workflows/ci.yml:13`), and its failure is ignored (continue-on-error or `\|\| true`). _(code)_ | Remove `continue-on-error` / `\|\| true`, or fix what fails and then remove it. |
 | 9 | P1 | **yes** | **Type check: set up, not enforced** | Type check is set up (tsconfig.json) and no CI step runs it: nothing stops a change that breaks it. _(code)_ | Add a pull-request step that runs it. |
-| 10 | P1 | no (advice) | **REQ-8 Payment speed (critical: money · "payment") cannot be tested as written** | "Payment speed. Payment processing should be fast." (`docs/requirements.md:10`): "fast" has no number; state a time limit such as p95 under <N> ms _(advice)_ | Rewrite it with a subject, a trigger and a checkable outcome (a number, a state, an error). |
+| 10 | P1 | **yes** | **tests/e2e/totals.e2e.test.ts is a unit test in the e2e suite** | tests/e2e/totals.e2e.test.ts is filed as e2e and crosses no boundary: it calls `src/totals.ts` directly (1 case). No pull-request step runs this suite, so today this check gates no change; as unit tests they would. _(code)_ | Move these cases to the unit suite: same proof, feedback in seconds, and they run on every pull request. |
+| 11 | P1 | no (advice) | **REQ-8 Payment speed (critical: money · "payment") cannot be tested as written** | "Payment speed. Payment processing should be fast." (`docs/requirements.md:10`): "fast" has no number; state a time limit such as p95 under <N> ms _(advice)_ | Rewrite it with a subject, a trigger and a checkable outcome (a number, a state, an error). |
 
 ## 1. Proof: is every rule proven by a test?
 
@@ -60,13 +61,15 @@ Not counted: 1 rule superseded, rejected or still a draft; 1 sentence the model 
 | integration | a real database, HTTP, queue or process | 2 | 2 | 2 of 2 |
 | e2e | the whole system, driven from outside | 2 | 2 | 0 of 2 |
 
+**Shift left:** 5 of 8 integration and end-to-end cases can be unit tests: 1 cross no boundary, 4 repeat a case with other data. Read from the tests alone: no document and no model is needed for this.
+
 | # | Priority | Blocks | Finding | Evidence | Fix |
 | --- | --- | --- | --- | --- | --- |
 | 5 | P1 | **yes** | **REQ-3 Payment retry (critical: money, external · "payment") is proven only against fakes** | REQ-3 is about a real boundary (gateway), and every test that proves it fakes that boundary (`jest.mock(` in tests/unit/payment.test.ts). _(code)_ | Add one integration test that crosses the real boundary; the unit tests can keep the edge cases. |
 | 6 | P1 | **yes** | **REQ-2 Free shipping (critical: money · "fee") is tested above the level it needs** | REQ-2 is logic with limits (over $50, $5), and is proven only at e2e level (5 cases in tests/e2e/shipping.spec.ts). _(code)_ | Add unit tests for the rule and its boundary values against `src/shipping.ts`; keep one e2e case for the wiring. |
-| 12 | P2 | no (below the gate) | **tests/unit/geo.test.ts is not a unit test** | tests/unit/geo.test.ts is filed as unit and needs a network, a database or a child process (`localhost:3000`). _(code)_ | Move it to the integration suite, or replace `localhost:3000` with a fake so it stays a unit test. |
-| 13 | P2 | no (below the gate) | **tests/e2e/totals.e2e.test.ts is a unit test in the e2e suite** | tests/e2e/totals.e2e.test.ts is filed as e2e and crosses no boundary: it calls `src/totals.ts` directly (1 case). _(code)_ | Move these cases to the unit suite: same proof, feedback in seconds, and they run on every pull request. |
-| 14 | P2 | no (below the gate) | **tests/e2e/shipping.spec.ts runs a parameter table at e2e level** | tests/e2e/shipping.spec.ts runs 5 parameter rows at e2e level. _(code)_ | Move the table to a unit test of the logic it varies; keep one row here to prove the wiring. |
+| 10 | P1 | **yes** | **tests/e2e/totals.e2e.test.ts is a unit test in the e2e suite** | tests/e2e/totals.e2e.test.ts is filed as e2e and crosses no boundary: it calls `src/totals.ts` directly (1 case). No pull-request step runs this suite, so today this check gates no change; as unit tests they would. _(code)_ | Move these cases to the unit suite: same proof, feedback in seconds, and they run on every pull request. |
+| 13 | P2 | no (below the gate) | **tests/unit/geo.test.ts is not a unit test** | tests/unit/geo.test.ts is filed as unit and needs a network, a database or a child process (`localhost:3000`). _(code)_ | Move it to the integration suite, or replace `localhost:3000` with a fake so it stays a unit test. |
+| 14 | P2 | no (below the gate) | **tests/e2e/shipping.spec.ts runs a parameter table at e2e level** | tests/e2e/shipping.spec.ts runs 5 parameter rows at e2e level: each one pays for the whole system to vary one input. _(code)_ | Keep one case here to prove the wiring; move the other 4 to a table in a unit test of the logic they vary. |
 
 ## 3. CI: are the checks enforced on pull requests?
 
@@ -90,7 +93,7 @@ Not counted: 1 rule superseded, rejected or still a draft; 1 sentence the model 
 
 | # | Priority | Finding | Evidence | Fix |
 | --- | --- | --- | --- | --- |
-| 11 | P2 | **Format: set up, not enforced** | Format is set up (.prettierrc) and no CI step runs it: nothing stops a change that breaks it. _(code)_ | Add a pull-request step that runs it. |
+| 12 | P2 | **Format: set up, not enforced** | Format is set up (.prettierrc) and no CI step runs it: nothing stops a change that breaks it. _(code)_ | Add a pull-request step that runs it. |
 
 </details>
 
@@ -102,4 +105,4 @@ Not counted: 1 rule superseded, rejected or still a draft; 1 sentence the model 
 - Shown to the model: 8 candidate tests, 28 of their 28 lines (the opening, every assertion, the lines that share the rule's words). Every assertion of every candidate was shown.
 - Read by code, in full: 4 rule documents, 11 test files, 2 CI files. The model reads no file.
 - Tests are read, not run. Evidence levels: _code_ is decided by parsing; _model, verified_ is a model answer whose citation code checked; _advice_ never blocks.
-- Time: scan 2 ms · extract 20 ms · formal 0 ms · ci-scripts 18 ms · index 16 ms · ci 2 ms · model 0 ms · link 7 ms · judge 12 ms · assess 1 ms · execute 0 ms · placement 1 ms.
+- Time: scan 3 ms · extract 31 ms · formal 0 ms · ci-scripts 23 ms · index 22 ms · ci 3 ms · model 0 ms · link 8 ms · judge 12 ms · assess 2 ms · execute 0 ms · placement 1 ms.

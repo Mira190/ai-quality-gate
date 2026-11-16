@@ -153,15 +153,33 @@ scan → extract → index → ci → trace(link → judge → assess) → place
 
 规则的"性质"由词表判定它最低能在哪层被证明（纯逻辑 → unit，界面 → component，真实边界 → integration，整条流程 → e2e），模型可以修正；模型与词表不一致时该 finding 降为建议。
 
+### 往左移：能用单元测试就不用重的
+
+判断分两种来源，互不依赖。
+
+**只看测试本身（GATE-33，不需要文档，不需要模型）。** 每个用例在索引时记下四件事：有没有调用进程之外的东西（浏览器、HTTP、SQL、子进程、文件）、显式等待了多久、有没有用到 suite 在 setup 里造的东西、去掉字面量之后的"形状"。据此：
+
+| 检查 | 依据 | 建议 |
+| --- | --- | --- |
+| `placement.no-boundary` | integration / e2e 文件里的某个用例：不出进程、不 `await`、不用 setup 的任何东西 | 它就是单元测试，移过去 |
+| `placement.table-at-top` | 重型文件里的参数表，或三个以上"只有数据不同"的用例（形状相同） | 留一个证明接线，其余下沉成单元测试的表 |
+| `placement.duplicate-below`（建议） | 重型用例和某个单元用例的名字高度重合，且那个单元用例没有 mock | 只留一个当冒烟 |
+| `placement.mislabelled` | 放在 unit 目录却需要网络 / 浏览器 / 子进程 | 移到对应层，或换成 fake |
+
+优先级默认 P2。一个例外：被判为"其实是单元测试"的用例所在的 suite **没有任何 PR 步骤在跑**时是 P1——它今天拦不住任何改动，移下去之后每个 PR 都会跑它。这是 shift left 最直接的收益。
+
+**看规则的性质（需要文档里有规则）。**
+
 | 检查 | 含义 |
 | --- | --- |
 | `placement.too-high` | 纯逻辑规则只在 integration / e2e 被证明：每个边界值都要付一次浏览器或数据库的代价 |
 | `placement.boundary-mocked` | 关于真实边界的规则只被 mock 掉边界的测试证明：测的是 mock |
-| `placement.mislabelled` | 放在 unit 目录却需要网络 / 浏览器 / 子进程 |
-| `placement.no-boundary` | 放在 integration / e2e 目录却什么边界都没跨：慢队列里的单元测试 |
-| `placement.table-at-top` | 高层测试里跑大参数表：组合应当下沉 |
-| `placement.pyramid` | 慢测试比快测试多 |
-| `ci.level-not-run` | 某一层的测试没有任何 PR 步骤在跑 |
+
+另有两条整体性的：`placement.pyramid`（慢测试比快测试多）、`ci.level-not-run`（某一层的测试没有任何 PR 步骤在跑）。
+
+报告的 Placement 一节先给一句"shift-left 计划"：多少个重型用例可以下沉、各因为什么、重复的那些显式等待了多少秒。
+
+保守之处：调用了本文件里会出进程的 helper、或测试自己的 support 文件里导出的 helper 的用例，一律按"跨了边界"算；只对 JS / TS 和 Python 做用例级判断（其它语言缺少"没有 await 就出不了进程"这样可靠的信号）；检查程序里的断言（`check(...)`）不参与；文件整体已被判为放错目录的，不再逐用例重复报。
 
 Placement 一节在报告里始终出现（各层文件数、用例数、PR 上跑了多少），即使 finding 都是 P2。
 

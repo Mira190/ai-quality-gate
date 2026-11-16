@@ -35,7 +35,7 @@ test('the run writes the report, the comment, the findings and SARIF, and the ou
   for (const f of ['report.md', 'comment.md', 'findings.json', 'results.sarif']) assert.ok(fs.statSync(path.join(out, f)).size > 0, f);
   assert.ok(!fs.existsSync(path.join(out, 'ai-requests.json')), 'every prompt had a recorded answer');
   const outputs = Object.fromEntries(fs.readFileSync(ghOut, 'utf8').trim().split('\n').map((l) => l.split(/=(.*)/s).slice(0, 2)));
-  assert.deepEqual([outputs.verdict, outputs.blocking, outputs.p0, outputs.pending], ['fail', '11', '3', '0']);
+  assert.deepEqual([outputs.verdict, outputs.blocking, outputs.p0, outputs.pending], ['fail', '12', '3', '0']);
   assert.match(r.stdout, /^::error file=docs\/requirements\.md,line=12,title=P0 proof\.unproven::REQ-9 Gift card limit/m);
   const findings = JSON.parse(fs.readFileSync(path.join(out, 'findings.json'), 'utf8'));
   assert.equal(findings.rules.find((x) => x.id === 'REQ-9').status, 'unproven');
