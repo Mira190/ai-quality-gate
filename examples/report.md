@@ -104,4 +104,4 @@ Not counted: 1 rule superseded, rejected or still a draft; 1 sentence the model 
 - Shown to the model: 5 candidate tests, 19 of their 19 lines (the opening, every assertion, the lines that share the rule's words). Every assertion of every candidate was shown.
 - Read by code, in full: 4 rule documents, 11 test files, 2 CI files. The model reads no file.
 - Tests are read, not run. Evidence levels: _code_ is decided by parsing; _model, verified_ is a model answer whose citation code checked; _advice_ never blocks.
-- Time: scan 5 ms · extract 19 ms · index 12 ms · ci 21 ms · model 0 ms · link 2 ms · judge 5 ms · assess 1 ms · placement 0 ms.
+- Time: scan 4 ms · extract 20 ms · index 10 ms · ci 16 ms · model 0 ms · link 2 ms · judge 5 ms · assess 2 ms · execute 0 ms · placement 1 ms.

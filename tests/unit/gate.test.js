@@ -122,3 +122,29 @@ test('the documented example config is exactly the defaults', () => {
   const example = YAML.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../examples/.quality-gate.yml'), 'utf8'));
   assert.deepEqual(example, require('../../src/config').DEFAULTS);
 });
+
+test('GATE-27 a check whose findings people mostly dismiss goes on probation and stops blocking; one they fix keeps blocking', () => {
+  const { nextHistory, probationOf } = require('../../src/gate');
+  // history is counted from one default-branch run to the next
+  const a = finding({ subject: 'REQ-1' }), b = finding({ subject: 'REQ-2' }), c = finding({ check: 'placement.too-high', subject: 'REQ-3', priority: 'P1' });
+  const run1 = nextHistory(null, [a, b, c]);
+  assert.deepEqual(run1.checks, {});
+  // next run: REQ-1 was fixed (gone), REQ-2 is now suppressed, REQ-3 is suppressed too
+  b.suppressed = 'not relevant'; c.suppressed = 'we disagree';
+  const run2 = nextHistory(run1, [b, c]);
+  assert.deepEqual(run2.checks, { 'proof.unproven': { fixed: 1, dismissed: 1 }, 'placement.too-high': { fixed: 0, dismissed: 1 } });
+  // a suppression is counted once, however many runs it stays
+  assert.deepEqual(nextHistory(run2, [b, c]).checks, run2.checks);
+
+  const policy = { min_resolved: 10, max_dismissed: 0.2 };
+  assert.equal(probationOf('x', { x: { fixed: 9, dismissed: 0 } }, policy), null);
+  assert.equal(probationOf('x', { x: { fixed: 8, dismissed: 2 } }, policy), null);               // 20% is allowed
+  assert.match(probationOf('x', { x: { fixed: 7, dismissed: 3 } }, policy), /3 of the last 10 findings of this check were dismissed/);
+  assert.equal(probationOf('x', { x: { fixed: 1, dismissed: 3 } }, policy), null);               // too few to judge
+
+  const noisy = finding({ check: 'placement.too-high', subject: 'REQ-9', priority: 'P1' }), solid = finding({ subject: 'REQ-8' });
+  const baseline = { fingerprints: [], checks: { 'placement.too-high': { fixed: 4, dismissed: 6 }, 'proof.unproven': { fixed: 30, dismissed: 1 } } };
+  const g = decide({ findings: [noisy, solid], config: config(), changes: null, baseline });
+  assert.deepEqual([noisy.blocking, solid.blocking, g.probation], [false, true, ['placement.too-high']]);
+  assert.match(noisy.why, /on probation/);
+});

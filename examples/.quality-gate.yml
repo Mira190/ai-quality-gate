@@ -48,9 +48,19 @@ ai:
   retries: 1
   concurrency: 2
 
+execute:
+  enabled: false               # executed evidence: moves a rule's limit in the code by one step and runs its linked tests
+  test_command: ''             # runs the given test files; {files} is replaced by them, e.g. "npx vitest run {files}"
+  scope: critical              # critical | all
+  max_mutants: 12              # test runs per review; results are cached until the rule, the code or the tests change
+  timeout_s: 120
+
 gate:
   fail_on: P1                  # P0 | P1 | P2 | P3 | never
-  basis: [S, V]                # evidence that may block: S code-decided, V model-proposed and code-verified, A advice
+  basis: [E, S, V]             # evidence that may block: E executed, S code-decided, V model-proposed and code-verified, A advice
+  probation:                   # a check whose findings people mostly dismiss, instead of fixing, stops blocking
+    min_resolved: 10
+    max_dismissed: 0.2
   new_only: false              # true: a ratchet for a repository with debt. Only findings missing from the default-branch baseline block
 
 report:

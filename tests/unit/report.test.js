@@ -80,3 +80,15 @@ test('the fix brief turns a blocking finding into a task with the test already n
   assert.match(skeleton({ ...rule, limits: [{ value: '3', unit: 'retries', raw: 'at most 3 retries' }] }, 'go'), /func TestREQ7\(t \*testing\.T\) \{\n\tcases := .*\n\t\t\{"below the limit \(at most 3 retries\)", 2\},/);
   assert.match(skeleton(rule, 'java'), /@DisplayName\("REQ-7 Order export"\)\nvoid orderExport\(\)/);
 });
+
+test('many rules of one document with the same gap are one row in the table, and stay separate findings', () => {
+  const { grouped } = require('../../src/report/markdown');
+  const mk = (n, o = {}) => ({ n, check: 'proof.unproven', priority: 'P0', blocking: true, basis: 'S', critical: true, subject: `REQ-${n}`, fingerprint: `f${n}`, loc: { path: 'docs/req.md', line: n }, title: `REQ-${n} has no test`, detail: 'd', fix: 'f', ...o });
+  const list = [mk(1), mk(2), mk(3), mk(4), mk(5), mk(6, { loc: { path: 'docs/other.md', line: 1 } }), mk(7, { check: 'ci.lint', subject: 'lint' })];
+  const rows = grouped(list);
+  assert.deepEqual(rows.map((r) => r.title), ['5 critical rules in `docs/req.md` have no test', 'REQ-6 has no test', 'REQ-7 has no test']);
+  assert.match(rows[0].detail, /^REQ-1, REQ-2, REQ-3, REQ-4, REQ-5\./);
+  assert.equal(list.length, 7);
+  // three of a kind are still shown one by one
+  assert.equal(grouped([mk(1), mk(2), mk(3)]).length, 3);
+});

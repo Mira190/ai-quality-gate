@@ -6,7 +6,7 @@ const { clip, plural, count, groupBy } = require('../util');
 const { LEVELS } = require('../index/tests');
 
 const esc = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
-const BASIS = { S: 'code', V: 'model, verified', A: 'advice' };
+const BASIS = { E: 'executed', S: 'code', V: 'model, verified', A: 'advice' };
 const STATE = { enforced: '✅ enforced', unverified: '🟡 runs, trigger not read', path_filtered: '✅ enforced (path filter)', non_blocking: '❌ failures ignored', not_on_pr: '❌ not on pull requests', configured: '❌ set up, not run', missing: '❌ missing', na: '— not applicable' };
 const table = (head, rows) => (rows.length ? [`| ${head.join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`, ...rows.map((r) => `| ${r.map(esc).join(' | ')} |`)].join('\n') : '');
 const locOf = (f) => (f.loc ? `\`${f.loc.path}:${f.loc.line}\`` : '');
@@ -14,6 +14,27 @@ const more = (n, what) => (n > 0 ? `\n\n…and ${n} more ${what} (all of them ar
 
 function findingRows(list, max, { blocks = true } = {}) {
   return list.slice(0, max).map((f) => [f.n, f.priority, ...(blocks ? [f.blocking ? '**yes**' : `no (${f.why})`] : []), `**${f.title}**`, `${f.detail} _(${BASIS[f.basis]})_`, f.fix]);
+}
+
+const GROUPED = { 'proof.unproven': 'have no test', 'proof.unverified': 'may have a test nobody has checked', 'proof.skipped': 'are proven only by skipped tests' };
+/**
+ * Twenty rules of one document with the same gap are one thing to do, not twenty rows: the table shows the group,
+ * findings.json and fix-brief.md keep every one.
+ */
+function grouped(list) {
+  const groups = new Map();
+  for (const f of list) {
+    const k = GROUPED[f.check] && f.loc ? `${f.check}|${f.priority}|${f.blocking}|${f.basis}|${f.loc.path}` : `single|${f.fingerprint}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(f);
+  }
+  const out = [];
+  for (const g of groups.values()) {
+    if (g.length < 4) { out.push(...g); continue; }
+    const f = g[0];
+    out.push({ ...f, title: `${g.length} ${f.critical ? 'critical ' : ''}rules in \`${f.loc.path}\` ${GROUPED[f.check]}`, detail: `${g.slice(0, 15).map((x) => x.subject).join(', ')}${g.length > 15 ? ` and ${g.length - 15} more` : ''}. Each is listed with its evidence in \`findings.json\`.`, fix: f.check === 'proof.skipped' ? 'Fix and re-enable the tests.' : '`fix-brief.md` has a named, placed test skeleton for each; start at the top.' });
+  }
+  return out.sort((a, b) => a.n - b.n);
 }
 
 function summarize(ledger) {
@@ -60,7 +81,7 @@ function proofSection(ledger, max) {
   out.push(table(['Document', 'Rules', 'Critical', 'Proven', 'Hole in the proof', 'No test', 'Unverified', 'Reword'], byDoc.slice(0, max).map(([doc, l]) => [`\`${doc}\``, l.length, count(l, (p) => p.rule.critical), n(l, 'proven'), n(l, 'weak'), n(l, 'unproven'), n(l, 'unverified'), n(l, 'untestable')])) + more(byDoc.length - max, 'documents'));
   const ICON = { proven: '✅', weak: '🟡', unproven: '❌', unverified: '❔', untestable: '✏️' };
   const how = (p) => {
-    if (p.links.length) return `${p.links.slice(0, 2).map((l) => `\`${l.case.file.path}:${l.line || l.case.line}\` (${l.case.file.level}${l.by === 'id' ? ', names the ID' : ', model-linked'}${l.case.skipped ? ', skipped' : ''})`).join(', ')}${p.links.length > 2 ? ` +${p.links.length - 2}` : ''}${p.holes.length ? `: ${p.holes.map((h) => h.text).join('; ')}` : ''}`;
+    if (p.links.length) return `${p.links.slice(0, 2).map((l) => `\`${l.case.file.path}:${l.line || l.case.line}\` (${l.case.file.level}${l.by === 'id' ? ', names the ID' : ', model-linked'}${p.executed?.outcome === 'killed' ? ', fails when the limit moves' : ''}${l.case.skipped ? ', skipped' : ''})`).join(', ')}${p.links.length > 2 ? ` +${p.links.length - 2}` : ''}${p.holes.length ? `: ${p.holes.map((h) => h.text).join('; ')}` : ''}`;
     if (p.status === 'untestable') return `too vague to test${p.missing ? `: ${p.missing}` : ''}`;
     if (p.status === 'unverified') return `candidate \`${p.candidates[0]?.case.file.path}:${p.candidates[0]?.case.line}\`, not judged`;
     return p.basis === 'V' ? 'the model read the nearest tests: none asserts it' : 'no test names it or shares its words';
@@ -118,7 +139,9 @@ function runSection(ledger) {
   const sh = m.shown;
   if (sh && sh.tests) lines.push(`- Shown to the model: ${plural(sh.tests, 'candidate test')}, ${sh.lines} of their ${sh.of} lines (the opening, every assertion, the lines that share the rule's words)${sh.helpers ? `, with the assertions of same-file helpers for ${sh.helpers}` : ''}. ${sh.cut ? `${plural(sh.cut, 'test')} too long to show every assertion: a "no proof" about ${sh.cut === 1 ? 'it' : 'them'} is not relied on.` : 'Every assertion of every candidate was shown.'}`);
   lines.push(`- Read by code, in full: ${plural(run.docs.length, 'rule document')}, ${plural(run.testFiles, 'test file')}, ${plural(run.ciFiles, 'CI file')}. The model reads no file.`);
-  lines.push('- Tests are read, not run. Evidence levels: _code_ is decided by parsing; _model, verified_ is a model answer whose citation code checked; _advice_ never blocks.');
+  const ex = ledger.executed;
+  if (ex && (ex.ran || ex.cached)) lines.push(`- Executed: for ${plural(ex.killed + ex.survived, 'rule')} with a limit, the limit was moved in the code and the linked tests run (${ex.ran} runs now, ${ex.cached} from the cache): ${ex.killed} caught it, ${ex.survived} did not${ex.over ? `; ${ex.over} left for the next run` : ''}${ex.skipped ? `; ${ex.skipped} skipped` : ''}.${ex.notes.length ? ` ${ex.notes.join('; ')}.` : ''}`);
+  lines.push(ex && (ex.ran || ex.cached) ? '- Evidence levels: _executed_ is a test run; _code_ is decided by parsing; _model, verified_ is a model answer whose citation code checked; _advice_ never blocks.' : '- Tests are read, not run. Evidence levels: _code_ is decided by parsing; _model, verified_ is a model answer whose citation code checked; _advice_ never blocks.');
   for (const d of run.degraded) lines.push(`- ⚠️ ${d}`);
   for (const e of run.configErrors) lines.push(`- ⚠️ Config: ${e}`);
   lines.push(`- Time: ${Object.entries(run.timings).map(([k, v]) => `${k} ${v} ms`).join(' · ')}.`);
@@ -132,7 +155,9 @@ function renderReport(ledger) {
   const sup = ledger.findings.filter((f) => f.suppressed);
   const parts = [`# Quality gate: ${ledger.run.name}${ledger.run.sha ? ` @ ${ledger.run.sha}` : ''}`, ...header(ledger)];
   parts.push('## Fix first: P0 and P1');
-  parts.push(top.length ? table(['#', 'Priority', 'Blocks', 'Finding', 'Evidence', 'Fix'], findingRows(top, max)) + more(top.length - max, 'P0 and P1 findings') : 'None.');
+  const rows = grouped(top);
+  parts.push(top.length ? table(['#', 'Priority', 'Blocks', 'Finding', 'Evidence', 'Fix'], findingRows(rows, max)) + more(rows.length - max, 'P0 and P1 rows') : 'None.');
+  if (ledger.gate.probation?.length) parts.push(`On probation (reported, not blocking, because people dismissed more of their findings than \`gate.probation\` allows): ${ledger.gate.probation.map((c) => `\`${c}\``).join(', ')}.`);
   if (ledger.change?.affectedTests.length) parts.push(`**Tests that reach the changed code:** ${ledger.change.affectedTests.slice(0, 12).map((t) => `\`${t}\``).join(' ')}${ledger.change.affectedTests.length > 12 ? ` +${ledger.change.affectedTests.length - 12}` : ''}${ledger.change.touchedRules.length ? `. Rules this change touches: ${ledger.change.touchedRules.slice(0, 12).join(', ')}.` : ''}`);
   parts.push(...proofSection(ledger, max), ...placementSection(ledger, max), ...ciSection(ledger));
   if (low.length) parts.push(`## Lower priority: P2 and P3\n\n<details><summary>${plural(low.length, 'finding')}</summary>\n\n${table(['#', 'Priority', 'Finding', 'Evidence', 'Fix'], findingRows(low, max * 2, { blocks: false }))}${more(low.length - max * 2, 'findings')}\n\n</details>`);
@@ -157,4 +182,4 @@ function renderComment(ledger, { marker = '<!-- ai-quality-gate -->', url = '' }
   return parts.join('\n\n') + '\n';
 }
 
-module.exports = { renderReport, renderComment, summarize };
+module.exports = { renderReport, renderComment, summarize, grouped };

@@ -20,6 +20,7 @@ repository with the same rules it applies to any other.
 - **GATE-21 Read twice.** A model verdict that no candidate test proves a rule stands on the model's word alone, so it blocks only after a second, differently framed reading of the same tests agrees; a disagreement is advice.
 - **GATE-24 Nothing is concluded from part of a test.** The model is shown each candidate test whole, or its opening, its assertions and the lines that share the rule's words; assertions made through a helper in the same file are shown too; and when not every assertion fits, a verdict that the test proves nothing is advice.
 - **GATE-25 Candidates through imports.** A test that imports a source file named by one of the rule's words is a candidate for the rule even when the test shares none of its wording.
+- **GATE-26 Executed evidence.** When a test command is given, the gate moves a rule's limit in the code by one step and runs the linked tests on disk: a rule whose tests still pass is reported as unguarded with executed evidence, every file is restored, and nothing is concluded when the tests fail before any change.
 - **GATE-22 Model failures stop early.** Two failed calls in a row, or one refused for bad credentials, end the model calls of the run; a reply in the wrong shape gets one repair attempt.
 
 ## Placement
@@ -37,6 +38,7 @@ repository with the same rules it applies to any other.
 ## Gate
 
 - **GATE-16 What blocks.** The review covers the whole repository, and a finding blocks when its priority reaches the gate and its evidence is code-decided or code-verified; advice never blocks, and with the ratchet on a finding already in the baseline does not block.
+- **GATE-27 Probation.** A check whose findings were dismissed, not fixed, more often than the configured share stops blocking and is reported as on probation; the counts come from default-branch runs, and too few of them decide nothing.
 - **GATE-17 Suppressions.** A suppression needs a reason, and one whose end date has passed is no longer applied.
 - **GATE-18 Repeatable.** Two runs on the same repository state write the same report, byte for byte, whether the cache on disk is cold or warm.
 - **GATE-19 The gate does not break the build by breaking.** When a stage or the model fails, the report says what was skipped, and the exit code of the command line is zero unless enforcement was asked for and the gate failed.

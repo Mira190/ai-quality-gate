@@ -9,7 +9,8 @@
 //   P3  information
 // Advice is never P0: what only a heuristic or an unverified model opinion supports cannot be the top of the list.
 //
-// Evidence: S code-decided · V model-proposed, code-verified · A advice (a heuristic or an unverified model opinion).
+// Evidence: E executed · S code-decided · V model-proposed, code-verified · A advice (a heuristic or an unverified
+// model opinion).
 const { sha, clip, plural } = require('./util');
 
 const critTag = (r) => (r.critical ? ` (critical: ${r.tags.map((t) => t.area).join(', ')} · "${r.tags[0].word}")` : '');
@@ -78,11 +79,13 @@ function proofFindings(proofs, config, collapsed = new Set()) {
           limit: `Add cases at ${boundaryValues(h.limits || [])}.`,
           'not-in-pr': 'Run these tests in a pull-request step that can fail the build.',
           partial: `Assert the missing part${level ? ` in ${level === 'e2e' ? 'an' : 'a'} ${level} test` : ''}.`,
+          survived: `Add cases at ${boundaryValues(h.limits || [])} that fail when the limit moves.`,
         };
         out.push(make({
-          ...base, check: `proof.${h.kind}`, priority: P(r.critical, 'P1', 'P2'), basis: h.basis === 'S' && p.basis === 'V' ? 'V' : h.basis,
+          // a test run that shows the rule can be broken unnoticed is as severe as no test, and better evidence
+          ...base, check: `proof.${h.kind}`, priority: h.kind === 'survived' ? P(r.critical, 'P0', 'P1') : P(r.critical, 'P1', 'P2'), basis: h.basis === 'S' && p.basis === 'V' ? 'V' : h.basis,
           title: `${ruleLabel(r)}${critTag(r)}: ${h.kind === 'partial' ? 'the tests check only part of it' : h.text}`,
-          detail: `Linked test: \`${first.file.path}:${first.line}\` "${clip(first.name, 60)}"${p.links.length > 1 ? ` and ${p.links.length - 1} more` : ''}. ${h.kind === 'partial' ? `Not asserted: ${h.text}.` : h.note ? `The model adds: ${h.note}.` : ''}`.trim(),
+          detail: `Linked test: \`${first.file.path}:${first.line}\` "${clip(first.name, 60)}"${p.links.length > 1 ? ` and ${p.links.length - 1} more` : ''}. ${h.kind === 'partial' ? `Not asserted: ${h.text}.` : h.kind === 'survived' ? `With \`${h.site.text}\` changed to use ${h.site.to}, ${h.tests.map((t) => `\`${t}\``).join(', ')} still passed.` : h.note ? `The model adds: ${h.note}.` : ''}`.trim(),
           fix: fixes[h.kind],
           anchors: [ruleAnchor(r), ...p.links.map((l) => caseAnchor(l.case)), ...p.impl.map((f) => ({ path: f }))],
         }));

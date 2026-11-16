@@ -52,9 +52,17 @@ const DEFAULTS = {
     deadline_s: 600,                // no model call starts after this many seconds
     lock: '.quality-gate.lock.json',// verdicts committed to the repository: asked once, a fact from then on
   },
+  execute: {
+    enabled: false,                 // run rule-targeted mutants: moves a rule's limit in the code and runs its linked tests
+    test_command: '',               // runs the given test files; {files} is replaced by them, e.g. "npx vitest run {files}"
+    scope: 'critical',              // critical | all
+    max_mutants: 12,                // test runs per review; results are cached until rule, code or tests change
+    timeout_s: 120,
+  },
   gate: {
     fail_on: 'P1',                  // P0 | P1 | P2 | P3 | never
-    basis: ['S', 'V'],              // evidence that may block: S code-decided, V model-proposed and code-verified, M model only
+    basis: ['E', 'S', 'V'],         // evidence that may block: E executed, S code-decided, V model-proposed and code-verified
+    probation: { min_resolved: 10, max_dismissed: 0.2 },   // a check whose findings people mostly dismiss stops blocking
     new_only: false,                // true: a ratchet. Only findings missing from the default-branch baseline block
   },
   report: {
@@ -86,10 +94,11 @@ function merge(base, over, at, errors) {
 
 function validate(c, errors) {
   if (!/^(P[0-3]|never)$/.test(c.gate.fail_on)) { errors.push('gate.fail_on: must be P0, P1, P2, P3 or never'); c.gate.fail_on = DEFAULTS.gate.fail_on; }
-  const basis = c.gate.basis.filter((b) => ['S', 'V', 'M'].includes(b));
-  if (basis.length !== c.gate.basis.length) errors.push('gate.basis: only S, V and M are evidence levels');
+  const basis = c.gate.basis.filter((b) => ['E', 'S', 'V', 'A'].includes(b));
+  if (basis.length !== c.gate.basis.length) errors.push('gate.basis: the evidence levels are E, S, V and A');
   c.gate.basis = basis.length ? basis : DEFAULTS.gate.basis;
   if (!['auto', 'copilot', 'command', 'handoff', 'none'].includes(c.ai.provider)) { errors.push('ai.provider: must be auto, copilot, command, handoff or none'); c.ai.provider = 'auto'; }
+  if (!['critical', 'all'].includes(c.execute.scope)) { errors.push('execute.scope: must be critical or all'); c.execute.scope = 'critical'; }
   if (!['critical', 'all'].includes(c.ai.scope)) { errors.push('ai.scope: must be critical or all'); c.ai.scope = 'critical'; }
   const today = new Date().toISOString().slice(0, 10);
   c.suppress = c.suppress.filter((s, i) => {

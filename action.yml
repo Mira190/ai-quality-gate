@@ -61,6 +61,14 @@ inputs:
     description: "'true' uploads findings to code scanning (needs security-events: write)."
     required: false
     default: 'false'
+  execute:
+    description: "'true' adds executed evidence: for rules with a limit, the limit is moved in the code and the linked tests are run with test-command. Your tests run on this runner: install their dependencies before this step."
+    required: false
+    default: 'false'
+  test-command:
+    description: Runs the given test files; {files} is replaced by them (e.g. "npx vitest run {files}").
+    required: false
+    default: ''
   max-requests:
     description: Model calls per run (empty uses the config, default 12).
     required: false
@@ -125,6 +133,8 @@ runs:
         AQG_FAIL_ON: ${{ inputs.fail-on }}
         AQG_MAX_REQUESTS: ${{ inputs.max-requests }}
         AQG_NEW_ONLY: ${{ inputs.new-only }}
+        AQG_EXECUTE: ${{ inputs.execute }}
+        AQG_TEST_COMMAND: ${{ inputs.test-command }}
         AQG_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         AQG_NAME: ${{ github.repository }}
         AQG_IS_DEFAULT: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
@@ -140,6 +150,7 @@ runs:
         [ -n "$AQG_FAIL_ON" ] && args+=(--fail-on "$AQG_FAIL_ON")
         [ -n "$AQG_MAX_REQUESTS" ] && args+=(--max-requests "$AQG_MAX_REQUESTS")
         [ "$AQG_NEW_ONLY" = true ] && args+=(--new-only)
+        [ "$AQG_EXECUTE" = true ] && [ -n "$AQG_TEST_COMMAND" ] && args+=(--execute --test-command "$AQG_TEST_COMMAND")
         # the default branch writes the baseline the ratchet compares with
         [ "$AQG_IS_DEFAULT" = true ] && args+=(--write-baseline)
         node "$GITHUB_ACTION_PATH/bin/aqg.js" "${args[@]}"

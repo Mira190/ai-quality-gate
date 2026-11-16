@@ -14,7 +14,7 @@ const { runPipeline, writeOutputs, serialise } = require('./pipeline');
 const { annotations } = require('./report/sarif');
 
 const FLAGS = {
-  repo: 'path', config: 'path', out: 'path', base: 'value', diff: 'path', staged: 'bool', name: 'value', sha: 'value', cache: 'path', baseline: 'path', 'write-baseline': 'bool', 'write-lock': 'bool', 'new-only': 'bool',
+  repo: 'path', config: 'path', out: 'path', base: 'value', diff: 'path', staged: 'bool', name: 'value', sha: 'value', cache: 'path', baseline: 'path', 'write-baseline': 'bool', 'write-lock': 'bool', execute: 'bool', 'test-command': 'value', 'new-only': 'bool',
   answers: 'path', provider: 'value', model: 'value', 'fail-on': 'value', basis: 'value', 'all-findings': 'bool', 'ai-scope': 'value', 'max-requests': 'value', enforce: 'bool', 'report-url': 'value',
   file: 'value', json: 'bool', quiet: 'bool', help: 'bool',
 };
@@ -65,6 +65,7 @@ async function main(argv) {
   if (args.basis) overrides.gate.basis = args.basis.split(',').map((s) => s.trim()).filter(Boolean);
   if (args['all-findings']) overrides.gate.new_only = false;
   if (args['new-only']) overrides.gate.new_only = true;
+  if (args.execute || args['test-command']) overrides.execute = { enabled: true, ...(args['test-command'] ? { test_command: args['test-command'] } : {}) };
   if (cmd === 'rules') overrides.ai.provider = 'none';
   const { config, errors } = loadConfig(args.config ? path.resolve(args.config) : path.join(root, '.quality-gate.yml'), overrides);
   const log = args.quiet ? () => {} : (m) => console.error(`[aqg] ${m}`);

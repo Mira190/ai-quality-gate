@@ -24,9 +24,10 @@ const { linkRules } = require('./trace/link');
 const { judgeRules } = require('./trace/judge');
 const { assessRules } = require('./trace/evidence');
 const { assessPlacement } = require('./placement');
+const { executeRules } = require('./execute');
 const { proofFindings, placementFindings, ciFindings } = require('./findings');
 const { analyzeChange } = require('./change');
-const { decide } = require('./gate');
+const { decide, nextHistory } = require('./gate');
 const { makeProvider } = require('./ai/provider');
 const { Cache } = require('./cache');
 const { renderReport, renderComment, summarize } = require('./report/markdown');
@@ -98,6 +99,9 @@ async function runPipeline(o) {
   provider.flush?.();
   const { proofs } = await stage('assess', { proofs: [] }, () => assessRules({ root, rules: extracted.rules, links, verdicts: judged.verdicts, ci }));
 
+  // execute (opt-in): executed evidence for rules with a limit
+  const executed = await stage('execute', { ran: 0, killed: 0, survived: 0, cached: 0, skipped: 0, over: 0, notes: [], failed: true }, () => executeRules({ root, proofs, inventory, cache, config }));
+
   // placement
   const emptyLevels = Object.fromEntries(LEVELS.map((l) => [l, { files: 0, cases: 0, pr: 0, notRun: [] }]));
   const placement = await stage('placement', { issues: [], levels: emptyLevels }, () => assessPlacement({ proofs, tests, ci }));
@@ -112,6 +116,7 @@ async function runPipeline(o) {
   ];
   const baseline = o.baselineFile ? readJson(o.baselineFile) : null;
   const gate = decide({ findings, config, changes, baseline: baseline?.fingerprints ? baseline : null });
+  const history = nextHistory(baseline, findings);
 
   const ledger = {
     version: 1,
@@ -122,7 +127,7 @@ async function runPipeline(o) {
       rules: { total: extracted.rules.length, withId: extracted.rules.filter((r) => !r.inferred).length, inferred: extracted.rules.filter((r) => r.inferred).length },
       langs: inventory.langs, packages: inventory.packages.length, degraded, configErrors: o.configErrors || [], timings,
     },
-    config, gate, findings, proofs, placement, ci, change, tests,
+    config, gate, findings, proofs, placement, ci, change, tests, executed, history,
     ai: { provider: provider.name, model: provider.model || '', note: provider.note || '', stats: judged.stats, cache: cache.stats },
   };
   ledger.summary = summarize(ledger);
@@ -159,7 +164,7 @@ function writeOutputs(ledger, outDir, { reportUrl = '', writeBaseline = null } =
   writeAtomic(path.join(outDir, 'findings.json'), JSON.stringify(serialise(ledger), null, 2) + '\n');
   writeAtomic(path.join(outDir, 'results.sarif'), JSON.stringify(toSarif(ledger), null, 2) + '\n');
   // The baseline is what pull requests are compared against: every finding of this run, by fingerprint.
-  if (writeBaseline) writeAtomic(writeBaseline, JSON.stringify({ sha: ledger.run.sha, fingerprints: ledger.findings.map((f) => f.fingerprint).sort() }) + '\n');
+  if (writeBaseline) writeAtomic(writeBaseline, JSON.stringify({ sha: ledger.run.sha, fingerprints: ledger.findings.map((f) => f.fingerprint).sort(), ...ledger.history }) + '\n');
 }
 
 module.exports = { runPipeline, writeOutputs, serialise };
