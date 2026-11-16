@@ -31,6 +31,7 @@ const { makeProvider } = require('./ai/provider');
 const { Cache } = require('./cache');
 const { renderReport, renderComment, summarize } = require('./report/markdown');
 const { toSarif } = require('./report/sarif');
+const { renderBrief } = require('./report/brief');
 const { readJson, writeAtomic } = require('./util');
 
 /**
@@ -90,8 +91,10 @@ async function runPipeline(o) {
   // trace
   const provider = await stage('model', { name: 'none', available: false, note: 'the provider could not start' }, () => makeProvider(config, { answersFile: o.answersFile, requestsFile: o.outDir && path.join(o.outDir, 'ai-requests.json') }));
   const links = await stage('link', new Map(extracted.rules.map((r) => [r.id, { explicit: [], candidates: [], terms: [] }])), () => linkRules(extracted.rules, tests, config));
-  const emptyStats = { needed: 0, cached: 0, asked: 0, requests: 0, pending: 0, failed: 0, overBudget: 0, chars: 0, errors: [] };
-  const judged = await stage('judge', { verdicts: new Map(), stats: emptyStats }, () => judgeRules({ root, rules: extracted.rules, links, provider, cache, config, changedPaths: new Set(changes ? changes.keys() : []), log }));
+  const emptyStats = { needed: 0, cached: 0, locked: 0, asked: 0, confirmed: 0, requests: 0, pending: 0, failed: 0, overBudget: 0, chars: 0, errors: [] };
+  const lockFile = config.ai.lock ? path.join(root, config.ai.lock) : null;
+  const lock = (lockFile && readJson(lockFile)?.verdicts) || {};
+  const judged = await stage('judge', { verdicts: new Map(), stats: emptyStats }, () => judgeRules({ root, rules: extracted.rules, links, provider, cache, lock, config, log }));
   provider.flush?.();
   const { proofs } = await stage('assess', { proofs: [] }, () => assessRules({ root, rules: extracted.rules, links, verdicts: judged.verdicts, ci }));
 
@@ -102,8 +105,8 @@ async function runPipeline(o) {
   // findings and gate
   const change = changes ? await stage('change', null, () => analyzeChange({ changes, inventory, tests, proofs, config })) : null;
   const findings = [
-    ...proofFindings(proofs, config),
-    ...placementFindings(placement.issues),
+    ...proofFindings(proofs, config, new Set(placement.issues.filter((i) => i.kind === 'level-not-run').map((i) => i.level))),
+    ...placementFindings(placement.issues, proofs),
     ...(ci.failed ? [] : ciFindings(ci, inventory, config)),
     ...(change?.findings || []),
   ];
@@ -119,10 +122,13 @@ async function runPipeline(o) {
       rules: { total: extracted.rules.length, withId: extracted.rules.filter((r) => !r.inferred).length, inferred: extracted.rules.filter((r) => r.inferred).length },
       langs: inventory.langs, packages: inventory.packages.length, degraded, configErrors: o.configErrors || [], timings,
     },
-    config, gate, findings, proofs, placement, ci, change,
+    config, gate, findings, proofs, placement, ci, change, tests,
     ai: { provider: provider.name, model: provider.model || '', note: provider.note || '', stats: judged.stats, cache: cache.stats },
   };
   ledger.summary = summarize(ledger);
+  // The lock: every model verdict this run relied on, to commit. Asked once, reviewed in a diff, a fact from then on
+  // on every machine, whatever happens to the CI cache.
+  if (o.writeLock && lockFile) writeAtomic(lockFile, JSON.stringify({ version: 1, note: 'Model verdicts the quality gate relies on, keyed by a hash of the rule and the test excerpts. Regenerate: aqg run --write-lock', verdicts: Object.fromEntries(Object.entries(judged.used || {}).sort(([a], [b]) => (a < b ? -1 : 1))) }, null, 2) + '\n');
   cache.save();
   return ledger;
 }
@@ -149,6 +155,7 @@ function writeOutputs(ledger, outDir, { reportUrl = '', writeBaseline = null } =
   fs.mkdirSync(outDir, { recursive: true });
   writeAtomic(path.join(outDir, 'report.md'), renderReport(ledger));
   writeAtomic(path.join(outDir, 'comment.md'), renderComment(ledger, { url: reportUrl }));
+  writeAtomic(path.join(outDir, 'fix-brief.md'), renderBrief(ledger));
   writeAtomic(path.join(outDir, 'findings.json'), JSON.stringify(serialise(ledger), null, 2) + '\n');
   writeAtomic(path.join(outDir, 'results.sarif'), JSON.stringify(toSarif(ledger), null, 2) + '\n');
   // The baseline is what pull requests are compared against: every finding of this run, by fingerprint.

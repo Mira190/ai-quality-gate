@@ -37,7 +37,10 @@ ai:
   model: ''                    # empty: the Copilot CLI's default
   command: ''                  # provider "command": a program that reads the prompt on stdin and prints the answer
   copilot_args: []             # extra arguments for the Copilot CLI
-  scope: critical              # critical: ask about critical rules and rules the change touches; all: every unlinked rule
+  scope: critical              # critical: ask about critical rules; all: every rule code could not link
+  confirm: true                # a "no proof" the word search does not back is read twice before it may block
+  deadline_s: 600              # no model call starts after this many seconds
+  lock: .quality-gate.lock.json   # verdicts committed to the repository (aqg run --write-lock): asked once, a fact from then on
   max_requests: 12             # model calls per run
   max_rules: 60                # rules judged per run, most severe first
   batch: 6                     # rules per call
@@ -48,7 +51,7 @@ ai:
 gate:
   fail_on: P1                  # P0 | P1 | P2 | P3 | never
   basis: [S, V]                # evidence that may block: S code-decided, V model-proposed and code-verified, A advice
-  new_only: true               # pull requests: only what the change brings or touches
+  new_only: false              # true: a ratchet for a repository with debt. Only findings missing from the default-branch baseline block
 
 report:
   max_rows: 25

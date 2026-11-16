@@ -25,7 +25,7 @@ function ledger() {
   const l = {
     config, gate, findings, proofs, placement: { issues: [], levels }, change: null,
     ci: { hasCI: true, systems: ['github'], errors: [], checks: [{ id: 'tests', title: 'Tests', state: 'enforced', where: [{ file: '.github/workflows/ci.yml', line: 9, job: 'check' }], command: 'npm test' }, { id: 'lint', title: 'Lint', state: 'missing', where: [] }] },
-    ai: { provider: 'none', note: 'switched off', stats: { needed: 0, cached: 0, asked: 0, requests: 0, pending: 0, failed: 0, overBudget: 0, chars: 0, errors: [] } },
+    ai: { provider: 'none', note: 'switched off', stats: { needed: 0, cached: 0, locked: 0, confirmed: 0, asked: 0, requests: 0, pending: 0, failed: 0, overBudget: 0, chars: 0, errors: [] } },
     run: { name: 'acme/shop', sha: 'abc1234', changedFiles: 0, files: { listed: 10, ignored: 1 }, docs: [{ path: 'docs/req.md', rules: 3 }], notRead: [], testFiles: 1, testCases: 4, ciFiles: 1, rules: { total: 3, withId: 3, inferred: 0 }, degraded: ['Stage "ci" failed and was skipped: boom'], configErrors: [], timings: { scan: 1 } },
   };
   l.summary = summarize(l);
@@ -55,10 +55,28 @@ test('the comment is short: the verdict, what blocks, placement; SARIF and annot
   const l = ledger();
   const comment = renderComment(l, { url: 'https://example.test/run/1' });
   assert.match(comment, /^<!-- ai-quality-gate -->\n\n### Quality gate @ abc1234/);
-  assert.match(comment, /#### Blocks this change\n\n- \*\*P0 REQ-2 has no test\*\* \(`docs\/req\.md:3`\)/);
+  assert.match(comment, /#### Blocks the gate\n\n- \*\*P0 REQ-2 has no test\*\* \(`docs\/req\.md:3`\)/);
   assert.match(comment, /#### Placement\n\n- \*\*P2 misfiled\*\*/);
   assert.match(comment, /\[Full report\]\(https:\/\/example\.test\/run\/1\)/);
   const sarif = toSarif(l);
   assert.deepEqual(sarif.runs[0].results.map((r) => [r.ruleId, r.level, r.locations.length]), [['proof.unproven', 'error', 1], ['placement.mislabelled', 'warning', 0]]);
   assert.deepEqual(annotations(l), ['::error file=docs/req.md,line=3,title=P0 proof.unproven::REQ-2 has no test. write it']);
+});
+
+test('the fix brief turns a blocking finding into a task with the test already named, placed and given its boundary cases', () => {
+  const { renderBrief, skeleton } = require('../../src/report/brief');
+  const l = ledger();
+  l.proofs[1].rule.limits = [{ value: '500', unit: '$', raw: '$500' }];
+  l.proofs[1].rule.title = 'Gift card limit';
+  l.tests = { files: [{ path: 'tests/unit/a.test.ts', level: 'unit', lang: 'js', pkg: '' }] };
+  const brief = renderBrief(l);
+  assert.match(brief, /^# Fix brief\n\n1 blocking finding in acme\/shop @ abc1234/);
+  assert.match(brief, /## 1\. P0 REQ-2 has no test/);
+  assert.match(brief, /\*\*Where:\*\* a new file next to `tests\/unit\/a\.test\.ts` \(`tests\/unit\/`\) \(unit level\)/);
+  assert.match(brief, /it\.each\(\[\n {2}\[499, \/\* expected \*\/\], {2}\/\/ below the limit \(\$500\)\n {2}\[500, .*\n {2}\[501, .*\n\]\)\('REQ-2 Gift card limit: %s'/);
+  assert.match(brief, /\*\*Done when:\*\* `proof\.unproven` for `REQ-2` is gone/);
+  const rule = { id: 'REQ-7', title: 'Order export', limits: [] };
+  assert.match(skeleton(rule, 'python'), /# covers: REQ-7\ndef test_req_7_order_export\(\):/);
+  assert.match(skeleton({ ...rule, limits: [{ value: '3', unit: 'retries', raw: 'at most 3 retries' }] }, 'go'), /func TestREQ7\(t \*testing\.T\) \{\n\tcases := .*\n\t\t\{"below the limit \(at most 3 retries\)", 2\},/);
+  assert.match(skeleton(rule, 'java'), /@DisplayName\("REQ-7 Order export"\)\nvoid orderExport\(\)/);
 });

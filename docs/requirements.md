@@ -16,7 +16,9 @@ repository with the same rules it applies to any other.
 - **GATE-6 Skipped tests prove nothing.** A rule whose linked tests are all skipped is reported as having no proof.
 - **GATE-7 Limits.** When a rule states a limit and no linked test uses that value, the report names the limit as a hole in the proof.
 - **GATE-8 Citations are checked.** A model verdict that a test proves a rule is believed only when it cites a candidate test it was shown, at a line it was shown, and that line is an assertion; anything else is advice.
-- **GATE-9 Model budget.** The model is called for rules code could not link, most severe first, never more often than the configured number of calls; a rule whose text and candidate tests are unchanged is answered from the verdict cache.
+- **GATE-9 Model budget.** The model is called for rules code could not link, most severe first, never more often than the configured number of calls; a rule whose text and candidate tests are unchanged is answered from the verdict cache or the lock file, and what the budget did not reach is judged by the next run.
+- **GATE-21 Read twice.** A model verdict that no candidate test proves a rule stands on the model's word alone, so it blocks only after a second, differently framed reading of the same tests agrees; a disagreement is advice.
+- **GATE-22 Model failures stop early.** Two failed calls in a row, or one refused for bad credentials, end the model calls of the run; a reply in the wrong shape gets one repair attempt.
 
 ## Placement
 
@@ -32,8 +34,9 @@ repository with the same rules it applies to any other.
 
 ## Gate
 
-- **GATE-16 Only the change blocks.** On a pull request a finding blocks only when it touches the change and is not already in the baseline; advice never blocks.
+- **GATE-16 What blocks.** The review covers the whole repository, and a finding blocks when its priority reaches the gate and its evidence is code-decided or code-verified; advice never blocks, and with the ratchet on a finding already in the baseline does not block.
 - **GATE-17 Suppressions.** A suppression needs a reason, and one whose end date has passed is no longer applied.
 - **GATE-18 Repeatable.** Two runs on the same repository state write the same report, byte for byte, whether the cache on disk is cold or warm.
 - **GATE-19 The gate does not break the build by breaking.** When a stage or the model fails, the report says what was skipped, and the exit code of the command line is zero unless enforcement was asked for and the gate failed.
-- **GATE-20 Untested change.** A changed source file that no test reaches, in a change that adds no test for it, is reported.
+- **GATE-23 Measured.** The quality of what the gate reports is measured by planting one defect at a time in a fixture repository on disk: every planted defect must be found, nothing else may be reported, and a second run must agree.
+- **GATE-20 Untested change.** When a review is given a change, a changed source file that no test reaches, in a change that adds no test for it, is reported; the change narrows nothing else.

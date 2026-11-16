@@ -40,9 +40,9 @@ function header(ledger) {
   const blocking = ledger.findings.filter((f) => f.blocking);
   const bp = (p) => count(blocking, (f) => f.priority === p);
   const verdict = gate.verdict === 'fail'
-    ? `**❌ Fail**: ${plural(gate.blocking, 'finding')} ${gate.blocking === 1 ? 'blocks' : 'block'} ${gate.mode === 'change' ? 'this change' : 'the gate'} (${['P0', 'P1', 'P2', 'P3'].filter((p) => bp(p)).map((p) => `${bp(p)} ${p}`).join(', ')}).`
-    : `**✅ Pass**: nothing blocks ${gate.mode === 'change' ? 'this change' : 'the gate'}${gate.counts.P0 + gate.counts.P1 ? ` (${gate.counts.P0} P0 and ${gate.counts.P1} P1 ${gate.mode === 'change' ? 'exist and are not touched by it, or are advice' : 'are advice or suppressed'})` : ''}.`;
-  const mode = gate.mode === 'change' ? `Change review: ${plural(run.changedFiles, 'changed file')}${run.base ? ` against \`${run.base.slice(0, 10)}\`` : ''}${gate.baseline ? ', compared with the default-branch baseline' : ''}.` : 'Full review of the repository.';
+    ? `**❌ Fail**: ${plural(gate.blocking, 'finding')} ${gate.blocking === 1 ? 'blocks' : 'block'} the gate (${['P0', 'P1', 'P2', 'P3'].filter((p) => bp(p)).map((p) => `${bp(p)} ${p}`).join(', ')}).`
+    : `**✅ Pass**: nothing blocks the gate${gate.counts.P0 + gate.counts.P1 ? ` (${gate.counts.P0} P0 and ${gate.counts.P1} P1 are reported and do not block: advice, suppressed${gate.ratchet ? ', or already in the baseline' : ''})` : ''}.`;
+  const mode = `Full review of the repository${gate.ratchet ? (gate.baseline ? '; only findings missing from the default-branch baseline block' : gate.mode === 'change' ? '; no baseline yet, so only what the change touches blocks' : '') : ''}.${gate.mode === 'change' ? ` Change under review: ${plural(run.changedFiles, 'file')}${run.base ? ` since \`${run.base.slice(0, 10)}\`` : ''}.` : ''}`;
   const q = table(['Question', 'Answer', 'P0', 'P1'], [
     ['1. Is every requirement and design decision proven by a test?', s.rules ? `**${s.proven} of ${s.rules}** rules proven · ${s.weak} with a hole · ${s.unproven} with no test · ${s.unverified} unverified${s.untestable ? ` · ${s.untestable} not testable as written` : ''}. Critical rules: **${s.criticalProven} of ${s.critical}** proven.` : 'No rules were found in the documents read (see Run).', s.p.proof[0], s.p.proof[1]],
     ['2. Is each thing tested at the right level?', `${plural(s.placementFindings, 'placement finding')}. Cases: ${LEVELS.map((l) => `${l} ${s.levels[l]}`).join(' · ')}.`, s.p.placement[0], s.p.placement[1]],
@@ -113,7 +113,7 @@ function runSection(ledger) {
   const m = ai.stats;
   const modelLine = ai.provider === 'none'
     ? `- Model: none (${ai.note}). Only code-decided findings can block; ${plural(m.needed - m.cached, 'rule')} that need a judgment ${m.needed - m.cached === 1 ? 'is' : 'are'} listed as unverified.`
-    : `- Model: ${ai.provider}${ai.model ? ` (${ai.model})` : ''}. ${plural(m.needed, 'rule')} needed a judgment: ${m.cached} from the verdict cache, ${m.asked} asked in ${plural(m.requests, 'call')} (${Math.round(m.chars / 1000)}k characters sent)${m.pending ? `, ${m.pending} awaiting an answer in \`ai-requests.json\`` : ''}${m.overBudget ? `, ${m.overBudget} over this run's budget` : ''}${m.failed ? `, ${m.failed} failed (${m.errors[0] || 'no usable reply'})` : ''}.`;
+    : `- Model: ${ai.provider}${ai.model ? ` (${ai.model})` : ''}. ${plural(m.needed, 'rule')} needed a judgment: ${m.cached} from the verdict cache${m.locked ? `, ${m.locked} from the lock file` : ''}, ${m.asked} asked${m.confirmed ? `, ${m.confirmed} read a second time` : ''}, in ${plural(m.requests, 'call')} (${Math.round(m.chars / 1000)}k characters, about ${Math.round(m.chars / 4000)}k tokens sent)${m.pending ? `; ${m.pending} await an answer in \`ai-requests.json\`` : ''}${m.overBudget ? `; ${m.overBudget} left for the next run (budget)` : ''}${m.failed ? `; ${m.failed} failed (${m.errors[0] || 'no usable reply'})` : ''}${m.stopped ? `; calls stopped: ${m.stopped}` : ''}.`;
   lines.push(modelLine);
   lines.push('- Tests are read, not run. Evidence levels: _code_ is decided by parsing; _model, verified_ is a model answer whose citation code checked; _advice_ never blocks.');
   for (const d of run.degraded) lines.push(`- ⚠️ ${d}`);
@@ -130,7 +130,7 @@ function renderReport(ledger) {
   const parts = [`# Quality gate: ${ledger.run.name}${ledger.run.sha ? ` @ ${ledger.run.sha}` : ''}`, ...header(ledger)];
   parts.push('## Fix first: P0 and P1');
   parts.push(top.length ? table(['#', 'Priority', 'Blocks', 'Finding', 'Evidence', 'Fix'], findingRows(top, max)) + more(top.length - max, 'P0 and P1 findings') : 'None.');
-  if (ledger.change?.affectedTests.length) parts.push(`**Run first for this change:** ${ledger.change.affectedTests.slice(0, 12).map((t) => `\`${t}\``).join(' ')}${ledger.change.affectedTests.length > 12 ? ` +${ledger.change.affectedTests.length - 12}` : ''}${ledger.change.touchedRules.length ? `. Rules this change touches: ${ledger.change.touchedRules.slice(0, 12).join(', ')}.` : ''}`);
+  if (ledger.change?.affectedTests.length) parts.push(`**Tests that reach the changed code:** ${ledger.change.affectedTests.slice(0, 12).map((t) => `\`${t}\``).join(' ')}${ledger.change.affectedTests.length > 12 ? ` +${ledger.change.affectedTests.length - 12}` : ''}${ledger.change.touchedRules.length ? `. Rules this change touches: ${ledger.change.touchedRules.slice(0, 12).join(', ')}.` : ''}`);
   parts.push(...proofSection(ledger, max), ...placementSection(ledger, max), ...ciSection(ledger));
   if (low.length) parts.push(`## Lower priority: P2 and P3\n\n<details><summary>${plural(low.length, 'finding')}</summary>\n\n${table(['#', 'Priority', 'Finding', 'Evidence', 'Fix'], findingRows(low, max * 2, { blocks: false }))}${more(low.length - max * 2, 'findings')}\n\n</details>`);
   if (sup.length) parts.push(`Suppressed in \`.quality-gate.yml\`: ${sup.slice(0, 10).map((f) => `${f.subject} (${f.check}: ${f.suppressed})`).join('; ')}${sup.length > 10 ? ` and ${sup.length - 10} more` : ''}.`);
@@ -141,12 +141,12 @@ function renderReport(ledger) {
 /** The pull-request comment: the verdict, the three answers, what blocks. Short on purpose. */
 function renderComment(ledger, { marker = '<!-- ai-quality-gate -->', url = '' } = {}) {
   const blocking = ledger.findings.filter((f) => f.blocking);
-  const advice = ledger.findings.filter((f) => !f.blocking && !f.suppressed && f.touchesChange && (f.priority === 'P0' || f.priority === 'P1'));
+  const advice = ledger.findings.filter((f) => !f.blocking && !f.suppressed && (f.priority === 'P0' || f.priority === 'P1'));
   const placement = ledger.findings.filter((f) => f.section === 'placement' && !f.suppressed && !f.blocking && !advice.includes(f));
   const parts = [marker, `### Quality gate${ledger.run.sha ? ` @ ${ledger.run.sha}` : ''}`, ...header(ledger)];
   const item = (f) => `- **${f.priority} ${f.title}**${f.loc ? ` (${locOf(f)})` : ''}\n  ${f.detail} _(${BASIS[f.basis]})_\n  **Fix:** ${f.fix}`;
-  if (blocking.length) parts.push(`#### Blocks this change\n\n${blocking.slice(0, 10).map(item).join('\n')}${blocking.length > 10 ? `\n- …and ${blocking.length - 10} more` : ''}`);
-  if (advice.length) parts.push(`#### Touched by this change, not blocking\n\n${advice.slice(0, 5).map(item).join('\n')}${advice.length > 5 ? `\n- …and ${advice.length - 5} more` : ''}`);
+  if (blocking.length) parts.push(`#### Blocks the gate\n\n${blocking.slice(0, 10).map(item).join('\n')}${blocking.length > 10 ? `\n- …and ${blocking.length - 10} more` : ''}`);
+  if (advice.length) parts.push(`#### P0 and P1 that do not block\n\n${advice.slice(0, 5).map(item).join('\n')}${advice.length > 5 ? `\n- …and ${advice.length - 5} more` : ''}`);
   if (placement.length) parts.push(`#### Placement\n\n${placement.slice(0, 5).map((f) => `- **${f.priority} ${f.title}**: ${f.detail} **Fix:** ${f.fix}`).join('\n')}${placement.length > 5 ? `\n- …and ${placement.length - 5} more` : ''}`);
   if (ledger.change?.affectedTests.length) parts.push(`**Run first:** ${ledger.change.affectedTests.slice(0, 8).map((t) => `\`${t}\``).join(' ')}`);
   const m = ledger.ai.stats;

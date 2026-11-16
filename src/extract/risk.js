@@ -5,7 +5,7 @@
 // for free. A team tunes them in .quality-gate.yml (risk.extra_terms, risk.critical_ids).
 
 const AREAS = {
-  money: /\b(pric(?:e|es|ing)|premiums?|fees?|charg(?:e|es|ed|ing)|discounts?|refunds?|payments?|pay(?:s|ing)?|paid|invoic(?:e|es|ing)|tax(?:es)?|currenc(?:y|ies)|billing|balances?|credits?|debits?|payouts?|surcharges?|vouchers?|coupons?)\b|价格|金额|支付|付款|退款|折扣|费用|账单|余额|计费|税/i,
+  money: /\b(pric(?:e|es|ing)|premiums?|fees?|charg(?:e|es|ed|ing)|discounts?|refunds?|payments?|pay(?:s|ing)?|paid|invoic(?:e|es|ing)|tax(?:es)?|currenc(?:y|ies)|billing|balances?|credits?|debits?|payouts?|surcharges?|chargebacks?|vouchers?|coupons?)\b|价格|金额|支付|付款|退款|折扣|费用|账单|余额|计费|税/i,
   auth: /\b(authenticat\w*|authori[sz]\w*|permissions?|roles?|admins?|administrators?|log(?:s|ged)? ?in|login|sign(?:s|ed)? ?in|passwords?|sessions?|access control|privileges?|2fa|mfa|oauth|sso|api keys?|tokens?|tenants?)\b|登录|权限|认证|鉴权|授权|密码|会话|租户/i,
   data: /\b(personal data|pii|gdpr|customer (?:data|records?)|retention|retain(?:ed|s)?|delet(?:e|ed|es|ion)|consent|encrypt\w*|privacy|anonymi[sz]\w*|audit (?:log|trail))\b|个人信息|隐私|删除|保留期|加密|脱敏|审计/i,
   external: /\b(gateways?|webhooks?|third[- ]party|external (?:service|api|system)s?|crm|queues?|message broker|idempoten\w*|retr(?:y|ies|ied)|time ?outs?|circuit breaker|rate limit\w*)\b|外部系统|第三方|回调|重试|超时|幂等|限流/i,

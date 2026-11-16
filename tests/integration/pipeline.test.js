@@ -40,15 +40,20 @@ test('proof: every status of the fixture, with the evidence level that decided i
     'REQ-4': 'unproven/S',                                            // GATE-6: only a skipped test
     'REQ-5': 'proven/V', 'REQ-6': 'weak/V',                           // GATE-8: model links, citation checked
     'REQ-7': 'unproven/S', 'REQ-8': 'untestable/A',
+    'REQ-10': 'unproven/V',                                           // GATE-21: the test's name matches, its assertion does not
   });
   assert.deepEqual(p['REQ-6'].holes.map((h) => h.kind), ['limit']);   // GATE-7: 12 is never used by the test
   assert.deepEqual(p['REQ-2'].holes.map((h) => h.kind), ['not-in-pr']);
-  assert.deepEqual(ledger.summary, { ...ledger.summary, rules: 10, proven: 5, weak: 2, unproven: 2, unverified: 0, untestable: 1, critical: 8, criticalProven: 4 });
+  assert.deepEqual(ledger.summary, { ...ledger.summary, rules: 11, proven: 5, weak: 2, unproven: 3, unverified: 0, untestable: 1, critical: 9, criticalProven: 4 });
   const proof = checks(ledger, 'proof');
   assert.ok(proof.includes('proof.skipped:REQ-4:P0:S'));
   assert.ok(proof.includes('proof.unproven:REQ-7:P1:S'));
   assert.ok(proof.includes('proof.limit:REQ-6:P1:V'));
   assert.ok(proof.includes('rule.untestable:REQ-8:P1:A'));
+  assert.ok(proof.includes('proof.unproven:REQ-10:P0:V'));
+  // one root cause, one finding: REQ-2's tests never gate a pull request because no e2e test does
+  assert.ok(!proof.some((x) => x.startsWith('proof.not-in-pr')));
+  assert.match(ledger.findings.find((f) => f.check === 'ci.level-not-run').detail, /1 rule is proven only there, 1 critical: REQ-2/);
 });
 
 test('GATE-10 GATE-11 GATE-12 placement: too high, proven against fakes, misfiled files, a table at the top', async () => {
@@ -64,7 +69,7 @@ test('GATE-10 GATE-11 GATE-12 placement: too high, proven against fakes, misfile
   assert.match(tooHigh.detail, /proven only at e2e level \(5 cases/);
   assert.match(tooHigh.fix, /unit tests .* against `src\/shipping\.ts`/);
   const lv = ledger.placement.levels;
-  assert.deepEqual([lv.unit.files, lv.integration.files, lv.e2e.files, lv.e2e.pr], [6, 2, 2, 0]);
+  assert.deepEqual([lv.unit.files, lv.integration.files, lv.e2e.files, lv.e2e.pr], [7, 2, 2, 0]);
   // the placement section is in the report whatever the priorities are
   assert.match(renderReport(ledger), /## 2\. Placement[\s\S]*tests\/unit\/geo\.test\.ts is not a unit test/);
 });
@@ -75,8 +80,7 @@ test('GATE-13 GATE-14 CI: enforced, ignored failures, set up and not run, script
   assert.deepEqual(state, { tests: 'enforced', lint: 'non_blocking', typecheck: 'configured', format: 'configured', coverage: 'missing', deps: 'enforced', secrets: 'missing', sast: 'missing' });
   // "npm test" was followed into package.json: the step runs tests/unit and tests/integration, not tests/e2e
   assert.deepEqual(ledger.ci.testSteps.find((t) => t.state === 'enforced').dirs.sort(), ['tests/integration', 'tests/unit']);
-  assert.deepEqual(checks(ledger, 'ci').filter((c) => /:P[01]:/.test(c)), ['ci.lint:lint:P1:S', 'ci.typecheck:typecheck:P1:S']);
-  assert.ok(checks(ledger, 'ci').includes('ci.level-not-run:e2e:P2:S'));
+  assert.deepEqual(checks(ledger, 'ci').filter((c) => /:P[01]:/.test(c)).sort(), ['ci.level-not-run:e2e:P1:S', 'ci.lint:lint:P1:S', 'ci.typecheck:typecheck:P1:S']);
 });
 
 test('GATE-13 a workflow that stops running on pull requests turns the test check into a P0', async () => {
@@ -88,34 +92,38 @@ test('GATE-13 a workflow that stops running on pull requests turns the test chec
   assert.ok(checks(ledger, 'ci').includes('ci.tests:tests:P0:S'));
 });
 
-test('GATE-16 GATE-20 a pull request is blocked by what it brings: a new critical rule without a test, new code no test reaches', async () => {
-  const ledger = await run(pr, { base: pr.base });
-  assert.equal(ledger.gate.mode, 'change');
-  assert.deepEqual(ledger.findings.filter((f) => f.blocking).map((f) => `${f.check}:${f.subject}:${f.priority}`), ['proof.unproven:REQ-9:P0', 'change.untested:src/payment/giftcard.ts:P1']);
-  // the debt that was already there is reported, and does not block
-  const old = ledger.findings.find((f) => f.check === 'proof.skipped');
-  assert.deepEqual([old.blocking, old.why], [false, 'existing, not touched by this change']);
-  assert.match(ledger.findings.find((f) => f.subject === 'REQ-9').fix, /\$499, \$500 and \$501/);
+test('GATE-16 GATE-20 the review is of the whole repository; a change adds what it puts at risk, and narrows nothing', async () => {
+  const whole = await run(pr);
+  const withChange = await run(pr, { base: pr.base });
+  // same repository, same findings, plus the one only a diff can show
+  const subjects = (l) => l.findings.map((f) => `${f.check}:${f.subject}`).sort();
+  assert.deepEqual(subjects(withChange).filter((x) => !subjects(whole).includes(x)), ['change.untested:src/payment/giftcard.ts']);
+  assert.deepEqual(subjects(whole).filter((x) => !subjects(withChange).includes(x)), []);
+  const blocking = withChange.findings.filter((f) => f.blocking).map((f) => f.subject);
+  for (const s of ['REQ-4', 'REQ-9', 'REQ-10', 'REQ-7', 'src/payment/giftcard.ts', 'lint']) assert.ok(blocking.includes(s), s);
+  assert.match(withChange.findings.find((f) => f.subject === 'REQ-9').fix, /\$499, \$500 and \$501/);
+  assert.equal(withChange.gate.mode, 'change');
 });
 
-test('GATE-16 with a baseline from the default branch, the same pull request is blocked by the same two findings', async () => {
+test('GATE-16 the ratchet: with a baseline from the default branch only what is new blocks, and everything is still reported', async () => {
   const baselineFile = path.join(dir('state'), 'baseline.json');
-  const out = dir('out');
-  writeOutputs(await run(full), out, { writeBaseline: baselineFile });
-  const ledger = await run(pr, { base: pr.base, baselineFile });
-  assert.equal(ledger.gate.baseline, true);
-  assert.deepEqual(ledger.findings.filter((f) => f.blocking).map((f) => f.subject), ['REQ-9', 'src/payment/giftcard.ts']);
-  assert.ok(ledger.findings.filter((f) => !f.blocking).every((f) => f.isNew === false || !f.touchesChange || f.why));
+  writeOutputs(await run(full), dir('out'), { writeBaseline: baselineFile });
+  const ledger = await run(pr, { baselineFile, over: { gate: { new_only: true } } });
+  assert.deepEqual([ledger.gate.baseline, ledger.gate.ratchet], [true, true]);
+  assert.deepEqual(ledger.findings.filter((f) => f.blocking).map((f) => f.subject), ['REQ-9']);
+  assert.ok(ledger.findings.filter((f) => !f.blocking && f.why === 'in the baseline').length >= 8);
+  assert.match(renderReport(ledger), /only findings missing from the default-branch baseline block/);
 });
 
 // covers: DEC-4
 test('GATE-9 the verdict cache answers an unchanged rule without a call, and the budget is never exceeded', async () => {
   const cacheDir = dir('cache');
   const first = await run(full, { cacheDir });
-  assert.deepEqual([first.ai.stats.requests, first.ai.stats.asked, first.ai.stats.cached], [1, 5, 0]);
+  assert.deepEqual([first.ai.stats.requests, first.ai.stats.asked, first.ai.stats.confirmed, first.ai.stats.cached], [2, 6, 1, 0]);
   // second run, no provider at all: the same verdicts come from the cache
   const second = await run(full, { cacheDir, provider: 'none' });
-  assert.deepEqual([second.ai.stats.requests, second.ai.stats.cached], [0, 5]);
+  assert.deepEqual([second.ai.stats.requests, second.ai.stats.cached], [0, 6]);
+  assert.deepEqual(second.findings.map((f) => [f.fingerprint, f.basis]), first.findings.map((f) => [f.fingerprint, f.basis]));
   assert.equal(byRule(second)['REQ-5'].status, 'proven');
   // an edited test invalidates only the rule it is a candidate for
   const repo = build(dir('shop-edit'));
@@ -124,16 +132,16 @@ test('GATE-9 the verdict cache answers an unchanged rule without a call, and the
   fs.appendFileSync(path.join(repo.dir, 'tests/unit/session.test.ts'), '\n');
   fs.writeFileSync(path.join(repo.dir, 'tests/unit/session.test.ts'), fs.readFileSync(path.join(repo.dir, 'tests/unit/session.test.ts'), 'utf8').replace('isExpired(14)', 'isExpired(13)'));
   const third = await run(repo, { cacheDir: warm });
-  assert.deepEqual([third.ai.stats.cached, third.ai.stats.pending], [4, 1]);
+  assert.deepEqual([third.ai.stats.cached, third.ai.stats.pending], [5, 1]);
   // budget: with room for no call, nothing is asked and the rules stay unverified
   const none = await run(full, { over: { ai: { max_requests: 0 } } });
-  assert.deepEqual([none.ai.stats.requests, none.ai.stats.overBudget], [0, 5]);
+  assert.deepEqual([none.ai.stats.requests, none.ai.stats.overBudget], [0, 6]);
   assert.equal(byRule(none)['REQ-5'].status, 'unverified');
 });
 
 test('GATE-9 the model is asked about critical rules first, and only about rules code could not link', async () => {
   const ledger = await run(full, { over: { ai: { scope: 'critical' } }, provider: 'none' });
-  assert.equal(ledger.ai.stats.needed, 4); // REQ-5, REQ-6, REQ-8 and the critical inferred sentence; not REQ-1..4 (linked by ID), not the cart rule
+  assert.equal(ledger.ai.stats.needed, 5); // REQ-5, REQ-6, REQ-8, REQ-10 and the critical inferred sentence; not REQ-1..4 (linked by ID), not the cart rule
 });
 
 test('GATE-18 two runs on the same repository state write the same report, byte for byte', async () => {
@@ -152,13 +160,13 @@ test('GATE-18 two runs on the same repository state write the same report, byte 
 // covers: DEC-7
 test('GATE-19 a model that fails, and a stage that throws, leave a report that says so', async () => {
   const failing = await run(full, { over: { ai: { command: 'exit 3', retries: 0 } }, provider: 'command' });
-  assert.equal(failing.ai.stats.failed, 5);
+  assert.equal(failing.ai.stats.failed, 6);
   assert.equal(byRule(failing)['REQ-5'].status, 'unverified');
-  assert.match(renderReport(failing), /5 failed \(exit 3/);
+  assert.match(renderReport(failing), /6 failed \(exit 3/);
   assert.ok(failing.findings.some((f) => f.check === 'proof.skipped' && f.blocking), 'code-decided findings are unaffected');
 
   const garbage = await run(full, { over: { ai: { command: 'echo "Sure! Here is my analysis."', retries: 0 } }, provider: 'command' });
-  assert.equal(garbage.ai.stats.failed, 5);
+  assert.equal(garbage.ai.stats.failed, 6);
 
   // a broken workflow file: the CI stage reports it and the rest of the report is intact
   const repo = build(dir('shop-broken'));
@@ -204,17 +212,106 @@ test('a large repository: thousands of files are listed, only documents, tests a
   const t = Date.now();
   const cold = await run(repo, { cacheDir, provider: 'none' });
   const took = Date.now() - t;
-  assert.equal(cold.run.testFiles, 310);
+  assert.equal(cold.run.testFiles, 311);
   assert.ok(took < 20000, `took ${took} ms`);
   const warm = await run(repo, { cacheDir, provider: 'none' });
-  assert.deepEqual([warm.ai.cache.tests.miss, warm.ai.cache.tests.hit], [0, 310]);
+  assert.deepEqual([warm.ai.cache.tests.miss, warm.ai.cache.tests.hit], [0, 311]);
   // the report stays readable: tables are capped, the full list is in findings.json
   assert.ok(renderReport(cold).length < 60000);
 });
 
-test('GATE-19 a base commit that is not in the clone: everything is reported and nothing blocks', async () => {
-  const ledger = await run(full, { base: '0123456789abcdef0123456789abcdef01234567', provider: 'none' });
-  assert.deepEqual([ledger.gate.verdict, ledger.gate.blocking], ['pass', 0]);
-  assert.ok(ledger.findings.length > 10);
-  assert.match(renderReport(ledger), /The change could not be read \(base 0123456789abcdef0123456789abcdef01234567 is not in this clone/);
+test('GATE-19 a base commit that is not in the clone does not change the review; under the ratchet nothing blocks without it', async () => {
+  const missing = '0123456789abcdef0123456789abcdef01234567';
+  const plain = await run(full, { base: missing, provider: 'none' });
+  assert.equal(plain.gate.verdict, 'fail');
+  assert.match(renderReport(plain), /The change could not be read \(base 0123456789abcdef0123456789abcdef01234567 is not in this clone/);
+  const ratchet = await run(full, { base: missing, provider: 'none', over: { gate: { new_only: true } } });
+  assert.deepEqual([ratchet.gate.verdict, ratchet.gate.blocking], ['pass', 0]);
+  assert.ok(ratchet.findings.length > 10);
+});
+
+// A model as a program: it answers the first question with `verdicts` and the second with `finds`, from two tables.
+function model(verdicts, finds) {
+  const file = path.join(dir('model'), 'model.js');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `let s = '';
+process.stdin.on('data', (d) => { s += d; }).on('end', () => {
+  const rules = [...s.matchAll(/^RULE (R\\d+) (\\S+)/gm)];
+  const V = ${JSON.stringify(verdicts)}, F = ${JSON.stringify(finds)};
+  if (s.includes('"finds"')) console.log(JSON.stringify({ finds: rules.map((m) => (F[m[2]] ? { rule: m[1], test: m[1] + '.T1', line: F[m[2]] } : { rule: m[1], test: null })) }));
+  else console.log(JSON.stringify({ verdicts: rules.map((m) => ({ rule: m[1], testable: true, proof: 'none', cites: [], ...(V[m[2]] || {}) })) }));
+});
+`);
+  return `node ${file}`;
+}
+
+test('GATE-21 a "no proof" blocks only after a second reading agrees; when the readings disagree it is advice', async () => {
+  // both readings find nothing for REQ-10
+  const agree = await run(full, { provider: 'command', over: { ai: { command: model({}, {}), scope: 'critical' } } });
+  const a = byRule(agree)['REQ-10'];
+  assert.deepEqual([a.status, a.basis, a.readTwice], ['unproven', 'V', true]);
+  const finding = agree.findings.find((f) => f.subject === 'REQ-10' && f.check === 'proof.unproven');
+  assert.equal(finding.blocking, true);
+  assert.match(finding.detail, /by the model's reading, done twice/);
+  // the second reading points at the assertion on line 5: the first "no proof" does not stand
+  const disagree = await run(full, { provider: 'command', over: { ai: { command: model({}, { 'REQ-10': 5 }), scope: 'critical' } } });
+  const d = byRule(disagree)['REQ-10'];
+  assert.deepEqual([d.status, d.basis], ['unverified', 'A']);
+  assert.equal(disagree.findings.find((f) => f.subject === 'REQ-10').blocking, false);
+  // with the second reading switched off, the first one stands
+  const off = await run(full, { provider: 'command', over: { ai: { command: model({}, {}), scope: 'critical', confirm: false } } });
+  assert.deepEqual([byRule(off)['REQ-10'].basis, off.ai.stats.confirmed], ['V', 0]);
+});
+
+test('GATE-22 bad credentials end the model calls at once; two failures in a row end them; a wrong shape gets one repair attempt', async () => {
+  const count = path.join(dir('count'), 'calls');
+  fs.mkdirSync(path.dirname(count), { recursive: true });
+  const calls = () => (fs.existsSync(count) ? fs.readFileSync(count, 'utf8').length : 0);
+  const tick = `printf x >> ${count}`;
+  // one rule per call, so there are several calls to stop
+  const ai = (command, more = {}) => ({ ai: { command, batch: 1, retries: 2, concurrency: 1, ...more } });
+
+  const denied = await run(full, { provider: 'command', over: ai(`${tick}; echo "401 Unauthorized" >&2; exit 1`) });
+  assert.equal(calls(), 1);
+  assert.match(denied.ai.stats.stopped, /refused the call/);
+  assert.match(renderReport(denied), /calls stopped: the provider refused the call/);
+
+  fs.rmSync(count);
+  const flaky = await run(full, { provider: 'command', over: ai(`${tick}; exit 7`, { retries: 0 }) });
+  assert.equal(calls(), 2);
+  assert.equal(flaky.ai.stats.stopped, 'two calls in a row failed');
+  assert.ok(flaky.findings.some((f) => f.check === 'proof.skipped' && f.blocking), 'code-decided findings are unaffected');
+
+  // prose first, JSON once told what was wrong
+  fs.rmSync(count);
+  const file = path.join(dir('model'), 'repair.js');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, "let s = '';\nprocess.stdin.on('data', (d) => { s += d; }).on('end', () => {\n  if (!s.includes('previous reply was rejected')) return console.log('Sure, here is my analysis.');\n  console.log(JSON.stringify({ verdicts: [{ rule: 'R1', testable: true, proof: 'none', cites: [] }] }));\n});\n");
+  const fixed = await run(full, { provider: 'command', over: ai(`${tick}; node ${file}`, { max_requests: 2, confirm: false }) });
+  assert.deepEqual([calls(), fixed.ai.stats.asked, fixed.ai.stats.failed], [2, 1, 0]);
+});
+
+test('GATE-9 what the budget does not reach is judged by the next run: a backlog converges', async () => {
+  const cacheDir = dir('cache');
+  const over = { ai: { command: model({}, {}), batch: 2, max_requests: 1, confirm: false } };
+  const rounds = [];
+  for (let i = 0; i < 4; i++) { const l = await run(full, { cacheDir, over, provider: 'command' }); rounds.push([l.ai.stats.asked, l.ai.stats.cached, l.ai.stats.overBudget]); }
+  assert.deepEqual(rounds, [[2, 0, 4], [2, 2, 2], [2, 4, 0], [0, 6, 0]]);
+});
+
+// covers: DEC-9
+test('GATE-9 verdicts committed in the lock file are used on a machine with an empty cache and no model', async () => {
+  const repo = build(dir('shop-lock'));
+  const first = await run(repo, { writeLock: true });
+  const lock = JSON.parse(fs.readFileSync(path.join(repo.dir, '.quality-gate.lock.json'), 'utf8'));
+  assert.equal(Object.keys(lock.verdicts).length, 6);
+  const fresh = await run(repo, { provider: 'none', cacheDir: dir('cache') });
+  assert.deepEqual([fresh.ai.stats.locked, fresh.ai.stats.cached, fresh.ai.stats.requests], [6, 0, 0]);
+  assert.deepEqual(fresh.findings.map((f) => [f.check, f.subject, f.basis]), first.findings.map((f) => [f.check, f.subject, f.basis]));
+  // the lock is keyed by content: edit a test and its entry no longer applies
+  const t = path.join(repo.dir, 'tests/unit/session.test.ts');
+  fs.writeFileSync(t, fs.readFileSync(t, 'utf8').replace('isExpired(14)', 'isExpired(13)'));
+  const edited = await run(repo, { provider: 'none', cacheDir: dir('cache') });
+  assert.equal(edited.ai.stats.locked, 5);
+  assert.equal(byRule(edited)['REQ-5'].status, 'unverified');
 });

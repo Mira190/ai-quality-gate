@@ -1,15 +1,23 @@
 {
   "_model": "stand-in (recorded answers)",
-  "_note": "Answers to the prompts the gate writes for tests/fixtures/shop.js, keyed by prompt hash. The gate ran with the handoff provider; a coding agent stood in for the model and wrote these. Re-record: run with --provider handoff, read out/ai-requests.json, answer here.",
-  "2c763e7e5482": {
+  "_note": "Answers to the prompts the gate writes for tests/fixtures/shop.js, keyed by prompt hash. Written by tests/fixtures/record.js from the judgments in that file.",
+  "b74eb840d8e5": {
     "verdicts": [
       {
         "rule": "R1",
         "testable": true,
+        "proof": "none",
+        "cites": [],
+        "missing": "rounding half up to whole cents; the test only checks the currency sign",
+        "level": "unit"
+      },
+      {
+        "rule": "R2",
+        "testable": true,
         "proof": "full",
         "cites": [
           {
-            "test": "R1.T1",
+            "test": "R2.T1",
             "line": 6
           }
         ],
@@ -17,12 +25,12 @@
         "level": "unit"
       },
       {
-        "rule": "R2",
+        "rule": "R3",
         "testable": true,
         "proof": "partial",
         "cites": [
           {
-            "test": "R2.T1",
+            "test": "R3.T1",
             "line": 5
           }
         ],
@@ -30,79 +38,12 @@
         "level": "unit"
       },
       {
-        "rule": "R3",
+        "rule": "R4",
         "testable": false,
         "proof": "none",
         "cites": [],
         "missing": "\"fast\" has no number; state a time limit such as p95 under <N> ms",
         "level": "integration"
-      },
-      {
-        "rule": "R4",
-        "testable": false,
-        "proof": "none",
-        "cites": [],
-        "missing": "readability is not behaviour of the software",
-        "level": "unit"
-      },
-      {
-        "rule": "R5",
-        "testable": true,
-        "proof": "full",
-        "cites": [
-          {
-            "test": "R5.T1",
-            "line": 5
-          }
-        ],
-        "missing": "",
-        "level": "unit"
-      }
-    ]
-  },
-  "674d30a921e5": {
-    "verdicts": [
-      {
-        "rule": "R1",
-        "testable": true,
-        "proof": "full",
-        "cites": [
-          {
-            "test": "R1.T1",
-            "line": 6
-          }
-        ],
-        "missing": "",
-        "level": "unit"
-      },
-      {
-        "rule": "R2",
-        "testable": true,
-        "proof": "partial",
-        "cites": [
-          {
-            "test": "R2.T1",
-            "line": 5
-          }
-        ],
-        "missing": "the 12-character boundary: the test only tries 8 characters, never 11 and 12",
-        "level": "unit"
-      },
-      {
-        "rule": "R3",
-        "testable": false,
-        "proof": "none",
-        "cites": [],
-        "missing": "\"fast\" has no number; state a time limit such as p95 under <N> ms",
-        "level": "integration"
-      },
-      {
-        "rule": "R4",
-        "testable": true,
-        "proof": "none",
-        "cites": [],
-        "missing": "no test rejects a gift card payment above $500",
-        "level": "unit"
       },
       {
         "rule": "R5",
@@ -123,6 +64,147 @@
           }
         ],
         "missing": "",
+        "level": "unit"
+      }
+    ]
+  },
+  "1ae2ccc0cd51": {
+    "finds": [
+      {
+        "rule": "R1",
+        "test": null
+      }
+    ]
+  },
+  "cbd695fb9e56": {
+    "verdicts": [
+      {
+        "rule": "R1",
+        "testable": true,
+        "proof": "none",
+        "cites": [],
+        "missing": "rounding half up to whole cents; the test only checks the currency sign",
+        "level": "unit"
+      },
+      {
+        "rule": "R2",
+        "testable": true,
+        "proof": "full",
+        "cites": [
+          {
+            "test": "R2.T1",
+            "line": 6
+          }
+        ],
+        "missing": "",
+        "level": "unit"
+      },
+      {
+        "rule": "R3",
+        "testable": true,
+        "proof": "partial",
+        "cites": [
+          {
+            "test": "R3.T1",
+            "line": 5
+          }
+        ],
+        "missing": "the 12-character boundary: the test only tries 8 characters, never 11 and 12",
+        "level": "unit"
+      },
+      {
+        "rule": "R4",
+        "testable": false,
+        "proof": "none",
+        "cites": [],
+        "missing": "\"fast\" has no number; state a time limit such as p95 under <N> ms",
+        "level": "integration"
+      },
+      {
+        "rule": "R5",
+        "testable": true,
+        "proof": "none",
+        "cites": [],
+        "missing": "no test rejects a gift card payment above $500",
+        "level": "unit"
+      },
+      {
+        "rule": "R6",
+        "testable": false,
+        "proof": "none",
+        "cites": [],
+        "missing": "readability is not behaviour of the software",
+        "level": "unit"
+      }
+    ]
+  },
+  "17d99aa8b11b": {
+    "verdicts": [
+      {
+        "rule": "R1",
+        "testable": true,
+        "proof": "full",
+        "cites": [
+          {
+            "test": "R1.T1",
+            "line": 5
+          }
+        ],
+        "missing": "",
+        "level": "unit"
+      }
+    ]
+  },
+  "de3e595323e5": {
+    "verdicts": [
+      {
+        "rule": "R1",
+        "testable": true,
+        "proof": "none",
+        "cites": [],
+        "missing": "rounding half up to whole cents; the test only checks the currency sign",
+        "level": "unit"
+      },
+      {
+        "rule": "R2",
+        "testable": true,
+        "proof": "full",
+        "cites": [
+          {
+            "test": "R2.T1",
+            "line": 6
+          }
+        ],
+        "missing": "",
+        "level": "unit"
+      },
+      {
+        "rule": "R3",
+        "testable": true,
+        "proof": "partial",
+        "cites": [
+          {
+            "test": "R3.T1",
+            "line": 5
+          }
+        ],
+        "missing": "the 12-character boundary: the test only tries 8 characters, never 11 and 12",
+        "level": "unit"
+      },
+      {
+        "rule": "R4",
+        "testable": false,
+        "proof": "none",
+        "cites": [],
+        "missing": "\"fast\" has no number; state a time limit such as p95 under <N> ms",
+        "level": "integration"
+      },
+      {
+        "rule": "R5",
+        "testable": false,
+        "proof": "none",
+        "cites": [],
+        "missing": "readability is not behaviour of the software",
         "level": "unit"
       }
     ]

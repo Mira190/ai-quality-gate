@@ -20,7 +20,7 @@ test('GATE-19 the exit code is zero unless enforcement was asked for and the gat
   const common = ['run', '--repo', repo.dir, '--base', repo.base, '--out', out, '--cache', path.join(tmp, 'c1'), '--provider', 'none'];
   const report = aqg(common);
   assert.equal(report.status, 0, report.stderr);
-  assert.match(report.stdout, /^FAIL {2}blocking 2/);
+  assert.match(report.stdout, /^FAIL {2}blocking \d+ {2}P0 \d/);
   assert.equal(aqg([...common, '--enforce']).status, 1);
   assert.equal(aqg([...common, '--enforce', '--fail-on', 'never']).status, 0);
   assert.equal(aqg(['run', '--repo', path.join(tmp, 'nowhere')]).status, 2);
@@ -35,8 +35,8 @@ test('the run writes the report, the comment, the findings and SARIF, and the ou
   for (const f of ['report.md', 'comment.md', 'findings.json', 'results.sarif']) assert.ok(fs.statSync(path.join(out, f)).size > 0, f);
   assert.ok(!fs.existsSync(path.join(out, 'ai-requests.json')), 'every prompt had a recorded answer');
   const outputs = Object.fromEntries(fs.readFileSync(ghOut, 'utf8').trim().split('\n').map((l) => l.split(/=(.*)/s).slice(0, 2)));
-  assert.deepEqual([outputs.verdict, outputs.blocking, outputs.pending], ['fail', '2', '0']);
-  assert.match(r.stdout, /^::error file=docs\/requirements\.md,line=11,title=P0 proof\.unproven::REQ-9 Gift card limit/m);
+  assert.deepEqual([outputs.verdict, outputs.blocking, outputs.p0, outputs.pending], ['fail', '11', '3', '0']);
+  assert.match(r.stdout, /^::error file=docs\/requirements\.md,line=12,title=P0 proof\.unproven::REQ-9 Gift card limit/m);
   const findings = JSON.parse(fs.readFileSync(path.join(out, 'findings.json'), 'utf8'));
   assert.equal(findings.rules.find((x) => x.id === 'REQ-9').status, 'unproven');
   assert.equal(findings.gate.verdict, 'fail');
@@ -45,7 +45,7 @@ test('the run writes the report, the comment, the findings and SARIF, and the ou
   assert.ok(sarif.runs[0].results.some((x) => x.ruleId === 'proof.unproven' && x.level === 'error'));
   const comment = fs.readFileSync(path.join(out, 'comment.md'), 'utf8');
   assert.match(comment, /^<!-- ai-quality-gate -->/);
-  assert.match(comment, /#### Blocks this change[\s\S]*REQ-9[\s\S]*#### Placement/);
+  assert.match(comment, /#### Blocks the gate[\s\S]*REQ-9[\s\S]*#### Placement/);
 });
 
 test('handoff: without answers the prompts are written out, and the run still reports', () => {
@@ -54,7 +54,7 @@ test('handoff: without answers the prompts are written out, and the run still re
   assert.equal(r.status, 0, r.stderr);
   const requests = JSON.parse(fs.readFileSync(path.join(out, 'ai-requests.json'), 'utf8'));
   assert.equal(requests.length, 1);
-  assert.match(requests[0].prompt, /RULE R1 REQ-5/);
+  assert.match(requests[0].prompt, /RULE R\d REQ-5/);
   assert.match(r.stdout, /await a model answer/);
 });
 
@@ -73,8 +73,10 @@ test('shift left: --staged reviews what is about to be committed', () => {
   fs.mkdirSync(path.join(dir, 'src/billing'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'src/billing/invoice.ts'), Array.from({ length: 8 }, (_, i) => `export const line${i} = ${i};`).join('\n') + '\n');
   spawnSync('git', ['-C', dir, 'add', '-A']);
-  const r = aqg(['run', '--repo', dir, '--staged', '--out', path.join(tmp, 'o5'), '--cache', path.join(tmp, 'c5'), '--provider', 'none', '--enforce']);
+  // a local hook: the ratchet without a baseline blocks on what the staged change touches, and still reports the rest
+  const r = aqg(['run', '--repo', dir, '--staged', '--new-only', '--out', path.join(tmp, 'o5'), '--cache', path.join(tmp, 'c5'), '--provider', 'none', '--enforce']);
   assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stdout, /^FAIL {2}blocking 1 /);
   assert.match(r.stdout, /P1 src\/billing\/invoice\.ts changed and no test reaches it/);
   assert.ok(r0.base);
 });

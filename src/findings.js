@@ -27,7 +27,7 @@ function make(f) {
 const ruleAnchor = (r) => ({ path: r.path, from: r.line, to: r.line });
 const caseAnchor = (c) => ({ path: c.file.path, from: c.line, to: c.end });
 
-function proofFindings(proofs, config) {
+function proofFindings(proofs, config, collapsed = new Set()) {
   const out = [];
   for (const p of proofs) {
     const r = p.rule;
@@ -42,7 +42,8 @@ function proofFindings(proofs, config) {
       if (p.status === 'proven' || p.status === 'untestable') continue;
     }
     if (p.status === 'unproven' && !p.links.length) {
-      const how = p.basis === 'V' ? `the model read the ${plural(p.candidates.length, 'nearest test')} and none asserts it${p.missing ? `: ${p.missing}` : ''}` : `no test names \`${r.id}\` or shares its words (searched: ${p.terms.slice(0, 5).join(', ')})`;
+      const near = p.candidates[0];
+      const how = p.basis === 'V' ? `${near ? `the nearest test (\`${near.case.file.path}:${near.case.line}\` "${clip(near.case.name, 50)}") does not assert it` : 'no test comes near it'}, by the model's reading${p.readTwice ? ', done twice' : ''}${p.missing ? `: ${p.missing}` : ''}` : `no test names \`${r.id}\` or shares its words (searched: ${p.terms.slice(0, 5).join(', ')})`;
       out.push(make({
         ...base, check: 'proof.unproven', priority: P(r.critical, 'P0', 'P1'), basis: p.basis,
         title: `${ruleLabel(r)}${critTag(r)} has no test`,
@@ -69,6 +70,8 @@ function proofFindings(proofs, config) {
       }));
     } else if (p.status === 'weak') {
       for (const h of p.holes) {
+        // one root cause, one finding: when a whole level never gates pull requests, that finding lists the rules
+        if (h.kind === 'not-in-pr' && p.links.filter((l) => !l.case.skipped).every((l) => collapsed.has(l.case.file.level))) continue;
         const first = p.links.find((l) => !l.case.skipped).case;
         const fixes = {
           'no-assert': 'Add an assertion on the outcome the rule promises.',
@@ -112,10 +115,17 @@ const PLACEMENT_TITLES = {
   'level-not-run': (i) => `${i.level} tests do not gate pull requests`,
 };
 
-function placementFindings(issues) {
-  return issues.map((i) => {
-    const critical = Boolean(i.rule?.critical);
-    const priority = i.kind === 'level-not-run' ? { unit: 'P0', component: 'P0', integration: 'P1', e2e: 'P2' }[i.level] : i.rule ? P(critical, 'P1', 'P2') : 'P2';
+function placementFindings(issues, proofs = []) {
+  return issues.filter((i) => !i.silent).map((i) => {
+    let critical = Boolean(i.rule?.critical);
+    let priority = i.kind === 'level-not-run' ? { unit: 'P0', component: 'P0', integration: 'P1', e2e: 'P2' }[i.level] : i.rule ? P(critical, 'P1', 'P2') : 'P2';
+    if (i.kind === 'level-not-run') {
+      // the rules whose only proof lives at this level: their proof never gates a pull request
+      const hit = proofs.filter((p) => p.holes?.some((h) => h.kind === 'not-in-pr') && p.links.filter((l) => !l.case.skipped).every((l) => l.case.file.level === i.level));
+      const crit = hit.filter((p) => p.rule.critical);
+      if (hit.length) i = { ...i, text: `${i.text} ${plural(hit.length, 'rule')} ${hit.length === 1 ? 'is' : 'are'} proven only there${crit.length ? `, ${crit.length} critical` : ''}: ${hit.slice(0, 8).map((p) => p.rule.id).join(', ')}${hit.length > 8 ? ` +${hit.length - 8}` : ''}.` };
+      if (crit.length && priority === 'P2') { priority = 'P1'; critical = true; }
+    }
     return make({
       section: i.kind === 'level-not-run' ? 'ci' : 'placement', check: i.kind === 'level-not-run' ? 'ci.level-not-run' : `placement.${i.kind}`, priority, basis: i.basis, critical,
       subject: i.rule ? i.rule.id : i.kind === 'pyramid' ? 'suite' : i.kind === 'level-not-run' ? i.level : i.files[0].path,

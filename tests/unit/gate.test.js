@@ -11,18 +11,27 @@ const finding = (o = {}) => make({ section: 'proof', check: 'proof.unproven', pr
 const diff = (text) => parseDiff(text);
 const DIFF = 'diff --git a/docs/req.md b/docs/req.md\n--- a/docs/req.md\n+++ b/docs/req.md\n@@ -9,0 +10,1 @@\n+- REQ-1 new rule\n';
 
-test('GATE-16 on a pull request only a finding that touches the change blocks', () => {
-  const touching = finding(), elsewhere = finding({ subject: 'REQ-2', anchors: [{ path: 'docs/req.md', from: 3, to: 3 }] }), otherFile = finding({ subject: 'REQ-3', anchors: [{ path: 'docs/other.md', from: 10, to: 10 }] });
-  const g = decide({ findings: [touching, elsewhere, otherFile], config: config(), changes: diff(DIFF), baseline: null });
-  assert.deepEqual([touching.blocking, elsewhere.blocking, otherFile.blocking], [true, false, false]);
-  assert.equal(elsewhere.why, 'existing, not touched by this change');
-  assert.deepEqual([g.verdict, g.blocking, g.mode], ['fail', 1, 'change']);
+test('GATE-16 the review is of the whole repository: a finding blocks wherever it is, change or no change', () => {
+  const inChange = finding(), elsewhere = finding({ subject: 'REQ-2', anchors: [{ path: 'docs/other.md', from: 3, to: 3 }] });
+  const g = decide({ findings: [inChange, elsewhere], config: config(), changes: diff(DIFF), baseline: null });
+  assert.deepEqual([inChange.blocking, elsewhere.blocking], [true, true]);
+  assert.deepEqual([g.verdict, g.blocking], ['fail', 2]);
+  // the change is still recorded on each finding, for the report
+  assert.deepEqual([inChange.touchesChange, elsewhere.touchesChange], [true, false]);
 });
 
-test('GATE-16 a finding already in the baseline does not block, even when the change touches it', () => {
-  const f = finding();
-  const g = decide({ findings: [f], config: config(), changes: diff(DIFF), baseline: { fingerprints: [f.fingerprint] } });
-  assert.deepEqual([f.blocking, f.why, g.verdict], [false, 'already on the default branch', 'pass']);
+test('GATE-16 with the ratchet on, a finding already in the baseline does not block; a new one does', () => {
+  const known = finding(), fresh = finding({ subject: 'REQ-2' });
+  const g = decide({ findings: [known, fresh], config: config({ gate: { new_only: true } }), changes: null, baseline: { fingerprints: [known.fingerprint] } });
+  assert.deepEqual([known.blocking, known.why, fresh.blocking, g.verdict], [false, 'in the baseline', true, 'fail']);
+  // without the ratchet the baseline only labels findings as new or known
+  const k2 = finding();
+  decide({ findings: [k2], config: config(), changes: null, baseline: { fingerprints: [k2.fingerprint] } });
+  assert.deepEqual([k2.blocking, k2.isNew], [true, false]);
+  // ratchet, no baseline yet, a change given (a local hook): what the change touches stands in for "new"
+  const touched = finding(), untouched = finding({ subject: 'REQ-3', anchors: [{ path: 'docs/req.md', from: 3, to: 3 }] });
+  decide({ findings: [touched, untouched], config: config({ gate: { new_only: true } }), changes: diff(DIFF), baseline: null });
+  assert.deepEqual([touched.blocking, untouched.blocking, untouched.why], [true, false, 'not touched by the change']);
 });
 
 // covers: DEC-8
@@ -35,12 +44,8 @@ test('GATE-16 advice never blocks, and neither does a priority below the gate', 
   assert.equal(finding({ basis: 'A', priority: 'P0' }).priority, 'P1');
 });
 
-test('GATE-16 a whole-file anchor is touched by any edit of the file; a full review blocks on everything eligible', () => {
-  const impl = finding({ anchors: [{ path: 'docs/req.md' }] });
-  decide({ findings: [impl], config: config(), changes: diff(DIFF), baseline: null });
-  assert.equal(impl.touchesChange, true);
-  const f = finding({ anchors: [{ path: 'elsewhere.md', from: 1, to: 1 }] });
-  assert.equal(decide({ findings: [f], config: config(), changes: null, baseline: null }).verdict, 'fail');
+test('GATE-16 the gate can be lowered, raised or switched off', () => {
+  assert.equal(decide({ findings: [finding({ priority: 'P2' })], config: config({ gate: { fail_on: 'P2' } }), changes: null, baseline: null }).verdict, 'fail');
   assert.equal(decide({ findings: [finding()], config: config({ gate: { fail_on: 'never' } }), changes: null, baseline: null }).verdict, 'pass');
 });
 

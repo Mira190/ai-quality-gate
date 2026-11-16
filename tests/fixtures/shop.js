@@ -11,6 +11,7 @@
 //   REQ-6    no ID in tests; a test checks 8, the rule says 12                hole: partial (model, verified)
 //   REQ-7    nothing                                                          P1 no test (code)
 //   REQ-8    critical and vague                                               cannot be tested as written (advice)
+//   REQ-10   a test with the right words asserts something else               P0 no test (model, read twice)
 //   ADR-3    integration test names the ID                                    proven, right level
 //   ADR-4    superseded                                                       not counted
 //   design   one inferred rule with a test, one inferred non-rule             proven (model) / dropped
@@ -30,6 +31,7 @@ const FILES = {
 - **REQ-6 Password length.** Passwords must be at least 12 characters long.
 - **REQ-7 Order export.** An order history can be exported as CSV.
 - **REQ-8 Payment speed.** Payment processing should be fast.
+- **REQ-10 Price rounding.** A price is rounded half up to whole cents before it is shown.
 `,
   'docs/adr/0003-idempotent-webhooks.md': `# 3. Idempotent webhooks
 
@@ -118,6 +120,15 @@ describe('session', () => {
 describe('password', () => {
   it('rejects a password shorter than the minimum length', () => {
     expect(isValidPassword('12345678')).toBe(false);
+  });
+});
+`,
+  'src/price.ts': `export const formatPrice = (cents: number): string => '$' + (Math.round(cents) / 100).toFixed(2);\n`,
+  'tests/unit/price.test.ts': `import { formatPrice } from '../../src/price';
+
+describe('price', () => {
+  it('rounds the price half up to whole cents', () => {
+    expect(formatPrice(500)).toContain('$');
   });
 });
 `,

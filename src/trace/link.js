@@ -38,6 +38,7 @@ function linkRules(rules, tests, config, { preferPkg = true } = {}) {
   for (const rule of rules) {
     const explicit = byId.get(rule.id) || [];
     const q = queryOf(rule, index);
+    const allWords = uniq(tokenize(`${rule.title} ${rule.text}`));
     const total = q.reduce((s, x) => s + x.idf, 0) || 1;
     const scores = new Map(), shared = new Map();
     if (!explicit.length) {
@@ -61,8 +62,14 @@ function linkRules(rules, tests, config, { preferPkg = true } = {}) {
     }).sort((a, b) => b.score - a.score || (a.case.key < b.case.key ? -1 : 1));
     let candidates = scored.filter((c) => c.score >= minOverlap && c.shared.length >= Math.min(2, q.length));
     // "No test" on a critical rule is the most expensive thing to get wrong. Before saying it, show the two nearest
-    // tests, however weak the match, to whoever judges (the model, or a person reading "unverified").
-    if (!candidates.length && rule.critical) candidates = scored.filter((c) => c.score >= minOverlap / 2).slice(0, 2).map((c) => ({ ...c, weak: true }));
+    // tests to whoever judges (the model, or a person reading "unverified"), if they share at least two of the rule's
+    // words. That count does not depend on the rest of the suite: adding an unrelated test cannot move a rule
+    // between "no test" and "unverified".
+    if (!candidates.length && rule.critical) {
+      const all = new Set(allWords);
+      const overlap = (c) => { let n = 0; for (const t of c.case.nt) if (all.has(t)) n++; for (const t of c.case.bt) if (all.has(t)) n++; return n; };
+      candidates = scored.filter((c) => overlap(c) >= 2).slice(0, 2).map((c) => ({ ...c, weak: true }));
+    }
     // at most two candidates per file: five near-identical cases of one table tell the model nothing new
     const perFile = new Map();
     candidates = candidates.filter((c) => { const n = (perFile.get(c.case.file.path) || 0) + 1; perFile.set(c.case.file.path, n); return n <= 2; }).slice(0, k);

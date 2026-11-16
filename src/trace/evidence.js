@@ -34,7 +34,7 @@ function assessRules({ root, rules, links, verdicts, ci }) {
     proofs.push(p);
     if (!rule.active) { p.status = 'inactive'; continue; }
     const v = verdicts.get(rule.id);
-    if (v) { p.modelLevel = v.level; p.missing = v.missing; }
+    if (v) { p.modelLevel = v.level; p.missing = v.missing; p.readTwice = v.readTwice; }
     if (v && !v.testable) {
       if (rule.inferred) { p.status = 'not_a_rule'; p.basis = 'A'; continue; }
       // A rule that cannot be tested cannot be asked for a test: the finding is about its wording.

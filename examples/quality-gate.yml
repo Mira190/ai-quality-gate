@@ -1,12 +1,15 @@
 # Copy to .github/workflows/quality-gate.yml.
-# Pull requests are reviewed and gated; pushes to the default branch write the baseline pull requests are compared
-# with, so what was already there is reported and never blocks.
+# Every run reviews the whole repository. It runs on pull requests (so a gap is seen before the merge), on the default
+# branch (which also writes the baseline for the ratchet), weekly, and by hand.
 name: Quality gate
 
 on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -30,5 +33,7 @@ jobs:
           # A fine-grained personal access token with the "Copilot Requests" permission.
           # Leave the secret unset to run on code-decided findings alone.
           copilot-token: ${{ secrets.COPILOT_PAT }}
+          # A repository that starts with debt: report everything, block only what is not in the baseline yet.
+          new-only: 'true'
           # Rollout: 'false' for the first weeks (report only), then 'true'.
           enforce: 'false'

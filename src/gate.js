@@ -1,11 +1,12 @@
 'use strict';
-// The verdict. A finding blocks only when all of these hold:
+// The verdict, over the whole repository. A finding blocks when all of these hold:
 //   1. its priority is at or above gate.fail_on (default P1);
 //   2. its evidence may block (default: S code-decided, V model-proposed and code-verified; never advice);
 //   3. it is not suppressed in .quality-gate.yml (a suppression needs a reason, and may carry an end date);
-//   4. on a pull request: it touches the change (the rule's lines, the test, the implementation, the workflow), and
-//      it is not already in the default branch's baseline.
-// 4 is what makes the gate adoptable: existing debt is reported, and only what the change brings or touches blocks.
+//   4. with gate.new_only (a ratchet for a repository that starts with debt): it is not in the baseline written by
+//      the default branch. Everything is still reported; only what is new blocks.
+// A review can also be given a change (--base, --staged: a local hook). That never narrows what is reviewed or
+// reported; with gate.new_only and no baseline, it stands in for the baseline: what the change touches blocks.
 const { matcher, by } = require('./util');
 
 const PRI = ['P0', 'P1', 'P2', 'P3'];
@@ -29,25 +30,22 @@ function suppressionOf(f, suppress) {
   return null;
 }
 
-/**
- * Options:
- * Sets on each finding: suppressed, isNew, touchesChange, blocking, why (when it does not block).
- */
+/** Sets on each finding: suppressed, isNew, touchesChange, blocking, why (when it does not block). */
 function decide({ findings, config, changes, baseline }) {
   const failAt = config.gate.fail_on === 'never' ? -1 : PRI.indexOf(config.gate.fail_on);
   const known = baseline ? new Set(baseline.fingerprints) : null;
-  const pr = Boolean(changes);
+  const ratchet = config.gate.new_only;
   for (const f of findings) {
     const sup = suppressionOf(f, config.suppress);
     f.suppressed = sup ? sup.reason : null;
     f.isNew = known ? !known.has(f.fingerprint) : null;
-    f.touchesChange = pr ? touches(f, changes) : null;
+    f.touchesChange = changes ? touches(f, changes) : null;
     let why = null;
     if (PRI.indexOf(f.priority) > failAt) why = 'below the gate';
     else if (!config.gate.basis.includes(f.basis)) why = 'advice';
     else if (f.suppressed) why = 'suppressed';
-    else if (pr && config.gate.new_only && !f.touchesChange) why = 'existing, not touched by this change';
-    else if (pr && config.gate.new_only && known && !f.isNew) why = 'already on the default branch';
+    else if (ratchet && known && !f.isNew) why = 'in the baseline';
+    else if (ratchet && !known && changes && !f.touchesChange) why = 'not touched by the change';
     f.blocking = why === null;
     f.why = why;
   }
@@ -56,7 +54,7 @@ function decide({ findings, config, changes, baseline }) {
   const blocking = findings.filter((f) => f.blocking);
   const counts = {};
   for (const p of PRI) counts[p] = findings.filter((f) => f.priority === p && !f.suppressed).length;
-  return { verdict: blocking.length ? 'fail' : 'pass', blocking: blocking.length, counts, mode: pr ? 'change' : 'full', baseline: Boolean(known) };
+  return { verdict: blocking.length ? 'fail' : 'pass', blocking: blocking.length, counts, mode: changes ? 'change' : 'full', baseline: Boolean(known), ratchet };
 }
 
 module.exports = { decide, touches, PRI };

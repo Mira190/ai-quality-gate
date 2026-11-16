@@ -48,11 +48,14 @@ const DEFAULTS = {
     retries: 1,
     concurrency: 2,
     scope: 'critical',              // critical | all: which unlinked rules the model is asked about
+    confirm: true,                  // a "no proof" the word search does not back is read twice before it may block
+    deadline_s: 600,                // no model call starts after this many seconds
+    lock: '.quality-gate.lock.json',// verdicts committed to the repository: asked once, a fact from then on
   },
   gate: {
     fail_on: 'P1',                  // P0 | P1 | P2 | P3 | never
     basis: ['S', 'V'],              // evidence that may block: S code-decided, V model-proposed and code-verified, M model only
-    new_only: true,                 // pull requests: only findings that are new or touch the change
+    new_only: false,                // true: a ratchet. Only findings missing from the default-branch baseline block
   },
   report: {
     max_rows: 25,                   // rows per table; the rest is counted, and kept in findings.json

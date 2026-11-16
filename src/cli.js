@@ -14,7 +14,7 @@ const { runPipeline, writeOutputs, serialise } = require('./pipeline');
 const { annotations } = require('./report/sarif');
 
 const FLAGS = {
-  repo: 'path', config: 'path', out: 'path', base: 'value', diff: 'path', staged: 'bool', name: 'value', sha: 'value', cache: 'path', baseline: 'path', 'write-baseline': 'bool',
+  repo: 'path', config: 'path', out: 'path', base: 'value', diff: 'path', staged: 'bool', name: 'value', sha: 'value', cache: 'path', baseline: 'path', 'write-baseline': 'bool', 'write-lock': 'bool', 'new-only': 'bool',
   answers: 'path', provider: 'value', model: 'value', 'fail-on': 'value', basis: 'value', 'all-findings': 'bool', 'ai-scope': 'value', 'max-requests': 'value', enforce: 'bool', 'report-url': 'value',
   file: 'value', json: 'bool', quiet: 'bool', help: 'bool',
 };
@@ -64,6 +64,7 @@ async function main(argv) {
   if (args['fail-on']) overrides.gate.fail_on = args['fail-on'];
   if (args.basis) overrides.gate.basis = args.basis.split(',').map((s) => s.trim()).filter(Boolean);
   if (args['all-findings']) overrides.gate.new_only = false;
+  if (args['new-only']) overrides.gate.new_only = true;
   if (cmd === 'rules') overrides.ai.provider = 'none';
   const { config, errors } = loadConfig(args.config ? path.resolve(args.config) : path.join(root, '.quality-gate.yml'), overrides);
   const log = args.quiet ? () => {} : (m) => console.error(`[aqg] ${m}`);
@@ -75,7 +76,7 @@ async function main(argv) {
   const ledger = await runPipeline({
     root, config, configErrors: errors, name: args.name, sha: args.sha, base: args.base, staged: args.staged, diffFile: args.diff && path.resolve(args.diff),
     cacheDir, baselineFile: args.baseline && path.resolve(args.baseline), outDir: cmd === 'run' ? outDir : null,
-    answersFile: args.answers ? path.resolve(args.answers) : path.join(outDir, 'ai-answers.json'), log,
+    answersFile: args.answers ? path.resolve(args.answers) : path.join(outDir, 'ai-answers.json'), writeLock: args['write-lock'], log,
   });
 
   if (cmd === 'rules') return printRules(ledger, args);

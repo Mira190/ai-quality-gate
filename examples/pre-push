@@ -1,5 +1,6 @@
 #!/bin/sh
 # Copy to .git/hooks/pre-push (or call it from husky / lefthook). Reviews what you are about to push against the
-# default branch, with code-decided findings only: no model, no network, a second or two.
+# default branch, with code-decided findings only: no model, no network, a second or two. The whole repository is
+# reviewed and reported; --new-only makes only what your change touches block the push.
 base=$(git merge-base HEAD origin/HEAD 2>/dev/null || git merge-base HEAD origin/main 2>/dev/null) || exit 0
-npx --no-install aqg run --repo . --base "$base" --provider none --out "${TMPDIR:-/tmp}/aqg-out" --enforce
+npx --no-install aqg run --repo . --base "$base" --new-only --provider none --out "${TMPDIR:-/tmp}/aqg-out" --enforce

@@ -77,12 +77,15 @@ function assessPlacement({ proofs, tests, ci }) {
   const fast = levels.unit.cases + levels.component.cases, slow = levels.integration.cases + levels.e2e.cases;
   if (fast + slow >= 10 && slow > fast) issues.push({ kind: 'pyramid', basis: 'S', files: [], text: `${slow} integration and end-to-end cases against ${fast} unit and component cases: the suite is top-heavy.`, fix: 'For each slow test, ask what it would lose as a unit test; move what loses nothing.' });
   if (ci.testSteps.length) {
+    // When the test check itself is not enforced, that is one finding (ci.tests). The levels it takes down with it are
+    // recorded, so the rules proven there are not reported one by one, and not reported a second time here.
+    const testsEnforced = ci.testSteps.some((t) => !t.e2e && (t.state === 'enforced' || t.state === 'path_filtered' || t.state === 'unverified'));
     for (const l of LEVELS) {
       const s = levels[l];
       if (!s.files || s.notRun.length < s.files) continue;
       const states = groupBy(s.notRun, (x) => x.state);
       const why = states.has('soft') ? 'only by a step whose failure is ignored' : states.has('not_pr') ? 'only outside pull requests' : 'by no CI step';
-      issues.push({ kind: 'level-not-run', level: l, basis: 'S', files: tests.files.filter((f) => f.level === l).slice(0, 5), text: `${plural(s.files, `${l} test file`)} (${plural(s.cases, 'case')}) ${s.files === 1 ? 'is' : 'are'} run ${why}.`, fix: l === 'e2e' ? 'Run a smoke subset on pull requests, or accept the gap and say so in .quality-gate.yml.' : `Add a pull-request step that runs the ${l} tests.` });
+      issues.push({ kind: 'level-not-run', level: l, basis: 'S', silent: !testsEnforced && l !== 'e2e', files: tests.files.filter((f) => f.level === l).slice(0, 5), text: `${plural(s.files, `${l} test file`)} (${plural(s.cases, 'case')}) ${s.files === 1 ? 'is' : 'are'} run ${why}.`, fix: l === 'e2e' ? 'Run a smoke subset on pull requests, or accept the gap and say so in .quality-gate.yml.' : `Add a pull-request step that runs the ${l} tests.` });
     }
   }
   return { issues, levels };
