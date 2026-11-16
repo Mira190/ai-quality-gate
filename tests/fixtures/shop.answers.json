@@ -1,7 +1,7 @@
 {
   "_model": "stand-in (recorded answers)",
   "_note": "Answers to the prompts the gate writes for tests/fixtures/shop.js, keyed by prompt hash. Written by tests/fixtures/record.js from the judgments in that file.",
-  "b74eb840d8e5": {
+  "ee96d4da183a": {
     "verdicts": [
       {
         "rule": "R1",
@@ -76,7 +76,7 @@
       }
     ]
   },
-  "cbd695fb9e56": {
+  "f0ba615a4c4d": {
     "verdicts": [
       {
         "rule": "R1",
@@ -155,7 +155,19 @@
       }
     ]
   },
-  "de3e595323e5": {
+  "7471cfff45bb": {
+    "finds": [
+      {
+        "rule": "R1",
+        "test": null
+      },
+      {
+        "rule": "R2",
+        "test": null
+      }
+    ]
+  },
+  "0e718f169d4f": {
     "verdicts": [
       {
         "rule": "R1",

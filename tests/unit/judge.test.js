@@ -127,3 +127,78 @@ test('GATE-22 a reply in the wrong shape is asked again once, with the reason; t
   assert.deepEqual([late.calls.length, late.stats.overBudget], [0, 4]);
   assert.match(late.stats.stopped, /deadline/);
 });
+
+const { buildItem } = require('../../src/trace/judge');
+const longTest = () => {
+  const body = ["it('checks the order', () => {", '  const order = makeOrder();'];
+  for (let i = 0; i < 30; i++) body.push(`  expect(order.lines[${i}].sku).toBe('sku-${i}');`);
+  body.push('  const discount = applyDiscount(order, 25);', '  expect(discount.percent).toBe(20);', '});');
+  return body;
+};
+
+test('GATE-24 a long test is cut around the rule: the assertion that mentions the rule\'s words is shown before the others', () => {
+  const body = longTest();
+  const c = { line: 1, end: body.length, file: { path: 'x' } };
+  const words = new Set(tokenize('Discounts never exceed 20%').concat('20'));
+  const ex = excerptOf(c, () => body.join('\n'), 6, words);
+  assert.match(ex.text, /34\| {3}expect\(discount\.percent\)\.toBe\(20\);/);
+  assert.deepEqual([ex.complete, ex.hidden, ex.shown.has(34)], [false, 21, true]);
+  assert.match(ex.text, /… \(21 more assertion lines of this test are not shown\)/);
+  // with room for every assertion the excerpt is complete, and still shorter than the test
+  const roomy = excerptOf(c, () => body.join('\n'), 20, words);
+  assert.deepEqual([roomy.complete, roomy.hidden, roomy.shown.size < body.length], [true, 0, true]);
+  assert.match(roomy.text, /33\| {3}const discount = applyDiscount\(order, 25\);/);
+});
+
+test('GATE-24 a "no proof" about a test that was not shown in full is advice, with the reason', () => {
+  const body = longTest();
+  const kase2 = { key: 'x › checks the order', name: 'checks the order', line: 1, end: body.length, skipped: false, file: { path: 'x', level: 'unit' } };
+  const rule = { id: 'REQ-1', kind: 'requirement', title: 'Discount cap', text: 'Discounts never exceed 20%.', critical: false, tags: [], limits: [] };
+  const config = { trace: { excerpt_lines: 6 } };
+  const it6 = buildItem(rule, { candidates: [{ case: kase2 }] }, () => body.join('\n'), config);
+  const none = verify(normalise({ rule: 'R1', proof: 'none' }, it6, 0), it6);
+  assert.deepEqual([none.status, none.basis], ['unverified', 'A']);
+  assert.match(none.note, /too long to show the model in full \(21 assertion lines left out\)/);
+  // a citation of a line that was shown still counts: what was seen can prove, what was not seen cannot disprove
+  assert.equal(verify(normalise({ rule: 'R1', proof: 'full', cites: [{ test: 'T1', line: 34 }] }, it6, 0), it6).status, 'proven');
+  const it20 = buildItem(rule, { candidates: [{ case: kase2 }] }, () => body.join('\n'), { trace: { excerpt_lines: 20 } });
+  assert.equal(verify(normalise({ rule: 'R1', proof: 'none' }, it20, 0), it20).basis, 'V');
+});
+
+test('GATE-24 assertions made through a helper in the same file are shown, and can be cited', () => {
+  const file = [
+    'function expectCapped(order) {',
+    '  const d = applyDiscount(order, 25);',
+    '  expect(d.percent).toBe(20);',
+    '}',
+    '',
+    "it('caps the discount', () => {",
+    '  expectCapped(makeOrder());',
+    '});',
+  ].join('\n');
+  const c = { key: 'x › caps', name: 'caps the discount', line: 6, end: 8, skipped: false, file: { path: 'x', level: 'unit' } };
+  const ex = excerptOf(c, () => file, 30);
+  assert.match(ex.text, /… helper expectCapped, called by this test:\n1\| function expectCapped\(order\) \{\n3\| {3}expect\(d\.percent\)\.toBe\(20\);/);
+  const item2 = { rule: { id: 'REQ-1', text: 't' }, head: 'h', cands: [{ case: c, ex }] };
+  const v = verify(normalise({ rule: 'R1', proof: 'full', cites: [{ test: 'T1', line: 3 }] }, item2, 0), item2);
+  assert.deepEqual([v.status, v.links[0].line], ['proven', 3]);
+  // python and go helpers, and a call that is not a helper of this file
+  assert.match(excerptOf({ line: 5, end: 6, file: { path: 'x' } }, () => 'def check_cap(o):\n    assert cap(o) == 20\n\n\ndef test_cap():\n    check_cap(order())\n', 30).text, /helper check_cap[\s\S]*2\| {5}assert cap\(o\) == 20/);
+  assert.doesNotMatch(excerptOf({ line: 1, end: 3, file: { path: 'x' } }, () => "it('x', () => {\n  expect(external(1)).toBe(1);\n});\n", 30).text, /helper/);
+});
+
+test('GATE-25 a test that imports the source file a rule names is a candidate, whatever words the test uses', () => {
+  const mk = (path, name, body, imports) => { const f = { path, pkg: '', imports, cases: [] }; const c = { key: `${path} › ${name}`, name, ids: [], nt: [...new Set(tokenize(name))], bt: [...new Set(tokenize(body))], file: f }; f.cases.push(c); return f; };
+  const files = [
+    mk('t/money.test.js', 'handles the edge case', 'expect(apply(100, 25)).toBe(80)', ['src/discount.js']),
+    mk('t/other.test.js', 'renders the page', 'expect(page).toBeTruthy()', ['src/page.js']),
+  ];
+  const tests = { files, cases: files.flatMap((f) => f.cases) };
+  const rule = { id: 'REQ-1', title: 'Discount cap', text: 'Discounts never exceed 20%.', critical: true, limits: [], pkg: '' };
+  const config = { trace: { candidates: 4, min_overlap: 0.34 } };
+  const got = linkRules([rule], tests, config).get('REQ-1').candidates;
+  assert.deepEqual(got.map((c) => [c.case.file.path, c.via]), [['t/money.test.js', 'src/discount.js']]);
+  // without the import there is no way to the test, and the rule has no candidate
+  files[0].imports = [];
+  assert.equal(linkRules([rule], { files, cases: tests.cases }, config).get('REQ-1').candidates.length, 0);
+});

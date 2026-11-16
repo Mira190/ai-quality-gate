@@ -11,7 +11,7 @@ const path = require('node:path');
 const { tokenize, uniq, sha, readText, pool } = require('../util');
 const { idsIn } = require('../extract/rules');
 
-const PARSER_VERSION = 5;
+const PARSER_VERSION = 6;
 const LEVELS = ['unit', 'component', 'integration', 'e2e'];
 const rank = (l) => LEVELS.indexOf(l);
 
@@ -179,7 +179,7 @@ function parseTestFile(p, text, lang, idp) {
       const ind = indentOf(l);
       if (lang === 'python' ? ind <= m.indent && !/^\s*[)\]]/.test(l) : ind < m.indent || (ind === m.indent && /^\s*[})\]]/.test(l) && lang !== 'gherkin')) { end = lang === 'python' || ind < m.indent ? j - 1 : j; break; }
     }
-    end = Math.min(end, m.line + 150);
+    end = Math.min(end, m.line + 600);
     const body = lines.slice(from, end + 1);
     const bodyText = body.join('\n');
     const name = [...stack.map((g) => g.name), m.name].join(' › ');
@@ -195,7 +195,7 @@ function parseTestFile(p, text, lang, idp) {
       asserts: body.reduce((n, l) => n + (ASSERT.test(l) ? 1 : 0), 0),
       ids: uniq(idsIn(`${name}\n${lines.slice(Math.max(0, from - 3), from).filter((l) => /^\s*(\/\/|#|\*|\/\*|@|--)/.test(l)).join('\n')}\n${bodyText}`, idp)),
       nt: nameTokens,
-      bt: uniq(tokenize(bodyText)).filter((t) => !nameSet.has(t)).slice(0, 120),
+      bt: uniq(tokenize(bodyText)).filter((t) => !nameSet.has(t)).slice(0, 300),
     });
   }
 

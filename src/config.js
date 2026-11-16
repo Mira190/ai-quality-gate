@@ -9,7 +9,7 @@ const DEFAULTS = {
   docs: {
     include: [],                    // globs always read as rule documents
     exclude: [],
-    max_kb: 256,                    // a larger document is listed as not read
+    max_kb: 2048,                   // a larger document is listed as not read
     max_files: 300,                 // the highest-scoring documents are read first
   },
   rules: {
@@ -25,7 +25,7 @@ const DEFAULTS = {
   tests: {
     include: [],                    // globs that are test files whatever their name
     levels: {},                     // level → globs, overrides detection: { e2e: ["apps/web/journeys/**"] }
-    max_kb: 512,
+    max_kb: 2048,
   },
   trace: {
     candidates: 4,                  // nearest tests shown to the model per rule

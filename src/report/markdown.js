@@ -115,6 +115,9 @@ function runSection(ledger) {
     ? `- Model: none (${ai.note}). Only code-decided findings can block; ${plural(m.needed - m.cached, 'rule')} that need a judgment ${m.needed - m.cached === 1 ? 'is' : 'are'} listed as unverified.`
     : `- Model: ${ai.provider}${ai.model ? ` (${ai.model})` : ''}. ${plural(m.needed, 'rule')} needed a judgment: ${m.cached} from the verdict cache${m.locked ? `, ${m.locked} from the lock file` : ''}, ${m.asked} asked${m.confirmed ? `, ${m.confirmed} read a second time` : ''}, in ${plural(m.requests, 'call')} (${Math.round(m.chars / 1000)}k characters, about ${Math.round(m.chars / 4000)}k tokens sent)${m.pending ? `; ${m.pending} await an answer in \`ai-requests.json\`` : ''}${m.overBudget ? `; ${m.overBudget} left for the next run (budget)` : ''}${m.failed ? `; ${m.failed} failed (${m.errors[0] || 'no usable reply'})` : ''}${m.stopped ? `; calls stopped: ${m.stopped}` : ''}.`;
   lines.push(modelLine);
+  const sh = m.shown;
+  if (sh && sh.tests) lines.push(`- Shown to the model: ${plural(sh.tests, 'candidate test')}, ${sh.lines} of their ${sh.of} lines (the opening, every assertion, the lines that share the rule's words)${sh.helpers ? `, with the assertions of same-file helpers for ${sh.helpers}` : ''}. ${sh.cut ? `${plural(sh.cut, 'test')} too long to show every assertion: a "no proof" about ${sh.cut === 1 ? 'it' : 'them'} is not relied on.` : 'Every assertion of every candidate was shown.'}`);
+  lines.push(`- Read by code, in full: ${plural(run.docs.length, 'rule document')}, ${plural(run.testFiles, 'test file')}, ${plural(run.ciFiles, 'CI file')}. The model reads no file.`);
   lines.push('- Tests are read, not run. Evidence levels: _code_ is decided by parsing; _model, verified_ is a model answer whose citation code checked; _advice_ never blocks.');
   for (const d of run.degraded) lines.push(`- ⚠️ ${d}`);
   for (const e of run.configErrors) lines.push(`- ⚠️ Config: ${e}`);

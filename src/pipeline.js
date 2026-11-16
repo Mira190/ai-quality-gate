@@ -91,7 +91,7 @@ async function runPipeline(o) {
   // trace
   const provider = await stage('model', { name: 'none', available: false, note: 'the provider could not start' }, () => makeProvider(config, { answersFile: o.answersFile, requestsFile: o.outDir && path.join(o.outDir, 'ai-requests.json') }));
   const links = await stage('link', new Map(extracted.rules.map((r) => [r.id, { explicit: [], candidates: [], terms: [] }])), () => linkRules(extracted.rules, tests, config));
-  const emptyStats = { needed: 0, cached: 0, locked: 0, asked: 0, confirmed: 0, requests: 0, pending: 0, failed: 0, overBudget: 0, chars: 0, errors: [] };
+  const emptyStats = { shown: { tests: 0, lines: 0, of: 0, cut: 0, helpers: 0 }, needed: 0, cached: 0, locked: 0, asked: 0, confirmed: 0, requests: 0, pending: 0, failed: 0, overBudget: 0, chars: 0, errors: [] };
   const lockFile = config.ai.lock ? path.join(root, config.ai.lock) : null;
   const lock = (lockFile && readJson(lockFile)?.verdicts) || {};
   const judged = await stage('judge', { verdicts: new Map(), stats: emptyStats }, () => judgeRules({ root, rules: extracted.rules, links, provider, cache, lock, config, log }));

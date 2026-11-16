@@ -108,7 +108,7 @@ test('boundary values are the limit, one below and one above', () => {
 
 test('config: unknown keys and wrong types are reported and the defaults stay', () => {
   const { config: c, errors } = loadConfig(null, { gate: { fail_on: 'P9', basis: ['S', 'X'] }, ai: { provider: 'gpt' }, nonsense: 1, docs: { max_kb: 'big' } });
-  assert.deepEqual([c.gate.fail_on, c.gate.basis, c.ai.provider, c.docs.max_kb], ['P1', ['S'], 'auto', 256]);
+  assert.deepEqual([c.gate.fail_on, c.gate.basis, c.ai.provider, c.docs.max_kb], ['P1', ['S'], 'auto', 2048]);
   assert.equal(errors.length, 5);
 });
 

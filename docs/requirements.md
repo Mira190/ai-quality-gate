@@ -18,6 +18,8 @@ repository with the same rules it applies to any other.
 - **GATE-8 Citations are checked.** A model verdict that a test proves a rule is believed only when it cites a candidate test it was shown, at a line it was shown, and that line is an assertion; anything else is advice.
 - **GATE-9 Model budget.** The model is called for rules code could not link, most severe first, never more often than the configured number of calls; a rule whose text and candidate tests are unchanged is answered from the verdict cache or the lock file, and what the budget did not reach is judged by the next run.
 - **GATE-21 Read twice.** A model verdict that no candidate test proves a rule stands on the model's word alone, so it blocks only after a second, differently framed reading of the same tests agrees; a disagreement is advice.
+- **GATE-24 Nothing is concluded from part of a test.** The model is shown each candidate test whole, or its opening, its assertions and the lines that share the rule's words; assertions made through a helper in the same file are shown too; and when not every assertion fits, a verdict that the test proves nothing is advice.
+- **GATE-25 Candidates through imports.** A test that imports a source file named by one of the rule's words is a candidate for the rule even when the test shares none of its wording.
 - **GATE-22 Model failures stop early.** Two failed calls in a row, or one refused for bad credentials, end the model calls of the run; a reply in the wrong shape gets one repair attempt.
 
 ## Placement
