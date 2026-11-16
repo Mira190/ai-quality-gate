@@ -35,6 +35,9 @@ function proofFindings(proofs, config, collapsed = new Set()) {
     if (p.status === 'inactive' || p.status === 'not_a_rule' || p.status === 'proven') {
       if (p.status === 'proven' && p.untestable) { /* proven in practice: the wording advice below still applies */ } else continue;
     }
+    // A sentence without an ID that nobody has judged to be a rule is not yet something to act on: it is counted in
+    // the report and listed nowhere. Reporting it would be the gate guessing.
+    if (r.inferred && p.basis === 'A' && !p.links.length) continue;
     const base = { section: 'proof', subject: r.id, critical: r.critical, loc: { path: r.path, line: r.line } };
     const tagHint = `name \`${r.id}\` in the test (its title or a \`// covers: ${r.id}\` comment) so the link is a fact from then on`;
     const level = p.modelLevel || r.lowest;
@@ -167,6 +170,9 @@ function ciFindings(ci, inventory, config) {
       continue;
     }
     if (c.need === 'na') continue;
+    // An optional check the repository never set up is a row in the CI table, not a finding: the gate reports gaps
+    // in what a team decided to do (a tool configured and not run, a step whose failure is ignored), not its taste.
+    if (c.state === 'missing' && !(config.ci.required.includes(c.id) && c.need === 'required')) continue;
     const required = config.ci.required.includes(c.id) && c.need === 'required';
     let priority = c.id === 'tests' ? 'P0' : required ? 'P1' : c.id === 'sast' ? 'P3' : 'P2';
     if (c.id === 'tests' && c.state === 'missing' && !(inventory.byKind.test || []).length) priority = 'P0';

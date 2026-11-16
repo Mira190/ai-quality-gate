@@ -82,9 +82,10 @@ test('a fingerprint depends on the check and its subject, not on line numbers or
 test('GATE-15 tests that do not gate pull requests are P0; lint and type check not enforced are P1; the rest lower', () => {
   const inventory = { byKind: { ci: [{ path: '.github/workflows/ci.yml' }], test: [{ path: 'a.test.ts' }] }, langs: { js: 3, ts: 3 } };
   const check = (id, state, need = 'required') => ({ id, title: id, state, need, where: [{ file: '.github/workflows/ci.yml', line: 3, job: 'j' }], command: 'x', configured: 'tsconfig.json' });
-  const ci = { hasCI: true, checks: [check('tests', 'non_blocking'), check('lint', 'configured'), check('typecheck', 'not_on_pr'), check('format', 'missing', 'optional'), check('sast', 'missing', 'optional'), check('deps', 'enforced', 'optional')] };
+  const ci = { hasCI: true, checks: [check('tests', 'non_blocking'), check('lint', 'configured'), check('typecheck', 'not_on_pr'), check('format', 'configured', 'optional'), check('sast', 'missing', 'optional'), check('coverage', 'missing', 'optional'), check('deps', 'enforced', 'optional')] };
   const out = ciFindings(ci, inventory, config());
-  assert.deepEqual(out.map((f) => [f.check, f.priority, f.basis]), [['ci.tests', 'P0', 'S'], ['ci.lint', 'P1', 'S'], ['ci.typecheck', 'P1', 'S'], ['ci.format', 'P2', 'S'], ['ci.sast', 'P3', 'S']]);
+  assert.deepEqual(out.map((f) => [f.check, f.priority, f.basis]), [['ci.tests', 'P0', 'S'], ['ci.lint', 'P1', 'S'], ['ci.typecheck', 'P1', 'S'], ['ci.format', 'P2', 'S']]);
+  // a tool the repository never chose (no SAST, no coverage) is a row in the CI table, not a finding
   assert.deepEqual(ciFindings({ hasCI: false, checks: [] }, inventory, config()).map((f) => [f.check, f.priority]), [['ci.none', 'P0']]);
 });
 
@@ -147,4 +148,11 @@ test('GATE-27 a check whose findings people mostly dismiss goes on probation and
   const g = decide({ findings: [noisy, solid], config: config(), changes: null, baseline });
   assert.deepEqual([noisy.blocking, solid.blocking, g.probation], [false, true, ['placement.too-high']]);
   assert.match(noisy.why, /on probation/);
+});
+
+test('GATE-28 an unjudged sentence without an ID makes no finding; a rule with an ID in the same state does', () => {
+  const rule = (o) => ({ id: 'R-ABC123', title: 'T', text: 'x', path: 'd.md', line: 1, critical: true, tags: [{ area: 'money', word: 'fee' }], limits: [], lowest: 'unit', inferred: true, ...o });
+  const proof = (r, status) => ({ rule: r, status, basis: 'A', links: [], holes: [], candidates: [], terms: [], impl: [] });
+  assert.deepEqual(proofFindings([proof(rule(), 'unproven'), proof(rule({ id: 'R-DEF456' }), 'unverified')], config()), []);
+  assert.deepEqual(proofFindings([proof(rule({ id: 'REQ-1', inferred: false }), 'unverified')], config()).map((f) => [f.check, f.priority, f.basis]), [['proof.unverified', 'P1', 'A']]);
 });

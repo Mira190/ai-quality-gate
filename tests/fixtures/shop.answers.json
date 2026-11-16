@@ -1,7 +1,7 @@
 {
   "_model": "stand-in (recorded answers)",
   "_note": "Answers to the prompts the gate writes for tests/fixtures/shop.js, keyed by prompt hash. Written by tests/fixtures/record.js from the judgments in that file.",
-  "ee96d4da183a": {
+  "e2f42c6d5bfd": {
     "verdicts": [
       {
         "rule": "R1",
@@ -26,24 +26,24 @@
       },
       {
         "rule": "R3",
-        "testable": true,
-        "proof": "partial",
-        "cites": [
-          {
-            "test": "R3.T1",
-            "line": 5
-          }
-        ],
-        "missing": "the 12-character boundary: the test only tries 8 characters, never 11 and 12",
-        "level": "unit"
-      },
-      {
-        "rule": "R4",
         "testable": false,
         "proof": "none",
         "cites": [],
         "missing": "\"fast\" has no number; state a time limit such as p95 under <N> ms",
         "level": "integration"
+      },
+      {
+        "rule": "R4",
+        "testable": true,
+        "proof": "partial",
+        "cites": [
+          {
+            "test": "R4.T1",
+            "line": 5
+          }
+        ],
+        "missing": "the 12-character boundary: the test only tries 8 characters, never 11 and 12",
+        "level": "unit"
       },
       {
         "rule": "R5",
@@ -68,7 +68,7 @@
       }
     ]
   },
-  "1ae2ccc0cd51": {
+  "cb8c39db9d87": {
     "finds": [
       {
         "rule": "R1",
@@ -76,7 +76,7 @@
       }
     ]
   },
-  "f0ba615a4c4d": {
+  "7a02658e8372": {
     "verdicts": [
       {
         "rule": "R1",
@@ -101,19 +101,6 @@
       },
       {
         "rule": "R3",
-        "testable": true,
-        "proof": "partial",
-        "cites": [
-          {
-            "test": "R3.T1",
-            "line": 5
-          }
-        ],
-        "missing": "the 12-character boundary: the test only tries 8 characters, never 11 and 12",
-        "level": "unit"
-      },
-      {
-        "rule": "R4",
         "testable": false,
         "proof": "none",
         "cites": [],
@@ -121,11 +108,24 @@
         "level": "integration"
       },
       {
-        "rule": "R5",
+        "rule": "R4",
         "testable": true,
         "proof": "none",
         "cites": [],
         "missing": "no test rejects a gift card payment above $500",
+        "level": "unit"
+      },
+      {
+        "rule": "R5",
+        "testable": true,
+        "proof": "partial",
+        "cites": [
+          {
+            "test": "R5.T1",
+            "line": 5
+          }
+        ],
+        "missing": "the 12-character boundary: the test only tries 8 characters, never 11 and 12",
         "level": "unit"
       },
       {
@@ -138,7 +138,7 @@
       }
     ]
   },
-  "17d99aa8b11b": {
+  "afd2a6dcf97e": {
     "verdicts": [
       {
         "rule": "R1",
@@ -155,7 +155,7 @@
       }
     ]
   },
-  "7471cfff45bb": {
+  "998ffe3b633b": {
     "finds": [
       {
         "rule": "R1",
@@ -167,7 +167,7 @@
       }
     ]
   },
-  "0e718f169d4f": {
+  "470f805098f2": {
     "verdicts": [
       {
         "rule": "R1",
@@ -192,24 +192,24 @@
       },
       {
         "rule": "R3",
-        "testable": true,
-        "proof": "partial",
-        "cites": [
-          {
-            "test": "R3.T1",
-            "line": 5
-          }
-        ],
-        "missing": "the 12-character boundary: the test only tries 8 characters, never 11 and 12",
-        "level": "unit"
-      },
-      {
-        "rule": "R4",
         "testable": false,
         "proof": "none",
         "cites": [],
         "missing": "\"fast\" has no number; state a time limit such as p95 under <N> ms",
         "level": "integration"
+      },
+      {
+        "rule": "R4",
+        "testable": true,
+        "proof": "partial",
+        "cites": [
+          {
+            "test": "R4.T1",
+            "line": 5
+          }
+        ],
+        "missing": "the 12-character boundary: the test only tries 8 characters, never 11 and 12",
+        "level": "unit"
       },
       {
         "rule": "R5",

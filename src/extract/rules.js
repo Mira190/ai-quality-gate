@@ -14,7 +14,7 @@ const path = require('node:path');
 const { sha, clip, matcher, readText } = require('../util');
 const { tagRule } = require('./risk');
 
-const PARSER_VERSION = 2; // bump when parseDoc changes: cached parses of unchanged documents are then redone
+const PARSER_VERSION = 3; // bump when parseDoc changes: cached parses of unchanged documents are then redone
 const REQ_PREFIXES = ['REQ', 'FR', 'NFR', 'AC', 'US', 'UC', 'BR', 'SR', 'RULE', 'INV', 'SEC'];
 const DEC_PREFIXES = ['DEC', 'ADR', 'DR', 'AD', 'DD'];
 
@@ -77,6 +77,14 @@ function parseDoc(p, text, type, idp, config = {}) {
   const rules = [];
   const headings = [];
   let fence = false;
+  // the headings above each line: a rule read without its section ("The cap applies after tax") is half a rule
+  const chain = [], above = [];
+  for (let i = 0, f = false; i < lines.length; i++) {
+    if (/^\s*(```|~~~)/.test(lines[i])) f = !f;
+    above.push(chain.filter(Boolean).slice(-2).join(' › '));
+    const h = !f && /^(#{1,6})\s+(.*)$/.exec(lines[i]);
+    if (h) { chain.length = h[1].length - 1; chain[h[1].length - 1] = unmark(h[2]).slice(0, 60); }
+  }
   const isBreak = (l) => !l.trim() || /^\s*(#{1,6}\s|[-*+]\s|\d+[.)]\s|\||```|~~~|---+\s*$)/.test(l);
 
   // pass 1: items with an ID
@@ -161,7 +169,7 @@ function parseDoc(p, text, type, idp, config = {}) {
       }
     }
   }
-  for (const r of rules) r.refs = idsIn(r.text, idp).filter((x) => x !== r.id);
+  for (const r of rules) { r.refs = idsIn(r.text, idp).filter((x) => x !== r.id); r.section = above[r.line - 1] || undefined; }
   return rules;
 }
 

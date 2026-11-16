@@ -59,9 +59,13 @@ test('GATE-3 a document that numbers its rules is not mined for sentences', () =
 test('GATE-4 a rule about money, access control, customer data, outside calls or data safety is critical, with the word', () => {
   const tag = (text) => tagRule({ id: 'REQ-1', title: '', text }, {});
   assert.deepEqual(tag('Discounts never exceed 20%.').tags, [{ area: 'money', word: 'discounts' }]);
-  assert.equal(tag('Only an admin can delete a user.').tags.map((t) => t.area).join(), 'auth,data');
+  assert.equal(tag('Only an admin can delete a user.').tags.map((t) => t.area).join(), 'auth,data');   // two weak words make one strong signal
+  // one ambiguous word alone does not: a wrongly critical rule is a wrong P0
+  for (const text of ['The parser emits one token per word.', 'The role attribute is set on the button.', 'Failed jobs are retried.', 'The battery is charged overnight.']) assert.equal(tag(text).critical, false, text);
+  assert.equal(tag('A token expires when the session ends.').critical, true);
+  assert.equal(tag('A chargeback is escalated.').critical, true);
   assert.equal(tag('The webhook is retried on timeout.').tags[0].area, 'external');
-  assert.equal(tag('The migration can be rolled back.').tags[0].area, 'safety');
+  assert.equal(tag('A failed migration must not cause data loss.').tags[0].area, 'safety');
   assert.equal(tag('The list is sorted by name.').critical, false);
   assert.equal(tagRule({ id: 'REQ-9', title: '', text: 'The list is sorted.' }, { risk: { critical_ids: ['req-9'] } }).critical, true);
 });
@@ -95,4 +99,10 @@ test('documents are typed by their path', () => {
 test('GATE-2 a numbered rule is retired only by an explicit marker, not by a word in its text', () => {
   const rules = parse('- REQ-1: A decision that is superseded or rejected is not counted.\n- REQ-2 [deprecated]: The old export.\n- ~~REQ-3: Gone.~~\n- REQ-4: Legacy import. Status: withdrawn\n');
   assert.deepEqual(rules.map((r) => [r.id, r.active]), [['REQ-1', true], ['REQ-2', false], ['REQ-3', false], ['REQ-4', false]]);
+});
+
+test('a rule carries the headings above it, and a preposition with a bare number is not a limit', () => {
+  const rules = parse('# Shop\n\n## Pricing\n\n### Discounts\n\n- REQ-1: The cap applies after tax.\n\n## Orders\n\n- REQ-2: Pages from 1 to 2 load over 40 items within 30 days, at most 5.\n');
+  assert.deepEqual(rules.map((r) => r.section), ['Pricing › Discounts', 'Shop › Orders']);
+  assert.deepEqual(limitsOf(rules[1].text).map((l) => l.raw), ['over 40 items', 'within 30 days', 'at most 5']);
 });

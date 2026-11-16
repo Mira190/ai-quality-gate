@@ -16,7 +16,7 @@
 | 2 | P0 | **yes** | **REQ-10 Price rounding (critical: money · "price") has no test** | "Price rounding. A price is rounded half up to whole cents before it is shown." (`docs/requirements.md:11`): the nearest test (`tests/unit/price.test.ts:4` "price › rounds the price half up to whole cents") does not assert it, by the model's reading, done twice: rounding half up to whole cents; the test only checks the currency sign. _(model, verified)_ | Write a unit test that fails when the rule is broken; name `REQ-10` in the test (its title or a `// covers: REQ-10` comment) so the link is a fact from then on. |
 | 3 | P1 | **yes** | **REQ-6 Password length (critical: auth · "password"): no linked test uses the stated limit at least 12 characters** | Linked test: `tests/unit/password.test.ts:4` "password › rejects a password shorter than the minimum leng…". The model adds: the 12-character boundary: the test only tries 8 characters, never 11 and 12. _(model, verified)_ | Add cases at 11, 12 and 13. |
 | 4 | P1 | **yes** | **e2e tests do not gate pull requests** | 2 e2e test files (2 cases) are run only outside pull requests. 1 rule is proven only there, 1 critical: REQ-2. _(code)_ | Run a smoke subset on pull requests, or accept the gap and say so in .quality-gate.yml. |
-| 5 | P1 | **yes** | **REQ-3 Payment retry (critical: money, external · "payment") is proven only against fakes** | REQ-3 is about a real boundary (retry), and every test that proves it fakes that boundary (`jest.mock(` in tests/unit/payment.test.ts). _(code)_ | Add one integration test that crosses the real boundary; the unit tests can keep the edge cases. |
+| 5 | P1 | **yes** | **REQ-3 Payment retry (critical: money, external · "payment") is proven only against fakes** | REQ-3 is about a real boundary (gateway), and every test that proves it fakes that boundary (`jest.mock(` in tests/unit/payment.test.ts). _(code)_ | Add one integration test that crosses the real boundary; the unit tests can keep the edge cases. |
 | 6 | P1 | **yes** | **REQ-2 Free shipping (critical: money · "fee") is tested above the level it needs** | REQ-2 is logic with limits (over $50, $5), and is proven only at e2e level (5 cases in tests/e2e/shipping.spec.ts). _(code)_ | Add unit tests for the rule and its boundary values against `src/shipping.ts`; keep one e2e case for the wiring. |
 | 7 | P1 | **yes** | **REQ-7 Order export has no test** | "Order export. An order history can be exported as CSV." (`docs/requirements.md:9`): no test names `REQ-7` or shares its words (searched: csv, export, history, order). _(code)_ | Write a unit test that fails when the rule is broken; name `REQ-7` in the test (its title or a `// covers: REQ-7` comment) so the link is a fact from then on. |
 | 8 | P1 | **yes** | **Lint: failures are ignored** | Lint runs on pull requests (`npm run lint`, `.github/workflows/ci.yml:13`), and its failure is ignored (continue-on-error or `\|\| true`). _(code)_ | Remove `continue-on-error` / `\|\| true`, or fix what fails and then remove it. |
@@ -62,11 +62,11 @@ Not counted: 1 rule superseded, rejected or still a draft; 1 sentence the model 
 
 | # | Priority | Blocks | Finding | Evidence | Fix |
 | --- | --- | --- | --- | --- | --- |
-| 5 | P1 | **yes** | **REQ-3 Payment retry (critical: money, external · "payment") is proven only against fakes** | REQ-3 is about a real boundary (retry), and every test that proves it fakes that boundary (`jest.mock(` in tests/unit/payment.test.ts). _(code)_ | Add one integration test that crosses the real boundary; the unit tests can keep the edge cases. |
+| 5 | P1 | **yes** | **REQ-3 Payment retry (critical: money, external · "payment") is proven only against fakes** | REQ-3 is about a real boundary (gateway), and every test that proves it fakes that boundary (`jest.mock(` in tests/unit/payment.test.ts). _(code)_ | Add one integration test that crosses the real boundary; the unit tests can keep the edge cases. |
 | 6 | P1 | **yes** | **REQ-2 Free shipping (critical: money · "fee") is tested above the level it needs** | REQ-2 is logic with limits (over $50, $5), and is proven only at e2e level (5 cases in tests/e2e/shipping.spec.ts). _(code)_ | Add unit tests for the rule and its boundary values against `src/shipping.ts`; keep one e2e case for the wiring. |
-| 14 | P2 | no (below the gate) | **tests/unit/geo.test.ts is not a unit test** | tests/unit/geo.test.ts is filed as unit and needs a network, a database or a child process (`localhost:3000`). _(code)_ | Move it to the integration suite, or replace `localhost:3000` with a fake so it stays a unit test. |
-| 15 | P2 | no (below the gate) | **tests/e2e/totals.e2e.test.ts is a unit test in the e2e suite** | tests/e2e/totals.e2e.test.ts is filed as e2e and crosses no boundary: it calls `src/totals.ts` directly (1 case). _(code)_ | Move these cases to the unit suite: same proof, feedback in seconds, and they run on every pull request. |
-| 16 | P2 | no (below the gate) | **tests/e2e/shipping.spec.ts runs a parameter table at e2e level** | tests/e2e/shipping.spec.ts runs 5 parameter rows at e2e level. _(code)_ | Move the table to a unit test of the logic it varies; keep one row here to prove the wiring. |
+| 12 | P2 | no (below the gate) | **tests/unit/geo.test.ts is not a unit test** | tests/unit/geo.test.ts is filed as unit and needs a network, a database or a child process (`localhost:3000`). _(code)_ | Move it to the integration suite, or replace `localhost:3000` with a fake so it stays a unit test. |
+| 13 | P2 | no (below the gate) | **tests/e2e/totals.e2e.test.ts is a unit test in the e2e suite** | tests/e2e/totals.e2e.test.ts is filed as e2e and crosses no boundary: it calls `src/totals.ts` directly (1 case). _(code)_ | Move these cases to the unit suite: same proof, feedback in seconds, and they run on every pull request. |
+| 14 | P2 | no (below the gate) | **tests/e2e/shipping.spec.ts runs a parameter table at e2e level** | tests/e2e/shipping.spec.ts runs 5 parameter rows at e2e level. _(code)_ | Move the table to a unit test of the logic it varies; keep one row here to prove the wiring. |
 
 ## 3. CI: are the checks enforced on pull requests?
 
@@ -85,14 +85,11 @@ Not counted: 1 rule superseded, rejected or still a draft; 1 sentence the model 
 
 ## Lower priority: P2 and P3
 
-<details><summary>4 findings</summary>
+<details><summary>1 finding</summary>
 
 | # | Priority | Finding | Evidence | Fix |
 | --- | --- | --- | --- | --- |
-| 11 | P2 | **Coverage: not run in CI** | No CI step runs coverage. _(code)_ | Add a pull-request step that runs coverage and fails the build. |
-| 12 | P2 | **Format: set up, not enforced** | Format is set up (.prettierrc) and no CI step runs it: nothing stops a change that breaks it. _(code)_ | Add a pull-request step that runs it. |
-| 13 | P2 | **Secret scan: not run in CI** | No CI step runs secret scan. (GitHub secret scanning is a repository setting this run cannot see) _(code)_ | Add a pull-request step that runs secret scan and fails the build. |
-| 17 | P3 | **Static security analysis: not run in CI** | No CI step runs static security analysis. _(code)_ | Add a pull-request step that runs static security analysis and fails the build. |
+| 11 | P2 | **Format: set up, not enforced** | Format is set up (.prettierrc) and no CI step runs it: nothing stops a change that breaks it. _(code)_ | Add a pull-request step that runs it. |
 
 </details>
 
@@ -100,8 +97,8 @@ Not counted: 1 rule superseded, rejected or still a draft; 1 sentence the model 
 
 - Files: 35 listed, 0 vendored or generated and skipped; read: 4 rule documents, 11 test files (11 cases), 2 CI files. Source files are not read, except the ones a change touches.
 - Rules: 13 (11 with an ID in the source, 2 inferred from normative sentences) from `docs/requirements.md` (9), `docs/adr/0003-idempotent-webhooks.md` (1), `docs/adr/0004-soap-gateway.md` (1), `docs/design.md` (2).
-- Model: handoff (stand-in (recorded answers)). 6 rules needed a judgment: 0 from the verdict cache, 6 asked, 1 read a second time, in 2 calls (4k characters, about 1k tokens sent).
+- Model: handoff (stand-in (recorded answers)). 6 rules needed a judgment: 0 from the verdict cache, 6 asked, 1 read a second time, in 2 calls (5k characters, about 1k tokens sent).
 - Shown to the model: 5 candidate tests, 19 of their 19 lines (the opening, every assertion, the lines that share the rule's words). Every assertion of every candidate was shown.
 - Read by code, in full: 4 rule documents, 11 test files, 2 CI files. The model reads no file.
 - Tests are read, not run. Evidence levels: _code_ is decided by parsing; _model, verified_ is a model answer whose citation code checked; _advice_ never blocks.
-- Time: scan 4 ms · extract 20 ms · index 10 ms · ci 16 ms · model 0 ms · link 2 ms · judge 5 ms · assess 2 ms · execute 0 ms · placement 1 ms.
+- Time: scan 4 ms · extract 23 ms · index 11 ms · ci 19 ms · model 0 ms · link 1 ms · judge 6 ms · assess 1 ms · execute 0 ms · placement 1 ms.

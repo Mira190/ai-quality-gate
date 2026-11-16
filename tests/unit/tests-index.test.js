@@ -91,3 +91,22 @@ test('paths are sorted into kinds without reading a file', () => {
   assert.equal(kind('eslint.config.js'), 'config');
   assert.equal(kind('package.json'), 'manifest');
 });
+
+test('a test that asserts through a helper is not reported as asserting nothing', () => {
+  const r = parse([
+    'function checkTotals(order) {',
+    '  expect(order.total).toBe(100);',
+    '}',
+    "it('through a helper of this file', () => {",
+    '  checkTotals(makeOrder());',
+    '});',
+    "it('through a helper named like an assertion', () => {",
+    '  expectValidOrder(makeOrder());',
+    '});',
+    "it('asserts nothing', () => {",
+    '  makeOrder();',
+    '});',
+  ].join('\n'));
+  assert.deepEqual(r.cases.map((c) => c.asserts), [1, 1, 0]);
+  assert.equal(parse('def assert_valid(o):\n    assert o.ok\n\ndef test_it():\n    assert_valid(order())\n', 'python').cases[0].asserts, 1);
+});

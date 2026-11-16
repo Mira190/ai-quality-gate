@@ -11,7 +11,7 @@ const path = require('node:path');
 const { tokenize, uniq, sha, readText, pool } = require('../util');
 const { idsIn } = require('../extract/rules');
 
-const PARSER_VERSION = 6;
+const PARSER_VERSION = 7;
 const LEVELS = ['unit', 'component', 'integration', 'e2e'];
 const rank = (l) => LEVELS.indexOf(l);
 
@@ -23,7 +23,7 @@ const NEEDS = {
 const MOCKS = /jest\.mock\(|vi\.mock\(|\bsinon\.|\bnock\(|\bmsw\b|jest\.fn\(|vi\.fn\(|jest\.spyOn\(|vi\.spyOn\(|mock\.method\(|mock\.fn\(|unittest\.mock|@patch\b|\bmocker\.|MagicMock|Mockito|@MockBean|@Mock\b|@MockK|\bmockk\(|gomock|testify\/mock|WireMock|\bresponses\.(add|activate)|httpretty|instance_double\(|\.to receive\(|new Mock<|NSubstitute|Substitute\.For|\bmock[A-Z]\w*\(|\bfake[A-Z]\w*\b|\bstub[A-Z]\w*\b|InMemory\w+/;
 // Touching the real file system is a boundary a test crosses, without making it need more than one process.
 const FS = /\bmkdtemp(Sync)?\(|os\.tmpdir\(|tempfile\.|\btmp_path\b|t\.TempDir\(|Files\.createTemp|@TempDir|Dir\.mktmpdir/;
-const ASSERT = /\bexpect\s*\(|\bassert\w*\s*[.(]|^\s*assert\s|\.should\b|\bshould\.|\bt\.(Error|Errorf|Fatal|Fatalf|Fail|FailNow)\(|\brequire\.\w+\(|\bverify\(|pytest\.raises|\bXCTAssert\w*\(|\bAssert\.\w+|\bassertThat\(|\.toThrow|^\s*(Then|And then)\b|\bexpectLater\(|\bcheck\(/;
+const ASSERT = /\bexpect\s*\(|\bassert\w*\s*[.(]|^\s*assert\s|\.should\b|\bshould\.|\bt\.(Error|Errorf|Fatal|Fatalf|Fail|FailNow)\(|\brequire\.\w+\(|\bverify\(|pytest\.raises|\bXCTAssert\w*\(|\bAssert\.\w+|\bassertThat\(|\.toThrow|^\s*(Then|And then)\b|\bexpectLater\(|\bcheck\(|(?<![.\w])(?:expect|assert|verify|check|should|ensure)(?:[A-Z]\w*|_\w+)\s*\(/;
 
 /** @type {[string, RegExp][]} */
 const DECLARED = [
@@ -158,6 +158,19 @@ function parseTestFile(p, text, lang, idp) {
       if (s) marks.push({ ...s, line: i, indent: s.flat ? -1 : indentOf(lines[i]) });
     }
   }
+  // Helpers of this file that assert: a test that only calls `checkTotals(order)` does assert.
+  const asserting = [];
+  for (let i = 0; i < lines.length; i++) {
+    const d = /^(\s*)(?:export\s+)?(?:async\s+)?(?:function\s+(\w+)\s*\(|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:\(|function\b)|def\s+(\w+)\s*\(|func\s+(\w+)\s*\()/.exec(lines[i]);
+    const name = d && (d[2] || d[3] || d[4] || d[5]);
+    if (!name || /^(test|Test|it|describe)/.test(name) || lines[i].length > 400) continue;
+    const base = indentOf(lines[i]);
+    for (let j = i + 1; j < Math.min(lines.length, i + 40); j++) {
+      if (lines[j].trim() && indentOf(lines[j]) <= base && !/^\s*[)\]}]/.test(lines[j])) break;
+      if (ASSERT.test(lines[j])) { asserting.push(name); break; }
+    }
+  }
+  const callsHelper = asserting.length ? new RegExp(`(?<![.\\w])(?:${[...new Set(asserting)].slice(0, 40).join('|')})\\s*\\(`) : null;
   const firstMark = marks.length ? marks[0].line - (marks[0].above || 0) : lines.length;
   const headerIds = idsIn(lines.slice(0, Math.min(firstMark, 40)).filter((l) => /^\s*(\/\/|#|\*|\/\*|--|@)/.test(l)).join('\n'), idp);
   const classSkip = (lang === 'java' || lang === 'csharp') && /@(Disabled|Ignore)\b[^\n]*\n(\s*@[^\n]*\n)*\s*(public\s+|final\s+|abstract\s+|internal\s+|open\s+)*class\b/.test(text);
@@ -192,7 +205,7 @@ function parseTestFile(p, text, lang, idp) {
     const nameSet = new Set(nameTokens);
     cases.push({
       name, line: from + 1, end: end + 1, skipped, params,
-      asserts: body.reduce((n, l) => n + (ASSERT.test(l) ? 1 : 0), 0),
+      asserts: body.reduce((n, l) => n + (ASSERT.test(l) || (callsHelper && callsHelper.test(l)) ? 1 : 0), 0),
       ids: uniq(idsIn(`${name}\n${lines.slice(Math.max(0, from - 3), from).filter((l) => /^\s*(\/\/|#|\*|\/\*|@|--)/.test(l)).join('\n')}\n${bodyText}`, idp)),
       nt: nameTokens,
       bt: uniq(tokenize(bodyText)).filter((t) => !nameSet.has(t)).slice(0, 300),
@@ -207,6 +220,19 @@ function parseTestFile(p, text, lang, idp) {
   if (lang === 'js') for (const m of text.matchAll(/(?:\bfrom\s+|\brequire\(\s*|\bimport\(\s*|^\s*import\s+)(['"])([^'"\n]+)\1/gm)) imports.push(m[2]);
   else if (lang === 'python') for (const m of text.matchAll(/^\s*(?:from\s+([\w.]+)\s+import\s+([\w, ]+)|import\s+([\w.]+))/gm)) { imports.push(m[1] || m[3]); if (m[1]) for (const n of m[2].split(',')) imports.push(`${m[1]}.${n.trim().split(' ')[0]}`); }
   return { lang, cases, headerIds, observed, why: needs[observed] || null, fs: FS.test(text), mock: mock ? mock[0].slice(0, 30) : null, imports: uniq(imports).slice(0, 80) };
+}
+
+/** The test's own helper files: relative imports that are not source (tests/helpers/*.js, conftest-style modules). */
+function resolveSupport(file, rec, inventory) {
+  if (rec.lang !== 'js') return [];
+  const dir = path.posix.dirname(file.path), out = [];
+  for (const spec of rec.imports) {
+    if (!spec.startsWith('.')) continue;
+    const base = path.posix.normalize(path.posix.join(dir, spec)).replace(/\.(js|mjs|cjs)$/, '');
+    const hit = [path.posix.normalize(path.posix.join(dir, spec)), ...['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '/index.ts', '/index.js'].map((e) => base + e)].find((c) => ['support', 'test'].includes(inventory.byPath.get(c)?.kind));
+    if (hit) out.push(hit);
+  }
+  return out.slice(0, 5);
 }
 
 /** Resolve a test file's imports to source files of the repository (one hop). Falls back to the naming convention. */
@@ -279,7 +305,7 @@ async function indexTests({ root, inventory, cache, config, idp }) {
     // The level a test counts at is what it needs when that is known to be higher than its folder says, otherwise
     // what its folder says: a browser test filed under unit/ is still a browser test.
     const level = declared && rank(declared) >= rank(rec.observed) ? declared : rec.observed;
-    const tf = { path: f.path, pkg: f.pkg, lang: rec.lang, declared, observed: rec.observed, level, why: rec.why, fs: rec.fs, mock: rec.mock, headerIds: rec.headerIds, imports: resolveImports(f, rec, inventory), cases: [] };
+    const tf = { path: f.path, pkg: f.pkg, lang: rec.lang, declared, observed: rec.observed, level, why: rec.why, fs: rec.fs, mock: rec.mock, headerIds: rec.headerIds, imports: resolveImports(f, rec, inventory), support: resolveSupport(f, rec, inventory), cases: [] };
     for (const c of rec.cases) {
       const tc = { ...c, file: tf, key: `${f.path} › ${c.name}`, ids: uniq([...c.ids, ...rec.headerIds]) };
       tf.cases.push(tc); cases.push(tc);

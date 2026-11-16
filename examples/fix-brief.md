@@ -46,7 +46,7 @@ it.each([
 - **Done when:** `ci.level-not-run` for `e2e` is gone from the next report.
 
 ## 5. P1 REQ-3 Payment retry (critical: money, external · "payment") is proven only against fakes
-- **Evidence:** REQ-3 is about a real boundary (retry), and every test that proves it fakes that boundary (`jest.mock(` in tests/unit/payment.test.ts).
+- **Evidence:** REQ-3 is about a real boundary (gateway), and every test that proves it fakes that boundary (`jest.mock(` in tests/unit/payment.test.ts).
 - **Do:** Add one integration test that crosses the real boundary; the unit tests can keep the edge cases.
 - **Where:** a new file next to `tests/integration/webhook.int.test.ts` (`tests/integration/`) (integration level)
 - **Rule:** "Payment retry. When the payment gateway times out, the payment is retried at most 3 times." (`docs/requirements.md:5`)

@@ -41,8 +41,8 @@ module.exports = [
   { name: 'lint is made blocking', apply: swap(CI, '        continue-on-error: true\n', ''), removed: ['ci.lint:lint:P1'] },
   { name: 'a type check step is added', apply: swap(CI, '      - name: Test\n', '      - run: npx tsc --noEmit\n      - name: Test\n'), removed: ['ci.typecheck:typecheck:P1'] },
   { name: 'a type check is added behind a script', apply: (d) => { swap(CI, '      - name: Test\n', '      - run: npm run check\n      - name: Test\n')(d); swap('package.json', '"lint": "eslint ."', '"lint": "eslint .", "check": "tsc --noEmit && prettier --check ."')(d); }, removed: ['ci.typecheck:typecheck:P1', 'ci.format:format:P2'] },
-  { name: 'coverage is measured without a minimum', apply: swap('package.json', 'jest tests/unit tests/integration', 'jest --coverage tests/unit tests/integration'), removed: ['ci.coverage:coverage:P2'], added: ['ci.coverage.no-threshold:coverage:P3'] },
-  { name: 'the CI configuration is deleted', apply: (d) => fs.rmSync(path.join(d, '.github/workflows'), { recursive: true }), added: ['ci.none:ci:P0'], removed: ['ci.lint:lint:P1', 'ci.typecheck:typecheck:P1', 'ci.format:format:P2', 'ci.coverage:coverage:P2', 'ci.secrets:secrets:P2', 'ci.sast:sast:P3', 'ci.level-not-run:e2e:P1'] },
+  { name: 'coverage is measured without a minimum', apply: swap('package.json', 'jest tests/unit tests/integration', 'jest --coverage tests/unit tests/integration'), added: ['ci.coverage.no-threshold:coverage:P3'] },
+  { name: 'the CI configuration is deleted', apply: (d) => fs.rmSync(path.join(d, '.github/workflows'), { recursive: true }), added: ['ci.none:ci:P0'], removed: ['ci.lint:lint:P1', 'ci.typecheck:typecheck:P1', 'ci.format:format:P2', 'ci.level-not-run:e2e:P1'] },
 
   // ---- nothing that matters changed: nothing may be reported
   { name: 'a README is edited', apply: (d) => edit(d, 'README.md', (s) => `${s}\nThe service must be started with npm start.\n`) },

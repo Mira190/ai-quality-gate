@@ -89,6 +89,8 @@ function proofSection(ledger, max) {
   const order = { unproven: 0, weak: 1, untestable: 2, unverified: 3, proven: 4 };
   const sorted = [...active].sort((a, b) => (a.rule.critical ? 0 : 1) - (b.rule.critical ? 0 : 1) || order[a.status] - order[b.status] || (a.rule.id < b.rule.id ? -1 : 1));
   out.push(`<details><summary>All ${plural(active.length, 'rule')}, critical first</summary>\n\n${table(['Rule', 'Critical', 'Status', 'Evidence'], sorted.slice(0, max * 4).map((p) => [`**${p.rule.id}** ${clip(p.rule.title, 60)} (\`${p.rule.path}:${p.rule.line}\`)`, p.rule.critical ? p.rule.tags.map((t) => t.area).join(', ') : '', `${ICON[p.status]} ${p.status === 'weak' ? 'hole' : p.status === 'unproven' ? 'no test' : p.status === 'untestable' ? 'reword' : p.status}`, how(p)]))}${more(sorted.length - max * 4, 'rules')}\n\n</details>`);
+  const unjudged = active.filter((p) => p.rule.inferred && p.basis === 'A' && !p.links.length).length;
+  if (unjudged) out.push(`${plural(unjudged, 'sentence')} without an ID ${unjudged === 1 ? 'was' : 'were'} not judged (no model, or outside this run's budget): ${unjudged === 1 ? 'it is' : 'they are'} in the table above and produce no finding. Give a sentence an ID to make it a rule for certain.`);
   const dropped = ledger.proofs.filter((p) => p.status === 'not_a_rule').length, inactive = ledger.proofs.filter((p) => p.status === 'inactive').length;
   if (dropped || inactive) out.push(`Not counted: ${[inactive && `${plural(inactive, 'rule')} superseded, rejected or still a draft`, dropped && `${plural(dropped, 'sentence')} the model judged not to be testable behaviour`].filter(Boolean).join('; ')}.`);
   return out;

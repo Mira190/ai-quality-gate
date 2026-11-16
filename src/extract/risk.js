@@ -11,6 +11,10 @@ const AREAS = {
   external: /\b(gateways?|webhooks?|third[- ]party|external (?:service|api|system)s?|crm|queues?|message broker|idempoten\w*|retr(?:y|ies|ied)|time ?outs?|circuit breaker|rate limit\w*)\b|外部系统|第三方|回调|重试|超时|幂等|限流/i,
   safety: /\b(data loss|corrupt\w*|irreversibl\w*|migrations?|roll ?backs?|double[- ](?:charge|spend|booking)|race condition)\b|数据丢失|回滚|迁移|重复扣款/i,
 };
+// Words that mean risk only in company: "token" is an auth word and a parser word, "role" an access word and an ARIA
+// attribute, "retry" a payment word and a test-runner word. One of them alone does not make a rule critical; two do,
+// and so does any other word of the lists above. A wrongly critical rule is a wrong P0, the costliest mistake here.
+const WEAK = /^(tokens?|roles?|credits?|balances?|pay(?:s|ing)?|paid|charg(?:e|es|ed|ing)|delet\w*|retain\w*|retr\w*|time ?outs?|queues?|tenants?|migrations?|admins?)$/i;
 const MARKED = /\[(?:critical|p0)\]|\(critical\)|\bcriticality:\s*(?:high|critical)\b|【关键】/i;
 
 /** @type {[string, RegExp][]} */
@@ -23,6 +27,7 @@ const NATURE = [
 const LOWEST = { logic: 'unit', ui: 'component', boundary: 'integration', flow: 'e2e' };
 
 const COMPARATOR = '(?:at most|at least|up to|no more than|not exceed(?:s|ing)?|never exceeds?|exceeds?|maximum(?: of)?|minimum(?: of)?|max\\.?|min\\.?|within|after|under|over|below|above|less than|more than|greater than|fewer than|from|to|≤|>=|<=|≥|<|>|不超过|至少|最多|最少|超过|少于|大于|小于|不少于|不大于)';
+const LOOSE = /^(within|after|under|over|below|above|from|to)$/i;
 const UNIT = '(?:%|percent|ms|milliseconds?|secs?|seconds?|mins?|minutes?|hours?|hrs?|days?|weeks?|months?|years?|kb|mb|gb|items?|characters?|chars?|times|attempts?|retries|requests?|digits?|s|天|秒|分钟|小时|次|个|元|条|位)';
 const LIMIT = new RegExp(`(?:(${COMPARATOR})\\s*)?([$€£¥]?)(?<![\\w.-])(\\d[\\d,]*(?:\\.\\d+)?)(?:\\s?(${UNIT})(?![a-z]))?`, 'gi');
 
@@ -32,6 +37,8 @@ function limitsOf(text) {
   for (const m of String(text).matchAll(LIMIT)) {
     const [raw, cmp, cur, num, unit] = m;
     if (!cmp && !cur && !unit) continue;
+    // "from 1 to 2", "after 3", "over 40": a preposition and a bare number is not a stated limit
+    if (!cur && !unit && LOOSE.test(cmp)) continue;
     const value = num.replace(/,/g, '').replace(/\.$/, '');
     if (seen.has(value)) continue;
     seen.add(value);
@@ -51,15 +58,21 @@ function exercisesLimit(body, limit) {
 function tagRule(rule, config = {}) {
   const text = `${rule.title} ${rule.text}`;
   const tags = [];
+  const weak = new Set();
+  let strong = false;
   for (const [area, re] of Object.entries(AREAS)) {
-    const m = re.exec(text);
-    if (m) { tags.push({ area, word: m[0].toLowerCase() }); continue; }
+    const words = [...new Set([...text.matchAll(new RegExp(re.source, 'gi'))].map((m) => m[0].toLowerCase()))];
+    const firm = words.find((w) => !WEAK.test(w));
+    if (firm) strong = true;
+    for (const w of words) if (WEAK.test(w)) weak.add(w.replace(/(s|es|ed|ing)$/, ''));
+    if (words.length) { tags.push({ area, word: firm || words[0] }); continue; }
     const extra = (config.risk?.extra_terms?.[area] || []).find((w) => text.toLowerCase().includes(String(w).toLowerCase()));
-    if (extra) tags.push({ area, word: String(extra).toLowerCase() });
+    if (extra) { tags.push({ area, word: String(extra).toLowerCase() }); strong = true; }
   }
-  if (MARKED.test(text) || (config.risk?.critical_ids || []).some((id) => String(id).toUpperCase() === rule.id.toUpperCase())) tags.push({ area: 'marked', word: 'critical' });
-  rule.tags = tags;
-  rule.critical = tags.length > 0;
+  const marked = MARKED.test(text) || (config.risk?.critical_ids || []).some((id) => String(id).toUpperCase() === rule.id.toUpperCase());
+  if (marked) tags.push({ area: 'marked', word: 'critical' });
+  rule.critical = marked || strong || weak.size >= 2;
+  rule.tags = rule.critical ? tags : [];
   rule.nature = NATURE.find(([, re]) => re.test(text))?.[0] || 'logic';
   rule.lowest = LOWEST[rule.nature];
   rule.limits = limitsOf(rule.text);

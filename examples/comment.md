@@ -25,7 +25,7 @@
   2 e2e test files (2 cases) are run only outside pull requests. 1 rule is proven only there, 1 critical: REQ-2. _(code)_
   **Fix:** Run a smoke subset on pull requests, or accept the gap and say so in .quality-gate.yml.
 - **P1 REQ-3 Payment retry (critical: money, external · "payment") is proven only against fakes** (`tests/unit/payment.test.ts:8`)
-  REQ-3 is about a real boundary (retry), and every test that proves it fakes that boundary (`jest.mock(` in tests/unit/payment.test.ts). _(code)_
+  REQ-3 is about a real boundary (gateway), and every test that proves it fakes that boundary (`jest.mock(` in tests/unit/payment.test.ts). _(code)_
   **Fix:** Add one integration test that crosses the real boundary; the unit tests can keep the edge cases.
 - **P1 REQ-2 Free shipping (critical: money · "fee") is tested above the level it needs** (`tests/e2e/shipping.spec.ts:4`)
   REQ-2 is logic with limits (over $50, $5), and is proven only at e2e level (5 cases in tests/e2e/shipping.spec.ts). _(code)_

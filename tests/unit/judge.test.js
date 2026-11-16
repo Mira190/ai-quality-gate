@@ -202,3 +202,35 @@ test('GATE-25 a test that imports the source file a rule names is a candidate, w
   files[0].imports = [];
   assert.equal(linkRules([rule], { files, cases: tests.cases }, config).get('REQ-1').candidates.length, 0);
 });
+
+test('GATE-24 the setup block above a test and the assertions of an imported helper file are shown; the helper call can be cited', () => {
+  const testFile = [
+    "const { expectCapped } = require('./helpers/money');",
+    "describe('discount', () => {",
+    '  beforeEach(() => {',
+    '    order = makeOrder({ total: 100 });',
+    '  });',
+    '',
+    "  it('caps the discount', () => {",
+    '    expectCapped(order, 25);',
+    '  });',
+    '});',
+  ].join('\n');
+  const helperFile = 'function expectCapped(order, percent) {\n  expect(applyDiscount(order, percent).percent).toBe(20);\n}\nmodule.exports = { expectCapped };\n';
+  const texts = { 'tests/discount.test.js': testFile, 'tests/helpers/money.js': helperFile };
+  const c = { key: 'k', name: 'discount › caps the discount', line: 7, end: 9, skipped: false, file: { path: 'tests/discount.test.js', level: 'unit', support: ['tests/helpers/money.js'] } };
+  const ex = excerptOf(c, (p) => texts[p] ?? null, 30);
+  assert.match(ex.text, /^… setup that runs before this test:\n3\| {3}beforeEach\(\(\) => \{\n4\| {5}order = makeOrder\(\{ total: 100 \}\);\n… the test:\n7\|/);
+  assert.match(ex.text, /… helper expectCapped, called by this test:\ntests\/helpers\/money\.js:1\| function expectCapped\(order, percent\) \{\ntests\/helpers\/money\.js:2\| expect\(applyDiscount\(order, percent\)\.percent\)\.toBe\(20\);/);
+  const item3 = { rule: { id: 'REQ-1', text: 't' }, head: 'h', cands: [{ case: c, ex }] };
+  // the line that calls the asserting helper is this test's assertion; a setup line is not
+  assert.equal(verify(normalise({ rule: 'R1', proof: 'full', cites: [{ test: 'T1', line: 8 }] }, item3, 0), item3).status, 'proven');
+  assert.equal(verify(normalise({ rule: 'R1', proof: 'full', cites: [{ test: 'T1', line: 4 }] }, item3, 0), item3).status, 'unverified');
+});
+
+test('the prompt asks for the evidence before the verdict, and gives each rule its section', () => {
+  const rule = { id: 'REQ-1', kind: 'requirement', title: 'Cap', text: 'The cap applies after tax.', section: 'Pricing › Discounts', critical: false, tags: [], limits: [] };
+  const p = renderPrompt([buildItem(rule, { candidates: [] }, () => null, { trace: { excerpt_lines: 30 } })]);
+  assert.match(p, /RULE R1 REQ-1 in "Pricing › Discounts" \[requirement\]/);
+  assert.ok(p.indexOf('"cites"') < p.indexOf('"proof":"partial"'), 'cites come before proof in the reply shape');
+});

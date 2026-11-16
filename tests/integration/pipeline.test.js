@@ -315,3 +315,14 @@ test('GATE-9 verdicts committed in the lock file are used on a machine with an e
   assert.equal(edited.ai.stats.locked, 5);
   assert.equal(byRule(edited)['REQ-5'].status, 'unverified');
 });
+
+test('GATE-28 without a model, sentences that were never judged to be rules produce no finding; the report counts them', async () => {
+  const ledger = await run(full, { provider: 'none' });
+  const inferred = ledger.proofs.filter((p) => p.rule.inferred);
+  assert.equal(inferred.length, 2);
+  assert.ok(!ledger.findings.some((f) => inferred.some((p) => p.rule.id === f.subject)));
+  assert.match(renderReport(ledger), /2 sentences without an ID were not judged/);
+  // judged by the model, the one that is a rule and has a test is proven, and still no finding is made up for the other
+  const judged = await run(full);
+  assert.ok(!judged.findings.some((f) => f.subject.startsWith('D-')));
+});

@@ -8,7 +8,7 @@ repository with the same rules it applies to any other.
 - **GATE-1 Rules with an ID.** An item that starts a heading, a list item or a table row with an ID (`REQ-12`, `DEC-4`, `AC-3`) is a rule; `REQ_007` and `req-7` name the same rule.
 - **GATE-2 Decision records.** An architecture decision record yields one decision; a decision that is superseded, rejected or still proposed is not counted.
 - **GATE-3 Rules without an ID.** In a requirement or design document that numbers nothing, a normative sentence (must, shall, should) is an inferred rule whose ID is a hash of its text; instructions to developers are not rules.
-- **GATE-4 Critical rules.** A rule about money, access control, customer data, calls to outside systems or data safety is critical, and the report names the word that made it so.
+- **GATE-4 Critical rules.** A rule about money, access control, customer data, calls to outside systems or data safety is critical, and the report names the word that made it so; a word that means risk only in some contexts does not make a rule critical on its own.
 
 ## Proof
 
@@ -18,7 +18,7 @@ repository with the same rules it applies to any other.
 - **GATE-8 Citations are checked.** A model verdict that a test proves a rule is believed only when it cites a candidate test it was shown, at a line it was shown, and that line is an assertion; anything else is advice.
 - **GATE-9 Model budget.** The model is called for rules code could not link, most severe first, never more often than the configured number of calls; a rule whose text and candidate tests are unchanged is answered from the verdict cache or the lock file, and what the budget did not reach is judged by the next run.
 - **GATE-21 Read twice.** A model verdict that no candidate test proves a rule stands on the model's word alone, so it blocks only after a second, differently framed reading of the same tests agrees; a disagreement is advice.
-- **GATE-24 Nothing is concluded from part of a test.** The model is shown each candidate test whole, or its opening, its assertions and the lines that share the rule's words; assertions made through a helper in the same file are shown too; and when not every assertion fits, a verdict that the test proves nothing is advice.
+- **GATE-24 Nothing is concluded from part of a test.** The model is shown each candidate test whole, or its opening, its assertions and the lines that share the rule's words; assertions made through a helper, in the same file or in a helper file the test imports, are shown too, with the setup block above the test; and when not every assertion fits, a verdict that the test proves nothing is advice.
 - **GATE-25 Candidates through imports.** A test that imports a source file named by one of the rule's words is a candidate for the rule even when the test shares none of its wording.
 - **GATE-26 Executed evidence.** When a test command is given, the gate moves a rule's limit in the code by one step and runs the linked tests on disk: a rule whose tests still pass is reported as unguarded with executed evidence, every file is restored, and nothing is concluded when the tests fail before any change.
 - **GATE-22 Model failures stop early.** Two failed calls in a row, or one refused for bad credentials, end the model calls of the run; a reply in the wrong shape gets one repair attempt.
@@ -33,7 +33,8 @@ repository with the same rules it applies to any other.
 
 - **GATE-13 Enforced means it can fail a pull request.** A check counts as enforced only when a step runs it in a workflow triggered by pull requests and the step's failure is not ignored.
 - **GATE-14 Scripts are followed.** A step that calls a package script or a make target is judged by the commands that script runs.
-- **GATE-15 Priorities of CI gaps.** Tests that do not gate pull requests are P0; a linter or type checker that is set up and not enforced is P1.
+- **GATE-15 Priorities of CI gaps.** Tests that do not gate pull requests are P0; a linter or type checker that is set up and not enforced is P1; an optional check the repository never set up is shown in the CI table and is not a finding.
+- **GATE-28 No guesses in the list.** A sentence without an ID that nobody has judged to be a rule is counted in the report and produces no finding.
 
 ## Gate
 
